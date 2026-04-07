@@ -1,0 +1,47 @@
+[project]
+name = "llm-autofix-agents"
+version = "0.1.0"
+description = "Autofix workflows based on LLM agents"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["langchain>=1.2.15"]
+authors = [{ name = "adriantd3", email = "adriantorremocha@hotmail.com" }]
+
+[dependency-groups]
+dev = ["mypy>=1.20.0", "ruff>=0.15.9"]
+
+[project.scripts]
+autofix = "llm_autofix_agents.main:app"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["llm_autofix_agents"]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = ["src"]
+files = ["src"]
+pretty = true
+strict = true
+show_error_codes = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
