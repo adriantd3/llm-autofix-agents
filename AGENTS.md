@@ -1,25 +1,20 @@
-## Contexto del proyecto
+## Proyecto
 
-Este pryecto tiene como objetivo la creación de un sistema de **autocorrección de errores en software** (APR) basado en LLMs y agentes, capaz de analizar fallos (tests, logs) y proponer modificaciones automáticas sobre el código.
-El sistema ejecuta el proceso completo en entornos aislados mediante Docker, incluyendo ejecución de tests y verificación de resultados.
-Se diseñan y comparan distintas arquitecturas (mono-agente y multi-agente) bajo un mismo entorno experimental.
-El objetivo es evaluar cómo influyen la orquestación de agentes y el tipo de modelo en la eficacia, coste y robustez de la autocorrección.
+Sistema de autocorreccion de errores (APR) con LLMs y agentes para analizar fallos (tests/logs), proponer parches y validarlos. El proyecto se usa como plataforma experimental para comparar arquitecturas de agentes y modelos.
 
-Para tener una informacion completa sobre el contexto del proyecto, accede a la carpeta `docs`
+Contexto funcional: `docs/general-definition.md` y `docs/anteproyecto.md`.
 
-## Flujo de trabajo - Spec Driven Development
+## SDD simple (imprescindible)
 
-Usar la carpeta `specs/` como registro de trabajo vivo:
+1. Usar `specs/` como registro minimo vivo.
+2. Si `specs/` no existe, crearla con:
+	- `specs/status.md` (Hecho / En curso / Siguiente)
+	- `specs/requirements.md` (alcance confirmado)
+	- `specs/lessons.md` (errores y aprendizaje)
+3. Antes de implementar: revisar `specs/status.md`.
+4. Despues de implementar: validar cambios y actualizar `specs/status.md`.
+5. Si cambia el alcance: actualizar `specs/requirements.md`.
 
-- `specs/status.md`: lo hecho, en curso y siguiente.
-- `specs/requirements.md`: requisitos confirmados y alcance.
-- `specs/lessons.md`: errores cometidos por el camino de los que dejamos constancia para que no vuelvan a ocurrir.
+## Regla tecnica
 
-Regla minima:
-
-1. Leer `specs/status.md` al iniciar una tarea.
-2. Implementar y validar los cambios.
-3. Actualizar `specs/status.md` al cerrar la tarea. Esto debe hacerse únicamente se ha validado que se ha implementado todo correctamente, es funcional y el usuario confirma que todo funciona según lo esperado.
-4. Si cambia el alcance del proyecto, actualizar `specs/requirements.md`.
-
-Para elicitar, aclarar y priorizar requisitos de forma sistematica, usar el skill `requirements-elicitation`. Para planear e implementar usa y `python-design-patterns`.
+Este proyecto usa **uv**: usar siempre `uv` para entorno, dependencias y ejecucion (`uv sync`, `uv add`, `uv run ...`).
