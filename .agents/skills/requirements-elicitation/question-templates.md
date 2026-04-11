@@ -1,5 +1,55 @@
 # Requirements Elicitation Question Templates
 
+## Mandatory Usage Rule
+
+Every question in this template must be asked with multiple recommended answer options.
+
+Required format:
+
+```markdown
+Q: [question]
+Recommended options:
+- Option A (recommended starting point)
+- Option B
+- Option C
+- Option D
+- Other: [free text]
+```
+
+Minimum requirements:
+- 3 to 5 recommended options per question.
+- Include one "Other" option for custom input.
+- Include one low-risk option and, when useful, one high-impact option.
+- Apply the same format to follow-up and validation questions.
+
+## Quick Option Banks (adapt per context)
+
+Use these banks to speed up interviews while keeping options concrete.
+
+### Prioritization options
+- Must have in current iteration.
+- Should have if capacity allows.
+- Could have for later phase.
+- Out of scope for now.
+
+### Delivery strategy options
+- Build a minimal end-to-end MVP first.
+- Build by internal modules first.
+- Build by highest-risk components first.
+- Build by stakeholder value stream first.
+
+### Decision confidence options
+- Decide now with current information.
+- Decide now but validate with a spike.
+- Postpone decision to next milestone.
+- Escalate decision to stakeholder owner.
+
+### Validation depth options
+- Smoke validation only.
+- Functional validation on critical flows.
+- Functional + non-functional baseline checks.
+- Full validation with traceability artifacts.
+
 ## Stakeholder Identification Questions
 
 ### Business Stakeholders

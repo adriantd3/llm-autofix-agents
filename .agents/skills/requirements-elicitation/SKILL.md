@@ -10,6 +10,36 @@ user-invocable: true
 
 This skill provides structured techniques for gathering, analyzing, and documenting software requirements from stakeholders and existing systems.
 
+## Mandatory Question Format (Always On)
+
+Every question must include several recommended answer options.
+
+Non-optional rules:
+- Ask each question with 3 to 5 recommended options.
+- Include an "Other / custom" option to keep discovery open.
+- Mark 1 or 2 options as "recommended starting point" when useful.
+- Apply this rule to all question types: discovery, clarification, validation, and follow-up.
+- Never send a plain question without options.
+
+Suggested structure for each question:
+
+```markdown
+Q: [question]
+Recommended options:
+- Option A (recommended starting point)
+- Option B
+- Option C
+- Option D
+- Other: [free text]
+```
+
+Quality criteria for options:
+- Specific and decision-oriented, not vague.
+- Mutually exclusive when possible.
+- Include at least one conservative/low-risk path.
+- Include at least one ambitious/high-impact path when relevant.
+- Include an "unknown yet / need spike" option when uncertainty is high.
+
 ## Elicitation Techniques
 
 ### 1. Structured Interviews
@@ -122,6 +152,14 @@ Each requirement should be:
 - **S**mall: Fits in a sprint
 - **T**estable: Has clear acceptance criteria
 
+## Interview Flow With Optioned Questions
+
+1. Open question with recommended options to frame the decision space.
+2. Clarify with a second question, again with recommended options.
+3. Validate selected direction with trade-off options.
+4. Confirm priority using MoSCoW or value/effort options.
+5. Capture unresolved points with explicit next-step options.
+
 ## Stakeholder Analysis
 
 ### Stakeholder Categories
@@ -166,4 +204,17 @@ Acceptance Criteria:
 Business Objective -> Requirement -> User Story -> Test Case
 ```
 
-See [question-templates.md](question-templates.md) for structured interview questions.
+### Question Pack Format (required)
+Use this format when interviewing stakeholders:
+
+```markdown
+### [Category]
+1. [Question]
+	Recommended options:
+	- [Option 1] (recommended starting point)
+	- [Option 2]
+	- [Option 3]
+	- Other: [free text]
+```
+
+See [question-templates.md](question-templates.md) for structured interview questions and optioned-question usage.
