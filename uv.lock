@@ -552,6 +552,7 @@ source = { editable = "." }
 dependencies = [
     { name = "langchain" },
     { name = "openai-agents" },
+    { name = "pydantic" },
 ]
 
 [package.dev-dependencies]
@@ -564,6 +565,7 @@ dev = [
 requires-dist = [
     { name = "langchain", specifier = ">=1.2.15" },
     { name = "openai-agents", specifier = ">=0.13.6" },
+    { name = "pydantic", specifier = ">=2.11.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -15,6 +15,7 @@ Contexto funcional: `docs/general-definition.md` y `docs/anteproyecto.md`.
 4. Antes de implementar: revisar `specs/status.md`.
 5. Despues de implementar: validar cambios y actualizar `specs/status.md`.
 6. Si cambia el alcance: actualizar `specs/requirements.md`.
+7. Considerar siempre las lecciones aprendidas en `specs/lessons.md`
 
 ## Regla tecnica
 
