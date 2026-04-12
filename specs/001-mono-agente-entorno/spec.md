@@ -33,11 +33,12 @@
 - B9: Dataset inicial = QuixBugs; se agregaran mas en el futuro.
 
 ### C) Flujo interno
-- C10: Pipeline base = analizar fallo -> localizar -> proponer -> aplicar -> validar.
-- C11: Estrategia inicial de localizacion = heuristica guiada por stacktrace/tests.
+- C10: Flujo de referencia = analizar fallo -> localizar -> proponer -> aplicar -> validar, sin imponer un orden interno estricto al agente.
+- C11: Estrategia inicial de localizacion = autonomia del agente via tools/MCP (filesystem, ejecucion, diff/tests), sin pre-localizador hardcodeado en el orquestador.
 - C12: Politica de edicion = hacer los cambios necesarios para resolver el problema (sin limite estricto de archivos).
 - C13: No progreso (estandar) = mismos tests fallando en iteraciones consecutivas.
 - C14: Al agotar iteraciones = fallo controlado con informe y artefactos.
+- C15: Se permite no determinismo en la trayectoria interna del agente; la validacion se centra en resultados y metricas agregadas.
 
 ### D) Docker y entorno
 - D15: 1 contenedor efimero por run.
@@ -68,9 +69,9 @@
 - G34: En v1 no se exige validacion extra de lint/typecheck.
 
 ### H) Modelos LLM
-- H35: Un unico modelo estable como baseline.
+- H35: Baseline de ejecucion actual = Gemini via endpoint OpenAI-compatible.
 - H36: Framework inicial = openai-agents-sdk; se podra cambiar/mejorar mas adelante.
-- H37: Parametrizacion no configurable en v1; abrir configuracion en fases posteriores (ej. temperatura, max_tokens).
+- H37: Configuracion minima por entorno habilitada en v1 para provider/model y limites operativos (sin exponer parametros avanzados de tuning).
 - H38: Fallos de API = retry exponencial + backoff + failover opcional.
 - H39: Versionado obligatorio por run con `prompt_version` y `agent_config_hash` en resultados JSONL.
 
@@ -116,9 +117,18 @@
 - Decision aplicada: acceso libre a internet con auditoria.
 - Implementacion esperada: permitir salida de red y registrar trazas de actividad relevante.
 
+### OA-003 (Provider baseline en SH3) - Cerrada
+- Decision aplicada: dual provider con adaptador compatible con openai-agents-sdk.
+- Implementacion esperada: OpenAI y Gemini bajo la misma abstraccion, con Gemini como ruta de ejecucion real cuando no hay credenciales OpenAI.
+
+### OA-004 (Autonomia de flujo en SH3) - Cerrada
+- Decision aplicada: autonomia-first para localizacion y secuenciacion de acciones.
+- Implementacion esperada: evitar heuristicas de localizacion codificadas en el orquestador; priorizar directrices y toolset para que el agente decida el flujo.
+
 ## Criterios de aceptacion de la spec
 - Existe implementacion funcional de run mono-agente con maximo de 3 iteraciones.
 - El sistema genera diff, resultado de tests y logs por run.
 - Se ejecuta en contenedor Docker efimero por run.
 - Se registra JSONL con metricas minimas y trazabilidad de configuracion.
 - Se completa benchmark inicial de 5 casos QuixBugs y se documenta resultado.
+- El sistema no fuerza una trayectoria determinista interna; se evalua por resultados reproducibles a nivel de run y por metricas agregadas entre multiples runs.

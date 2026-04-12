@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from llm_autofix_agents.agent_flow import run_agent_baseline
 from llm_autofix_agents.contracts import (
     RunInput,
     RunOutput,
@@ -24,6 +25,8 @@ def app() -> None:
         raise SystemExit(_run_docker_smoke(args))
     if args.command_name == "contracts-smoke":
         raise SystemExit(_run_contracts_smoke(args))
+    if args.command_name == "agent-smoke":
+        raise SystemExit(_run_agent_smoke(args))
 
     print("Welcome to LLM Autofix Agents!")
 
@@ -60,6 +63,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--prompt",
         default="Fix failing test in parser module",
         help="Prompt used to build the input model.",
+    )
+
+    agent_parser = subcommands.add_parser(
+        "agent-smoke",
+        help="Run a minimal baseline agent iteration with the configured LLM provider.",
+    )
+    agent_parser.add_argument(
+        "--prompt",
+        default="Analyze a failing test and suggest a minimal fix strategy.",
+        help="Prompt passed to the baseline agent.",
     )
     return parser
 
@@ -100,7 +113,7 @@ def _run_contracts_smoke(args: argparse.Namespace) -> int:
         stop_reason=StopReason.NO_PROGRESS,
         diff="",
         tests=TestResults(total=5, passed=3, failed=2),
-        logs=["iteration=1", "heuristic localization completed"],
+        logs=["iteration=1", "agent step completed"],
         final_message="No progress detected after validation.",
     )
     payload = {
@@ -109,6 +122,22 @@ def _run_contracts_smoke(args: argparse.Namespace) -> int:
     }
     print(json.dumps(payload, indent=2, ensure_ascii=True))
     return 0
+
+
+def _run_agent_smoke(args: argparse.Namespace) -> int:
+    run_input = RunInput(
+        prompt=args.prompt,
+        metadata={"source": "agent-smoke"},
+        target_repo=".",
+        test_command="uv run python -m unittest",
+    )
+    run_output = run_agent_baseline(run_input)
+    payload = {
+        "input": run_input.model_dump(mode="json"),
+        "output": run_output.model_dump(mode="json"),
+    }
+    print(json.dumps(payload, indent=2, ensure_ascii=True))
+    return 0 if run_output.status == RunStatus.SUCCESS else 1
 
 
 if __name__ == "__main__":

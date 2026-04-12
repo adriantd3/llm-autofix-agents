@@ -1,4 +1,4 @@
-.PHONY: check fix format lint typecheck test validate run docker-build docker-smoke contracts-smoke
+.PHONY: check fix format lint typecheck test validate run docker-build docker-smoke contracts-smoke agent-smoke
 
 RUNNER_IMAGE ?= llm-autofix-runner:py313
 RUNNER_DOCKERFILE ?= docker/runner.Dockerfile
@@ -35,3 +35,6 @@ docker-smoke:
 
 contracts-smoke:
 	uv run autofix contracts-smoke
+
+agent-smoke:
+	uv run autofix agent-smoke

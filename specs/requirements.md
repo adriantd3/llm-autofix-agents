@@ -12,6 +12,11 @@
 - Registrar resultados experimentales con trazabilidad (JSONL).
 - Permitir acceso libre a internet en run con auditoria.
 - Versionar por run la configuracion de prompt/agente en resultados.
+- Mantener dual provider en SH3 (OpenAI y Gemini) con adaptador compatible con openai-agents-sdk.
+- Ejecutar smoke real con Gemini y validar OpenAI por mocks cuando no existan credenciales OpenAI.
+- Mantener enfoque autonomy-first: el agente decide secuencia interna de acciones usando tools/MCP bajo limites y guardrails.
+- Evitar pre-localizacion heuristica hardcodeada en el orquestador; la localizacion debe emerger del uso autonomo de tools.
+- Aceptar no determinismo del flujo interno y validar por resultados por run + estimaciones medias sobre multiples runs.
 
 ## Referencias de especificacion activa
 - Spec principal: specs/001-mono-agente-entorno/spec.md

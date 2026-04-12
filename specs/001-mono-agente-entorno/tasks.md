@@ -35,17 +35,18 @@ Fijar contratos minimos para input libre y salida trazable.
 
 ## SH3 - Flujo mono-agente baseline (En curso)
 ### Objetivo
-Implementar pipeline analizar->localizar->proponer->aplicar->validar.
+Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resultados.
 
 ### Tasks
-- [ ] SH3-T01 Integrar openai-agents-sdk en version baseline.
-- [ ] SH3-T02 Implementar localizacion heuristica por stacktrace/tests.
+- [x] SH3-T01 Integrar openai-agents-sdk en version baseline.
+- [x] SH3-T02 Definir localizacion autonoma via tools/MCP y directrices de system prompt (sin pre-localizacion hardcodeada en el orquestador).
+- [ ] SH3-T02B Habilitar toolset/MCP minimo para localizacion autonoma efectiva (filesystem + ejecucion + diff/tests).
 - [ ] SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
 - [ ] SH3-T04 Implementar aplicacion de parches multiarchivo.
 - [ ] SH3-T05 Implementar rechazo automatico de regresiones.
 
 ### Done cuando
-- El flujo completo se ejecuta end-to-end sobre un caso controlado.
+- El flujo autonomo se ejecuta end-to-end sobre un caso controlado sin imponer pasos internos fijos al agente.
 
 ## SH4 - Git y artefactos de parche (Pendiente)
 ### Objetivo
