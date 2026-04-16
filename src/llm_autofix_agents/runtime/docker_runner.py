@@ -9,17 +9,7 @@ from pathlib import Path
 
 DEFAULT_RUNNER_IMAGE = "llm-autofix-runner:py313"
 DEFAULT_WORKDIR = "/workspace"
-
-_SMALL_PROJECT_SIZE_BYTES = 50 * 1024 * 1024
-_MEDIUM_PROJECT_SIZE_BYTES = 250 * 1024 * 1024
-_IGNORED_SIZE_PARTS = {
-    ".git",
-    ".venv",
-    ".mypy_cache",
-    ".ruff_cache",
-    "__pycache__",
-    "node_modules",
-}
+DEFAULT_TIMEOUT_SECONDS = 300
 
 
 class DockerRunnerError(RuntimeError):
@@ -28,19 +18,19 @@ class DockerRunnerError(RuntimeError):
 
 @dataclass(frozen=True)
 class ResourceLimits:
-    cpus: float
-    memory: str
-    pids_limit: int
-    timeout_seconds: int
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
+    cpus: float | None = None
+    memory: str | None = None
+    pids_limit: int | None = None
 
     def __post_init__(self) -> None:
-        if self.cpus <= 0:
-            raise ValueError("cpus must be greater than zero")
-        if self.pids_limit <= 0:
-            raise ValueError("pids_limit must be greater than zero")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero")
-        if not self.memory.strip():
+        if self.cpus is not None and self.cpus <= 0:
+            raise ValueError("cpus must be greater than zero")
+        if self.pids_limit is not None and self.pids_limit <= 0:
+            raise ValueError("pids_limit must be greater than zero")
+        if self.memory is not None and not self.memory.strip():
             raise ValueError("memory cannot be empty")
 
 
@@ -89,13 +79,8 @@ class ContainerRunResult:
 
 
 def resolve_dynamic_limits(repo_path: Path) -> ResourceLimits:
-    """Provide baseline dynamic limits based on project size on disk."""
-    total_size = _estimate_repo_size(repo_path)
-    if total_size <= _SMALL_PROJECT_SIZE_BYTES:
-        return ResourceLimits(cpus=1.0, memory="1g", pids_limit=256, timeout_seconds=120)
-    if total_size <= _MEDIUM_PROJECT_SIZE_BYTES:
-        return ResourceLimits(cpus=2.0, memory="2g", pids_limit=512, timeout_seconds=300)
-    return ResourceLimits(cpus=3.0, memory="4g", pids_limit=1024, timeout_seconds=600)
+    del repo_path
+    return ResourceLimits()
 
 
 class DockerRunner:
@@ -188,34 +173,32 @@ class DockerRunner:
         limits: ResourceLimits,
     ) -> list[str]:
         mount_spec = f"type=bind,src={repo_path},dst={DEFAULT_WORKDIR}"
-        return [
+        rendered_command = [
             self._docker_executable,
             "run",
             "--rm",
-            "--init",
             "--name",
             container_name,
             "--workdir",
             DEFAULT_WORKDIR,
             "--mount",
             mount_spec,
-            "--security-opt",
-            "no-new-privileges:true",
-            "--cap-drop",
-            "ALL",
-            "--cpus",
-            f"{limits.cpus:.2f}",
-            "--memory",
-            limits.memory,
-            "--pids-limit",
-            str(limits.pids_limit),
             "--network",
             self._network_mode,
+        ]
+        if limits.cpus is not None:
+            rendered_command.extend(["--cpus", f"{limits.cpus:.2f}"])
+        if limits.memory is not None:
+            rendered_command.extend(["--memory", limits.memory])
+        if limits.pids_limit is not None:
+            rendered_command.extend(["--pids-limit", str(limits.pids_limit)])
+        rendered_command.extend([
             image,
             "sh",
             "-lc",
             command,
-        ]
+        ])
+        return rendered_command
 
     def _force_remove_container(self, container_name: str) -> None:
         subprocess.run(
@@ -224,20 +207,6 @@ class DockerRunner:
             check=False,
             text=True,
         )
-
-
-def _estimate_repo_size(repo_path: Path) -> int:
-    size = 0
-    for path in repo_path.rglob("*"):
-        if any(part in _IGNORED_SIZE_PARTS for part in path.parts):
-            continue
-        if not path.is_file():
-            continue
-        try:
-            size += path.stat().st_size
-        except OSError:
-            continue
-    return size
 
 
 def _iso_timestamp(value: datetime) -> str:

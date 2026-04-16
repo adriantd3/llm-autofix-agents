@@ -4,9 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from llm_autofix_agents.config import (
+from llm_autofix_agents.llm.settings import (
     DEFAULT_GEMINI_BASE_URL,
     DEFAULT_GEMINI_MODEL,
+    DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_MODEL,
     LLMSettings,
     ProviderType,
     _load_dotenv_values,
@@ -14,16 +16,20 @@ from llm_autofix_agents.config import (
 
 
 class LLMSettingsTests(unittest.TestCase):
-    def test_from_env_defaults_to_gemini(self) -> None:
-        settings = LLMSettings.from_env({"GEMINI_API_KEY": "test-key"})
+    def test_from_env_defaults_to_ollama(self) -> None:
+        settings = LLMSettings.from_env({})
 
-        self.assertEqual(settings.provider, ProviderType.GEMINI)
-        self.assertEqual(settings.model, DEFAULT_GEMINI_MODEL)
-        self.assertEqual(settings.base_url, DEFAULT_GEMINI_BASE_URL)
+        self.assertEqual(settings.provider, ProviderType.OLLAMA)
+        self.assertEqual(settings.model, DEFAULT_OLLAMA_MODEL)
+        self.assertEqual(settings.base_url, DEFAULT_OLLAMA_BASE_URL)
 
-    def test_from_env_requires_provider_key(self) -> None:
+    def test_from_env_openai_requires_provider_key(self) -> None:
         with self.assertRaisesRegex(ValueError, "OPENAI_API_KEY"):
             LLMSettings.from_env({"LLM_PROVIDER": "openai"})
+
+    def test_from_env_gemini_requires_provider_key(self) -> None:
+        with self.assertRaisesRegex(ValueError, "GEMINI_API_KEY"):
+            LLMSettings.from_env({"LLM_PROVIDER": "gemini"})
 
     def test_from_env_openai_custom_settings(self) -> None:
         settings = LLMSettings.from_env(
@@ -42,6 +48,18 @@ class LLMSettingsTests(unittest.TestCase):
         self.assertEqual(settings.base_url, "https://proxy.example/v1")
         self.assertEqual(settings.max_turns, 4)
         self.assertFalse(settings.tracing_disabled)
+
+    def test_from_env_gemini_uses_default_base_url(self) -> None:
+        settings = LLMSettings.from_env(
+            {
+                "LLM_PROVIDER": "gemini",
+                "GEMINI_API_KEY": "gemini-key",
+            }
+        )
+
+        self.assertEqual(settings.provider, ProviderType.GEMINI)
+        self.assertEqual(settings.model, DEFAULT_GEMINI_MODEL)
+        self.assertEqual(settings.base_url, DEFAULT_GEMINI_BASE_URL)
 
     def test_from_env_invalid_boolean(self) -> None:
         with self.assertRaisesRegex(ValueError, "Invalid boolean value"):

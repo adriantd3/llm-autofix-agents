@@ -6,7 +6,7 @@ ENV UV_SYSTEM_PYTHON=1 \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates git \
+    && apt-get install --no-install-recommends -y ca-certificates git nodejs npm docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
@@ -14,4 +14,11 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 WORKDIR /workspace
 
-CMD ["python", "--version"]
+COPY pyproject.toml README.md Makefile /workspace/
+COPY src /workspace/src
+COPY tests /workspace/tests
+COPY docker /workspace/docker
+
+RUN uv sync
+
+CMD ["sh", "-lc", "sleep infinity"]

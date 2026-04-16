@@ -1,0 +1,17 @@
+services:
+  runner:
+    build:
+      context: .
+      dockerfile: docker/runtime.Dockerfile
+    env_file:
+      - .env
+    environment:
+      RUNNER_NAME: ${RUNNER_NAME:-runner}
+      RUN_REPOSITORY: ${RUN_REPOSITORY:-quixbugs}
+      RUN_BRANCH: ${RUN_BRANCH:-main}
+      RUN_ARCHITECTURE: ${RUN_ARCHITECTURE:-mono-agent}
+      RUN_AGENT_MODELS: ${RUN_AGENT_MODELS:-{"main":"llama3.1:8b"}}
+      RUN_BOOTSTRAP_PROMPT: ${RUN_BOOTSTRAP_PROMPT:-Fix failing tests with minimal changes.}
+    volumes:
+      - ./results:/results
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock

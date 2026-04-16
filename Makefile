@@ -1,7 +1,8 @@
-.PHONY: check fix format lint typecheck test validate run docker-build docker-smoke contracts-smoke agent-smoke
+.PHONY: check fix format lint typecheck test validate run docker-build docker-smoke contracts-smoke agent-smoke compose-up compose-down compose-ps compose-smoke
 
 RUNNER_IMAGE ?= llm-autofix-runner:py313
-RUNNER_DOCKERFILE ?= docker/runner.Dockerfile
+RUNNER_DOCKERFILE ?= docker/runtime.Dockerfile
+COMPOSE_FILE ?= docker-compose.yml
 
 check: lint typecheck
 
@@ -38,3 +39,15 @@ contracts-smoke:
 
 agent-smoke:
 	uv run autofix agent-smoke
+
+compose-up:
+	docker compose -f $(COMPOSE_FILE) up -d --build runner
+
+compose-down:
+	docker compose -f $(COMPOSE_FILE) down
+
+compose-ps:
+	docker compose -f $(COMPOSE_FILE) ps
+
+compose-smoke:
+	docker compose -f $(COMPOSE_FILE) run --rm runner uv run autofix agent-smoke

@@ -7,7 +7,7 @@
 - Lista de tasks por subhitos creada para SPEC-001.
 - Convencion de carpetas por spec adoptada: specs/<NNN-slug>/{spec.md,tasks.md}.
 - H39 cerrado con OA-001.A (versionado por run).
-- Politica de red cerrada: internet libre con auditoria.
+- Politica de red definida: internet libre con auditoria.
 - SH1 completado: imagen base Docker, runner efimero, bind mount, limites dinamicos y smoke test con logs/timeout.
 - SH2 completado: contratos Pydantic v2 para input/output, IDs reproducibles y modelo de errores con smoke de validacion.
 - Validacion reforzada: pruebas unitarias base y pipeline `make validate` para lint, typecheck, tests y smoke Docker.
@@ -15,14 +15,20 @@
 - Cobertura de SH3-T01 agregada: tests de configuracion LLM, adaptador provider y flujo baseline con manejo de errores.
 - SH3-T02 realineado: localizacion autonomy-first definida via tools/MCP y directrices, sin pre-localizacion hardcodeada en el orquestador.
 - Ajuste de implementacion aplicado: se retiro la pre-localizacion heuristica del flujo baseline para respetar autonomia del agente.
+- SH3-T02B completado: integracion MCP stdio autonomy-first habilitada con servidores definidos de filesystem y web-search, inyectados al baseline via openai-agents-sdk.
+- Rebaseline iniciado: runtime completo en contenedores locales via Compose como base operativa previa a SH3-T03.
+- Rebaseline MVP aplicado: Ollama definido como provider por defecto para ejecucion local gratuita y compatibilidad opcional OpenAI/Gemini preservada.
+- Refactor estructural aplicado: separacion en submodulos `llm/` y `runtime/` con wrappers de compatibilidad para imports existentes.
+- Simplificacion runner MVP aplicada: se eliminan limites dinamicos por defecto (CPU/RAM/PIDs) y se mantiene timeout operativo con limites opcionales.
+- Simplificacion infra aplicada: comando `docker run` reducido a flags minimas, Docker Compose reducido a un unico servicio `runner`, y consolidacion en un solo Dockerfile (`runtime.Dockerfile`).
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
 - Subhito activo: SH3 - Flujo mono-agente baseline.
-- Task activa: SH3-T02B Habilitar toolset/MCP minimo para localizacion autonoma efectiva.
+- Task activa: SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
 
 ## Siguiente
-- Implementar SH3-T02B (toolset/MCP minimo para localizacion autonoma efectiva).
-- Implementar SH3-T03 (iteracion max 3 con criterio de no progreso).
+- Implementar SH3-T02D (runtime completo contenedizado via Docker Compose local con runner unico parametrizable).
 - Implementar SH3-T04 y SH3-T05 (parches multiarchivo + rechazo de regresiones).
+- Implementar SH4 (git y artefactos de parche) tras estabilizar SH3-T03/T04/T05.

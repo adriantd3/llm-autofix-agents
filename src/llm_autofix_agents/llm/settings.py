@@ -7,12 +7,15 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
+DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 
 
 class ProviderType(StrEnum):
+    OLLAMA = "ollama"
     OPENAI = "openai"
     GEMINI = "gemini"
 
@@ -22,7 +25,7 @@ class LLMSettings(BaseModel):
 
     provider: ProviderType
     model: str = Field(min_length=1)
-    api_key: SecretStr
+    api_key: SecretStr | None = None
     base_url: str | None = None
     max_turns: int = Field(default=3, ge=1, le=10)
     tracing_disabled: bool = True
@@ -50,18 +53,27 @@ class LLMSettings(BaseModel):
         else:
             values = dict(env)
 
-        provider_raw = values.get("LLM_PROVIDER", ProviderType.GEMINI.value)
+        provider_raw = values.get("LLM_PROVIDER", ProviderType.OLLAMA.value)
         provider = _parse_provider(provider_raw)
 
         model = values.get("LLM_MODEL")
         if model is None:
-            model = DEFAULT_GEMINI_MODEL if provider is ProviderType.GEMINI else DEFAULT_OPENAI_MODEL
+            if provider is ProviderType.OLLAMA:
+                model = DEFAULT_OLLAMA_MODEL
+            elif provider is ProviderType.GEMINI:
+                model = DEFAULT_GEMINI_MODEL
+            else:
+                model = DEFAULT_OPENAI_MODEL
 
         max_turns = _parse_int(values.get("LLM_MAX_TURNS"), default=3)
         tracing_disabled = _parse_bool(values.get("LLM_TRACING_DISABLED"), default=True)
 
+        api_key: str | None
         base_url: str | None
-        if provider is ProviderType.GEMINI:
+        if provider is ProviderType.OLLAMA:
+            api_key = values.get("OLLAMA_API_KEY", "ollama")
+            base_url = values.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
+        elif provider is ProviderType.GEMINI:
             api_key = values.get("GEMINI_API_KEY")
             if not api_key:
                 raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
@@ -72,14 +84,12 @@ class LLMSettings(BaseModel):
                 raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
             base_url = values.get("OPENAI_BASE_URL")
 
-        resolved_base_url: str | None = base_url
-
         try:
             return cls(
                 provider=provider,
                 model=model,
-                api_key=SecretStr(api_key),
-                base_url=resolved_base_url,
+                api_key=SecretStr(api_key) if api_key is not None else None,
+                base_url=base_url,
                 max_turns=max_turns,
                 tracing_disabled=tracing_disabled,
             )

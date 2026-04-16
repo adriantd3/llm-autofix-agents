@@ -9,13 +9,20 @@
 - Registrar decisiones y estado en la carpeta specs.
 - Integrar QuixBugs como dataset inicial para baseline.
 - Operar en modo autonomo con limites (max 3 iteraciones por run).
-- Registrar resultados experimentales con trazabilidad (JSONL).
+- Registrar resultados experimentales con trazabilidad (MongoDB Atlas primario + fallback JSONL local).
 - Permitir acceso libre a internet en run con auditoria.
 - Versionar por run la configuracion de prompt/agente en resultados.
-- Mantener dual provider en SH3 (OpenAI y Gemini) con adaptador compatible con openai-agents-sdk.
-- Ejecutar smoke real con Gemini y validar OpenAI por mocks cuando no existan credenciales OpenAI.
+- Usar Ollama como baseline por defecto en SH3 para ejecucion local gratuita sobre endpoint OpenAI-compatible.
+- Mantener OpenAI y Gemini como providers opcionales compatibles con el mismo adaptador.
 - Mantener enfoque autonomy-first: el agente decide secuencia interna de acciones usando tools/MCP bajo limites y guardrails.
+- Priorizar MVP simple: sin limites de CPU/RAM/PIDs por defecto en el Docker runner; aplicar solo timeout y dejar limites opcionales.
 - Evitar pre-localizacion heuristica hardcodeada en el orquestador; la localizacion debe emerger del uso autonomo de tools.
+- En SH3-T02B priorizar MCPs definidos para capacidad externa (filesystem + web-search) sobre tools embebidas ad-hoc para localizacion.
+- Ejecutar runtime completo del sistema en contenedores locales (Compose), no solo el sandbox de ejecucion por run.
+- Definir por contenedor un contrato minimo de instanciacion con: repository, branch, architecture, agent_models y bootstrap_prompt.
+- Permitir invocacion local simple (CLI/Compose) con un runner base parametrizable; ampliar a multiples runners en fases posteriores.
+- Mantener fuera de alcance en esta fase: colas, workers distribuidos y control plane.
+- Usar MongoDB Atlas como almacenamiento primario de resultados con fallback JSONL local en caso de fallo temporal.
 - Aceptar no determinismo del flujo interno y validar por resultados por run + estimaciones medias sobre multiples runs.
 
 ## Referencias de especificacion activa

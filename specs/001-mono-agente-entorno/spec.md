@@ -34,7 +34,7 @@
 
 ### C) Flujo interno
 - C10: Flujo de referencia = analizar fallo -> localizar -> proponer -> aplicar -> validar, sin imponer un orden interno estricto al agente.
-- C11: Estrategia inicial de localizacion = autonomia del agente via tools/MCP (filesystem, ejecucion, diff/tests), sin pre-localizador hardcodeado en el orquestador.
+- C11: Estrategia inicial de localizacion = autonomia del agente via MCPs definidos (filesystem + web-search) y directrices, sin pre-localizador hardcodeado en el orquestador.
 - C12: Politica de edicion = hacer los cambios necesarios para resolver el problema (sin limite estricto de archivos).
 - C13: No progreso (estandar) = mismos tests fallando en iteraciones consecutivas.
 - C14: Al agotar iteraciones = fallo controlado con informe y artefactos.
@@ -44,12 +44,13 @@
 - D15: 1 contenedor efimero por run.
 - D16: Montaje de codigo con bind mount.
 - D17: Red en contenedor con acceso libre a internet para documentacion y necesidades del agente, con auditoria.
-- D18: Limites de recursos dinamicos por proyecto.
+- D18: MVP simple sin limites estrictos de CPU/RAM/PIDs por defecto; solo timeout de ejecucion y limites opcionales por configuracion.
 - D19: Soporte inicial de lenguaje = Python.
 - D20: Dependencias resueltas dentro del contenedor segun gestor/lockfile del proyecto objetivo.
+- D21: Runtime completo del sistema contenedizado para invocacion local via Compose con un runner unico parametrizable.
 
 ### E) Herramientas y MCPs
-- E21: Set minimo inicial de tools (filesystem + comandos + diff/test).
+- E21: Set minimo inicial de MCPs definidos para baseline (filesystem + web-search).
 - E22: Politica de comandos = amplia con auditoria.
 - E23: Fallo de tools = reintentos acotados + fallback + log.
 - E24: Trazabilidad completa de tool calls.
@@ -69,16 +70,16 @@
 - G34: En v1 no se exige validacion extra de lint/typecheck.
 
 ### H) Modelos LLM
-- H35: Baseline de ejecucion actual = Gemini via endpoint OpenAI-compatible.
-- H36: Framework inicial = openai-agents-sdk; se podra cambiar/mejorar mas adelante.
-- H37: Configuracion minima por entorno habilitada en v1 para provider/model y limites operativos (sin exponer parametros avanzados de tuning).
+- H35: Baseline de ejecucion actual = Ollama (endpoint OpenAI-compatible) para operacion local 100% gratuita.
+- H36: Framework inicial = openai-agents-sdk; se mantiene compatibilidad opcional con OpenAI y Gemini.
+- H37: Configuracion minima por entorno habilitada en v1 para provider/model y timeout operativo, mas contrato de instanciacion por contenedor (repository, branch, architecture, agent_models, bootstrap_prompt).
 - H38: Fallos de API = retry exponencial + backoff + failover opcional.
-- H39: Versionado obligatorio por run con `prompt_version` y `agent_config_hash` en resultados JSONL.
+- H39: Versionado obligatorio por run con `prompt_version` y `agent_config_hash` en resultados persistidos.
 
 ### I) Observabilidad y datos
 - I40: Unidad de analisis = run e iteracion.
 - I41: Metricas minimas = exito/fallo, iteraciones, tiempo, tokens, coste estimado.
-- I42: Persistencia inicial de resultados = JSONL.
+- I42: Persistencia inicial de resultados = MongoDB Atlas como primario + fallback JSONL local.
 - I43: Logging = INFO por defecto y DEBUG activable.
 - I44: Trazabilidad config -> resultado con identificador reproducible.
 
@@ -96,7 +97,7 @@
 - K53: Comparacion = tasa de exito + coste + tiempo.
 
 ### L) Arquitectura y roadmap
-- L54: Arranque con implementacion simple/monolitica, refactor posterior.
+- L54: Arranque con implementacion simple/monolitica contenedizada, invocada localmente por Compose, sin control plane ni colas en esta fase.
 - L55: Contratos a estabilizar primero = input bug, contexto repo, resultado run, metrica run.
 - L56: Base lista para escalar cuando haya baseline reproducible + metricas + logs + 1 benchmark inicial.
 - L57: Orden de construccion = entorno Docker -> runner -> agente -> metricas.
@@ -111,7 +112,7 @@
 
 ### OA-001 (H39) - Cerrada
 - Decision aplicada: OA-001.A.
-- Implementacion esperada: registrar `prompt_version` y `agent_config_hash` por run en JSONL.
+- Implementacion esperada: registrar `prompt_version` y `agent_config_hash` por run en almacenamiento persistido.
 
 ### OA-002 (Red del contenedor) - Cerrada
 - Decision aplicada: acceso libre a internet con auditoria.
@@ -125,10 +126,16 @@
 - Decision aplicada: autonomia-first para localizacion y secuenciacion de acciones.
 - Implementacion esperada: evitar heuristicas de localizacion codificadas en el orquestador; priorizar directrices y toolset para que el agente decida el flujo.
 
+### OA-005 (Runtime local contenedizado + contrato de instanciacion) - Cerrada
+- Decision aplicada: runtime completo en contenedores locales via Compose con un runner base parametrizable.
+- Implementacion esperada: definir por contenedor repository, branch, architecture, agent_models y bootstrap_prompt como contrato minimo de instanciacion.
+
 ## Criterios de aceptacion de la spec
 - Existe implementacion funcional de run mono-agente con maximo de 3 iteraciones.
 - El sistema genera diff, resultado de tests y logs por run.
 - Se ejecuta en contenedor Docker efimero por run.
-- Se registra JSONL con metricas minimas y trazabilidad de configuracion.
+- El runtime completo se puede levantar localmente con Docker Compose usando un runner base parametrizable.
+- El runner respeta el contrato minimo de instanciacion (repository, branch, architecture, agent_models, bootstrap_prompt).
+- Se registran resultados en MongoDB Atlas con fallback JSONL local y trazabilidad de configuracion.
 - Se completa benchmark inicial de 5 casos QuixBugs y se documenta resultado.
 - El sistema no fuerza una trayectoria determinista interna; se evalua por resultados reproducibles a nivel de run y por metricas agregadas entre multiples runs.

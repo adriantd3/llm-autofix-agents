@@ -14,7 +14,7 @@ from llm_autofix_agents.contracts import (
     TestResults,
     build_run_identity,
 )
-from llm_autofix_agents.docker_runner import ContainerRunRequest, DockerRunner, DockerRunnerError
+from llm_autofix_agents.runtime.docker_runner import ContainerRunRequest, DockerRunner, DockerRunnerError
 
 
 def app() -> None:

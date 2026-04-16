@@ -40,7 +40,9 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 ### Tasks
 - [x] SH3-T01 Integrar openai-agents-sdk en version baseline.
 - [x] SH3-T02 Definir localizacion autonoma via tools/MCP y directrices de system prompt (sin pre-localizacion hardcodeada en el orquestador).
-- [ ] SH3-T02B Habilitar toolset/MCP minimo para localizacion autonoma efectiva (filesystem + ejecucion + diff/tests).
+- [x] SH3-T02B Habilitar MCPs definidos para localizacion autonoma efectiva (filesystem + web-search).
+- [x] SH3-T02C Definir contrato minimo de instanciacion por contenedor (repository, branch, architecture, agent_models, bootstrap_prompt).
+- [ ] SH3-T02D Contenerizar runtime completo del sistema para invocacion local via Docker Compose (runner unico).
 - [ ] SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
 - [ ] SH3-T04 Implementar aplicacion de parches multiarchivo.
 - [ ] SH3-T05 Implementar rechazo automatico de regresiones.
@@ -66,7 +68,7 @@ Asegurar gestion de cambios por run y artefactos comparables.
 Guardar metrica y trazabilidad para analisis posterior.
 
 ### Tasks
-- [ ] SH5-T01 Definir esquema JSONL de resultados.
+- [ ] SH5-T01 Definir esquema de resultados para MongoDB Atlas con fallback JSONL local.
 - [ ] SH5-T02 Registrar metrica minima (exito, iteraciones, tiempo, tokens, coste).
 - [ ] SH5-T03 Implementar logging INFO/DEBUG.
 - [ ] SH5-T04 Registrar trazabilidad de tool calls.
