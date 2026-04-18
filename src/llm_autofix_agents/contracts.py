@@ -126,6 +126,7 @@ class RunOutput(BaseModel):
     tests: TestResults | None = None
     logs: list[str] = Field(default_factory=list)
     errors: list[RunError] = Field(default_factory=list)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
     final_message: str | None = None
 
 

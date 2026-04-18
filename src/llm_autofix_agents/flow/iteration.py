@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from llm_autofix_agents.contracts import RunInput
+from llm_autofix_agents.flow.models import TestExecution
+
+
+def build_iteration_input(
+    *,
+    prompt: str,
+    iteration: int,
+    max_iterations: int,
+    previous_message: str | None,
+) -> str:
+    if previous_message is None:
+        return prompt
+    return (
+        f"[ITERATION {iteration}/{max_iterations}]\n"
+        f"Previous attempt summary:\n{previous_message}\n\n"
+        "Continue improving the repair strategy and validate with available tools.\n"
+        f"Original prompt:\n{prompt}"
+    )
+
+
+def is_no_progress(
+    *,
+    previous_message: str | None,
+    current_message: str,
+    previous_test_signature: str | None,
+    current_test_signature: str,
+    changed_files: list[str],
+) -> bool:
+    if previous_message is None or previous_test_signature is None:
+        return False
+
+    previous_normalized = " ".join(previous_message.split()).strip().lower()
+    current_normalized = " ".join(current_message.split()).strip().lower()
+    same_message = previous_normalized == current_normalized
+    same_test_signature = previous_test_signature == current_test_signature
+    no_file_changes = len(changed_files) == 0
+    return same_message and same_test_signature and no_file_changes
+
+
+def can_complete_early(*, run_input: RunInput, test_execution: TestExecution) -> bool:
+    if run_input.test_command is None:
+        return True
+    return test_execution.exit_code == 0 and not test_execution.timed_out
+
+
+def is_regression(*, baseline: TestExecution, current: TestExecution) -> bool:
+    return baseline.exit_code == 0 and current.exit_code != 0

@@ -50,9 +50,9 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 - [ ] SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
 - [x] SH3-T03A Implementar esqueleto de ciclo iterativo (max 3) con razones de parada `max_iterations` y `no_progress` por señal textual.
 - [x] SH3-T03B Reforzar no-progreso con senales objetivas (firma de tests + cambios de archivos) manteniendo loop interno del SDK.
-- [ ] SH3-T04 Consolidar salida de parche multiarchivo basada en estado real del repo (execution-driven) y empaquetado de artefactos.
+- [x] SH3-T04 Consolidar salida de parche multiarchivo basada en estado real del repo (execution-driven) y empaquetado de artefactos.
 - [x] SH3-T04A Migrar de aplicacion de parche desde salida textual del modelo a enfoque execution-driven (agente aplica cambios via MCP; orquestador observa diff/tests).
-- [ ] SH3-T05 Implementar rechazo automatico de regresiones.
+- [x] SH3-T05 Implementar rechazo automatico de regresiones.
 
 ### Done cuando
 - El flujo autonomo se ejecuta end-to-end sobre un caso controlado sin imponer pasos internos fijos al agente.

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import unittest
 from collections.abc import Sequence
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -10,11 +13,22 @@ from pydantic import SecretStr
 
 from llm_autofix_agents.agent_flow import run_agent_baseline
 from llm_autofix_agents.contracts import ErrorCategory, RunInput, RunStatus, StopReason
+from llm_autofix_agents.flow import persist_iteration_artifacts as _persist_iteration_artifacts
 from llm_autofix_agents.llm.provider import AgentFixProposal
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
 
 class AgentFlowTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._persist_patcher = patch(
+            "llm_autofix_agents.agent_flow._persist_iteration_artifacts",
+            return_value={},
+        )
+        self._persist_patcher.start()
+
+    def tearDown(self) -> None:
+        self._persist_patcher.stop()
+
     def test_run_agent_baseline_success(self) -> None:
         provider = _CapturingProvider(_proposal(rationale="suggested fix"))
         with patch(
@@ -98,7 +112,7 @@ class AgentFlowTests(unittest.TestCase):
             ],
         ), patch(
             "llm_autofix_agents.agent_flow._collect_repo_diff",
-            return_value="",
+            return_value="diff --git a/src/a.py b/src/a.py",
         ):
             output = run_agent_baseline(
                 RunInput(
@@ -112,6 +126,96 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(output.status, RunStatus.PARTIAL)
         self.assertEqual(output.stop_reason, StopReason.MAX_ITERATIONS)
         self.assertEqual(output.identity.iteration, 3)
+
+    def test_run_agent_baseline_stops_on_changed_files_mismatch(self) -> None:
+        provider = _SequencedProvider(
+            [
+                _proposal(
+                    rationale="attempt one",
+                    changed_files=["src/other.py"],
+                )
+            ]
+        )
+        with patch(
+            "llm_autofix_agents.agent_flow._run_test_command",
+            side_effect=[
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._snapshot_repo_state",
+            side_effect=[
+                {"src/a.py": "v1"},
+                {"src/a.py": "v2"},
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="diff --git a/src/a.py b/src/a.py",
+        ):
+            output = run_agent_baseline(
+                RunInput(
+                    prompt="Fix parser failure",
+                    test_command="uv run python -m unittest",
+                ),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self.assertEqual(output.status, RunStatus.FAILED)
+        self.assertEqual(output.stop_reason, StopReason.VALIDATION_FAILURE)
+        self.assertEqual(output.errors[0].category, ErrorCategory.VALIDATION)
+        self.assertIn("proposal_changed_files", output.errors[0].details)
+
+    def test_run_agent_baseline_persists_artifacts_in_results(self) -> None:
+        provider = _SequencedProvider([_proposal(rationale="fix tests", changed_files=["src/a.py"])])
+        self._persist_patcher.stop()
+
+        try:
+            with TemporaryDirectory() as tmp_dir:
+                repo_root = Path(tmp_dir)
+                with patch(
+                    "llm_autofix_agents.agent_flow._persist_iteration_artifacts",
+                    side_effect=_persist_iteration_artifacts,
+                ), patch(
+                    "llm_autofix_agents.agent_flow._run_test_command",
+                    side_effect=[
+                        SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
+                        SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-ok"),
+                    ],
+                ), patch(
+                    "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                    side_effect=[
+                        {"src/a.py": "v1"},
+                        {"src/a.py": "v2"},
+                    ],
+                ), patch(
+                    "llm_autofix_agents.agent_flow._collect_repo_diff",
+                    return_value="diff --git a/src/a.py b/src/a.py",
+                ):
+                    output = run_agent_baseline(
+                        RunInput(
+                            prompt="Fix parser failure",
+                            test_command="uv run python -m unittest",
+                            target_repo=str(repo_root),
+                        ),
+                        settings=_settings(),
+                        provider=provider,
+                    )
+
+                self.assertEqual(output.status, RunStatus.SUCCESS)
+                self.assertIn("directory", output.artifacts)
+                diff_file = repo_root / output.artifacts["diff_file"]
+                metadata_file = repo_root / output.artifacts["metadata_file"]
+                manifest_file = repo_root / output.artifacts["manifest_file"]
+                self.assertTrue(diff_file.exists())
+                self.assertTrue(metadata_file.exists())
+                self.assertTrue(manifest_file.exists())
+                manifest_payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+                self.assertEqual(manifest_payload["run_id"], output.identity.run_id)
+                self.assertEqual(manifest_payload["iterations_count"], 1)
+                self.assertEqual(manifest_payload["iterations"][0]["iteration"], 1)
+        finally:
+            self._persist_patcher.start()
 
     def test_run_agent_baseline_maps_provider_error(self) -> None:
         output = run_agent_baseline(
@@ -258,7 +362,7 @@ def _proposal(
         patch_unified_diff=patch,
         rationale=rationale,
         confidence=confidence,
-        changed_files=changed_files if changed_files is not None else ["src/app.py"],
+        changed_files=changed_files if changed_files is not None else ["src/a.py"],
     )
 
 

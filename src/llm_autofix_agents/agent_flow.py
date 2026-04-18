@@ -14,41 +14,48 @@ from llm_autofix_agents.contracts import (
     TestResults,
     build_run_identity,
 )
-from llm_autofix_agents.flow_support import (
-    TestExecution,
-)
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import TestExecution
+from llm_autofix_agents.flow import (
     build_iteration_input as _build_iteration_input,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     can_complete_early as _can_complete_early,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     collect_repo_diff as _collect_repo_diff,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     detect_changed_files as _detect_changed_files,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     is_no_progress as _is_no_progress,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     is_regression as _is_regression,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
+    persist_iteration_artifacts as _persist_iteration_artifacts,
+)
+from llm_autofix_agents.flow import (
     resolve_repo_root as _resolve_repo_root,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     resolve_test_timeout_seconds as _resolve_test_timeout_seconds,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     run_test_command as _run_test_command,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     snapshot_repo_state as _snapshot_repo_state,
 )
-from llm_autofix_agents.flow_support import (
+from llm_autofix_agents.flow import (
     to_test_results as _to_test_results,
+)
+from llm_autofix_agents.flow import (
+    validate_changed_files_coherence as _validate_changed_files_coherence,
+)
+from llm_autofix_agents.flow import (
+    validate_diff_integrity as _validate_diff_integrity,
 )
 from llm_autofix_agents.llm.provider import AgentFixProposal, LLMProvider, create_provider
 from llm_autofix_agents.llm.settings import LLMSettings
@@ -83,6 +90,7 @@ def run_agent_baseline(
     mcp_server_count = 0
     latest_tests: TestResults | None = None
     latest_diff = ""
+    latest_artifacts: dict[str, Any] = {}
     baseline_test_execution: _TestExecution | None = None
     test_timeout_seconds = _resolve_test_timeout_seconds(run_input.metadata)
     repo_root = _resolve_repo_root(run_input.target_repo)
@@ -115,7 +123,7 @@ def run_agent_baseline(
                 run_id=run_id,
             )
             run_id = identity.run_id
-            before_snapshot = _snapshot_repo_state(repo_root) if run_input.test_command is not None else {}
+            before_snapshot = _snapshot_repo_state(repo_root)
 
             proposal = _run_sync(
                 resolved_provider.run_prompt(
@@ -133,7 +141,7 @@ def run_agent_baseline(
             final_message = _render_final_message(proposal)
             latest_diff = _collect_repo_diff(repo_root)
 
-            after_snapshot = _snapshot_repo_state(repo_root) if run_input.test_command is not None else {}
+            after_snapshot = _snapshot_repo_state(repo_root)
             changed_files = _detect_changed_files(before_snapshot, after_snapshot)
             repo_changed = len(changed_files) > 0
             test_execution = _run_test_command(
@@ -142,6 +150,79 @@ def run_agent_baseline(
                 timeout_seconds=test_timeout_seconds,
             )
             latest_tests = _to_test_results(test_execution)
+            latest_artifacts = _persist_iteration_artifacts(
+                repo_root=repo_root,
+                run_id=identity.run_id,
+                iteration=iteration,
+                diff=latest_diff,
+                changed_files=changed_files,
+            )
+
+            diff_integrity_ok, diff_integrity_reason = _validate_diff_integrity(
+                changed_files=changed_files,
+                diff=latest_diff,
+            )
+            if not diff_integrity_ok:
+                accumulated_logs.extend(
+                    [
+                        "stage=validation",
+                        "validation_result=diff_integrity_failure",
+                        f"validation_reason={diff_integrity_reason}",
+                    ]
+                )
+                return RunOutput(
+                    identity=identity,
+                    status=RunStatus.FAILED,
+                    stop_reason=StopReason.VALIDATION_FAILURE,
+                    diff=latest_diff,
+                    logs=accumulated_logs,
+                    tests=latest_tests,
+                    errors=[
+                        RunError(
+                            category=ErrorCategory.VALIDATION,
+                            message="Diff integrity validation failed",
+                            retryable=False,
+                            details={
+                                "reason": diff_integrity_reason,
+                                "changed_files_count": len(changed_files),
+                            },
+                        )
+                    ],
+                    artifacts=latest_artifacts,
+                    final_message=final_message,
+                )
+
+            coherence_ok, coherence_details = _validate_changed_files_coherence(
+                proposal=proposal,
+                changed_files=changed_files,
+                repo_changed=repo_changed,
+                diff=latest_diff,
+            )
+            if not coherence_ok:
+                accumulated_logs.extend(
+                    [
+                        "stage=validation",
+                        "validation_result=changed_files_mismatch",
+                    ]
+                )
+                return RunOutput(
+                    identity=identity,
+                    status=RunStatus.FAILED,
+                    stop_reason=StopReason.VALIDATION_FAILURE,
+                    diff=latest_diff,
+                    logs=accumulated_logs,
+                    tests=latest_tests,
+                    errors=[
+                        RunError(
+                            category=ErrorCategory.VALIDATION,
+                            message="Proposal changed_files does not match repository changes",
+                            retryable=False,
+                            details=coherence_details,
+                        )
+                    ],
+                    artifacts=latest_artifacts,
+                    final_message=final_message,
+                )
 
             if baseline_test_execution is not None and _is_regression(
                 baseline=baseline_test_execution,
@@ -175,6 +256,7 @@ def run_agent_baseline(
                             },
                         )
                     ],
+                    artifacts=latest_artifacts,
                     final_message=final_message,
                 )
 
@@ -207,6 +289,7 @@ def run_agent_baseline(
                     diff=latest_diff,
                     logs=accumulated_logs,
                     tests=latest_tests,
+                    artifacts=latest_artifacts,
                     final_message=final_message,
                 )
 
@@ -221,6 +304,7 @@ def run_agent_baseline(
                     diff=latest_diff,
                     logs=accumulated_logs,
                     tests=latest_tests,
+                    artifacts=latest_artifacts,
                     final_message=final_message,
                 )
 
@@ -238,6 +322,7 @@ def run_agent_baseline(
             diff=latest_diff,
             logs=accumulated_logs,
             tests=latest_tests,
+            artifacts=latest_artifacts,
             final_message=final_message,
         )
     except Exception as exc:
@@ -272,6 +357,7 @@ def run_agent_baseline(
                     details={"provider": resolved_settings.provider.value},
                 )
             ],
+            artifacts=latest_artifacts,
             final_message=None,
         )
 
