@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 import unittest
 from collections.abc import Sequence
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -14,6 +14,7 @@ from pydantic import SecretStr
 from llm_autofix_agents.agent_flow import run_agent_baseline
 from llm_autofix_agents.contracts import ErrorCategory, RunInput, RunStatus, StopReason
 from llm_autofix_agents.flow import persist_iteration_artifacts as _persist_iteration_artifacts
+from llm_autofix_agents.flow.git_ops import TempBranchContext
 from llm_autofix_agents.llm.provider import AgentFixProposal
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
@@ -24,10 +25,16 @@ class AgentFlowTests(unittest.TestCase):
             "llm_autofix_agents.agent_flow._persist_iteration_artifacts",
             return_value={},
         )
+        self._git_repo_patcher = patch(
+            "llm_autofix_agents.agent_flow._is_git_repository",
+            return_value=False,
+        )
         self._persist_patcher.start()
+        self._git_repo_patcher.start()
 
     def tearDown(self) -> None:
         self._persist_patcher.stop()
+        self._git_repo_patcher.stop()
 
     def test_run_agent_baseline_success(self) -> None:
         provider = _CapturingProvider(_proposal(rationale="suggested fix"))
@@ -179,7 +186,12 @@ class AgentFlowTests(unittest.TestCase):
                 ), patch(
                     "llm_autofix_agents.agent_flow._run_test_command",
                     side_effect=[
-                        SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
+                        SimpleNamespace(
+                            exit_code=1,
+                            timed_out=False,
+                            output="FAILED (failures=1)",
+                            signature="sig-baseline",
+                        ),
                         SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-ok"),
                     ],
                 ), patch(
@@ -267,7 +279,12 @@ class AgentFlowTests(unittest.TestCase):
         with patch(
             "llm_autofix_agents.agent_flow._run_test_command",
             side_effect=[
-                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline-fail"),
+                SimpleNamespace(
+                    exit_code=1,
+                    timed_out=False,
+                    output="FAILED (failures=1)",
+                    signature="sig-baseline-fail",
+                ),
                 SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-now-ok"),
             ],
         ), patch(
@@ -291,6 +308,125 @@ class AgentFlowTests(unittest.TestCase):
 
         self.assertEqual(output.status, RunStatus.SUCCESS)
         self.assertEqual(output.stop_reason, StopReason.COMPLETED)
+
+    def test_run_agent_baseline_creates_and_deletes_temp_branch_on_success(self) -> None:
+        provider = _CapturingProvider(_proposal(rationale="suggested fix"))
+        self._git_repo_patcher.stop()
+        with patch(
+            "llm_autofix_agents.agent_flow._is_git_repository",
+            return_value=True,
+        ), patch(
+            "llm_autofix_agents.agent_flow._create_temp_branch",
+            return_value=TempBranchContext(
+                branch_name="autofix/20260418T100000Z-run-abc",
+                original_branch="main",
+            ),
+        ) as create_branch, patch(
+            "llm_autofix_agents.agent_flow._restore_original_branch",
+        ) as restore_branch, patch(
+            "llm_autofix_agents.agent_flow._delete_branch",
+        ) as delete_branch, patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="",
+        ):
+            output = run_agent_baseline(
+                RunInput(prompt="Fix parser failure"),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self._git_repo_patcher.start()
+        self.assertEqual(output.status, RunStatus.SUCCESS)
+        create_branch.assert_called_once()
+        restore_branch.assert_called_once()
+        delete_branch.assert_called_once()
+
+    def test_run_agent_baseline_keeps_temp_branch_on_validation_failure(self) -> None:
+        provider = _SequencedProvider(
+            [
+                _proposal(
+                    rationale="attempt one",
+                    changed_files=["src/other.py"],
+                )
+            ]
+        )
+        self._git_repo_patcher.stop()
+        with patch(
+            "llm_autofix_agents.agent_flow._is_git_repository",
+            return_value=True,
+        ), patch(
+            "llm_autofix_agents.agent_flow._create_temp_branch",
+            return_value=TempBranchContext(
+                branch_name="autofix/20260418T100000Z-run-abc",
+                original_branch="main",
+            ),
+        ), patch(
+            "llm_autofix_agents.agent_flow._restore_original_branch",
+        ) as restore_branch, patch(
+            "llm_autofix_agents.agent_flow._delete_branch",
+        ) as delete_branch, patch(
+            "llm_autofix_agents.agent_flow._run_test_command",
+            side_effect=[
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._snapshot_repo_state",
+            side_effect=[
+                {"src/a.py": "v1"},
+                {"src/a.py": "v2"},
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="diff --git a/src/a.py b/src/a.py",
+        ):
+            output = run_agent_baseline(
+                RunInput(
+                    prompt="Fix parser failure",
+                    test_command="uv run python -m unittest",
+                ),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self._git_repo_patcher.start()
+        self.assertEqual(output.status, RunStatus.FAILED)
+        restore_branch.assert_called_once()
+        delete_branch.assert_not_called()
+
+    def test_run_agent_baseline_fails_when_success_cleanup_fails(self) -> None:
+        provider = _CapturingProvider(_proposal(rationale="suggested fix"))
+        self._git_repo_patcher.stop()
+        with patch(
+            "llm_autofix_agents.agent_flow._is_git_repository",
+            return_value=True,
+        ), patch(
+            "llm_autofix_agents.agent_flow._create_temp_branch",
+            return_value=TempBranchContext(
+                branch_name="autofix/20260418T100000Z-run-abc",
+                original_branch="main",
+            ),
+        ), patch(
+            "llm_autofix_agents.agent_flow._restore_original_branch",
+            side_effect=RuntimeError("cannot switch back"),
+        ), patch(
+            "llm_autofix_agents.agent_flow._delete_branch",
+        ), patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="",
+        ):
+            output = run_agent_baseline(
+                RunInput(prompt="Fix parser failure"),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self._git_repo_patcher.start()
+        self.assertEqual(output.status, RunStatus.FAILED)
+        self.assertEqual(output.stop_reason, StopReason.INFRA_FAILURE)
+        self.assertEqual(len(output.errors), 1)
+        self.assertEqual(output.errors[0].category, ErrorCategory.INFRA)
+        self.assertIn("branch_cleanup_error", output.errors[0].details)
 
 
 class _CapturingProvider:

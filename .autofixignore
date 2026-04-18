@@ -1,0 +1,19 @@
+# SH4 artifact exclusions for clean APR patches
+# One rule per line. Supports directory prefixes and glob file names.
+
+.git/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+results/
+build/
+dist/
+*.egg-info/
+htmlcov/
+.coverage
+*.pyc
+*.pyo
+*.so
+*.o

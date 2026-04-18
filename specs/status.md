@@ -38,13 +38,17 @@
 - Simplificacion runner MVP aplicada: se eliminan limites dinamicos por defecto (CPU/RAM/PIDs) y se mantiene timeout operativo con limites opcionales.
 - Simplificacion infra aplicada: comando `docker run` reducido a flags minimas, Docker Compose reducido a un unico servicio `runner`, y consolidacion en un solo Dockerfile (`runtime.Dockerfile`).
 - SH3-T02D1 completado: contrato RUN_* validable en runtime con comando `runtime-contract-smoke` y smoke Compose asociado (`compose-contract-smoke`).
+- SH4 completado: rama temporal por run (`autofix/<timestamp>-<run_id>`), restauracion de rama original y limpieza en exito, con trazas de auditoria en logs.
+- SH4-T02/T04 completados: artefactos enriquecidos por iteracion con `patch_summary.json` y `file_changes.json`, mas consolidacion de trazabilidad por archivo en `manifest.json`.
+- SH4-T03 completado: filtrado de artefactos de build/test/cache con `.autofixignore` aplicado a snapshot y diff para parches limpios.
+- Cobertura SH4 agregada: tests unitarios dedicados para operaciones Git, reglas de exclusión y artefactos; suite total en verde.
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
-- Subhito activo: SH4 - Git y artefactos de parche.
-- Task activa: SH4-T01 Crear rama temporal por run.
+- Subhito activo: SH5 - Observabilidad y datos experimentales.
+- Task activa: SH5-T01 Definir esquema de resultados para MongoDB Atlas con fallback JSONL local.
 
 ## Siguiente
-- Implementar SH4-T01/T02/T03/T04 (git y artefactos de parche).
+- Implementar SH5-T01/T02/T03/T04 (observabilidad y datos experimentales).
 - Ejecutar SH6-T00/T01/T02 para validar 1 caso QuixBugs reproducible como gate MVP.

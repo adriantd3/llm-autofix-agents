@@ -61,15 +61,15 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 - SH3-T02D1 -> SH3-T03 -> SH3-T04 -> SH3-T05.
 - SH3-T02D2 queda diferida mientras no bloquee la validacion de 1 bugfix reproducible.
 
-## SH4 - Git y artefactos de parche (Pendiente)
+## SH4 - Git y artefactos de parche (Completado)
 ### Objetivo
 Asegurar gestion de cambios por run y artefactos comparables.
 
 ### Tasks
-- [ ] SH4-T01 Crear rama temporal por run.
-- [ ] SH4-T02 Exportar unified diff + resumen.
-- [ ] SH4-T03 Limpiar/ignorar artefactos de build/test.
-- [ ] SH4-T04 Registrar trazabilidad de cambios por archivo.
+- [x] SH4-T01 Crear rama temporal por run.
+- [x] SH4-T02 Exportar unified diff + resumen.
+- [x] SH4-T03 Limpiar/ignorar artefactos de build/test.
+- [x] SH4-T04 Registrar trazabilidad de cambios por archivo.
 
 ### Done cuando
 - Cada run deja diff limpio y auditable.

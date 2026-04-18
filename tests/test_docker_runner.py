@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from llm_autofix_agents.runtime.docker_runner import (
     ContainerRunRequest,
-    DockerRunnerError,
     DockerRunner,
+    DockerRunnerError,
     ResourceLimits,
     resolve_dynamic_limits,
 )

@@ -3,6 +3,13 @@ from llm_autofix_agents.flow.artifacts import (
     validate_changed_files_coherence,
     validate_diff_integrity,
 )
+from llm_autofix_agents.flow.git_ops import (
+    TempBranchContext,
+    create_temp_branch,
+    delete_branch,
+    is_git_repository,
+    restore_original_branch,
+)
 from llm_autofix_agents.flow.iteration import (
     build_iteration_input,
     can_complete_early,
@@ -14,7 +21,9 @@ from llm_autofix_agents.flow.patch_ops import apply_unified_diff, run_git_apply
 from llm_autofix_agents.flow.repo_state import (
     collect_repo_diff,
     detect_changed_files,
+    load_ignore_rules,
     resolve_repo_root,
+    should_ignore_path,
     snapshot_repo_state,
 )
 from llm_autofix_agents.flow.test_execution import (
@@ -34,6 +43,7 @@ __all__ = [
     "build_test_signature",
     "can_complete_early",
     "collect_repo_diff",
+    "create_temp_branch",
     "detect_changed_files",
     "extract_int",
     "is_no_progress",
@@ -48,4 +58,10 @@ __all__ = [
     "to_test_results",
     "validate_changed_files_coherence",
     "validate_diff_integrity",
+    "TempBranchContext",
+    "load_ignore_rules",
+    "is_git_repository",
+    "delete_branch",
+    "restore_original_branch",
+    "should_ignore_path",
 ]

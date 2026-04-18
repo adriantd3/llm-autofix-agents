@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Coroutine
+from pathlib import Path
 from typing import Any
 
 from llm_autofix_agents.contracts import (
@@ -25,13 +26,25 @@ from llm_autofix_agents.flow import (
     collect_repo_diff as _collect_repo_diff,
 )
 from llm_autofix_agents.flow import (
+    create_temp_branch as _create_temp_branch,
+)
+from llm_autofix_agents.flow import (
+    delete_branch as _delete_branch,
+)
+from llm_autofix_agents.flow import (
     detect_changed_files as _detect_changed_files,
+)
+from llm_autofix_agents.flow import (
+    is_git_repository as _is_git_repository,
 )
 from llm_autofix_agents.flow import (
     is_no_progress as _is_no_progress,
 )
 from llm_autofix_agents.flow import (
     is_regression as _is_regression,
+)
+from llm_autofix_agents.flow import (
+    load_ignore_rules as _load_ignore_rules,
 )
 from llm_autofix_agents.flow import (
     persist_iteration_artifacts as _persist_iteration_artifacts,
@@ -41,6 +54,9 @@ from llm_autofix_agents.flow import (
 )
 from llm_autofix_agents.flow import (
     resolve_test_timeout_seconds as _resolve_test_timeout_seconds,
+)
+from llm_autofix_agents.flow import (
+    restore_original_branch as _restore_original_branch,
 )
 from llm_autofix_agents.flow import (
     run_test_command as _run_test_command,
@@ -57,6 +73,7 @@ from llm_autofix_agents.flow import (
 from llm_autofix_agents.flow import (
     validate_diff_integrity as _validate_diff_integrity,
 )
+from llm_autofix_agents.flow.git_ops import TempBranchContext
 from llm_autofix_agents.llm.provider import AgentFixProposal, LLMProvider, create_provider
 from llm_autofix_agents.llm.settings import LLMSettings
 from llm_autofix_agents.toolset import build_mcp_servers
@@ -94,6 +111,9 @@ def run_agent_baseline(
     baseline_test_execution: _TestExecution | None = None
     test_timeout_seconds = _resolve_test_timeout_seconds(run_input.metadata)
     repo_root = _resolve_repo_root(run_input.target_repo)
+    ignore_rules = _load_ignore_rules(repo_root)
+    temp_branch_context: TempBranchContext | None = None
+    branch_cleanup_error: str | None = None
 
     try:
         mcp_servers = build_mcp_servers(target_repo=run_input.target_repo)
@@ -123,6 +143,22 @@ def run_agent_baseline(
                 run_id=run_id,
             )
             run_id = identity.run_id
+
+            if iteration == 1 and temp_branch_context is None and _is_git_repository(repo_root):
+                branch_prefix = _resolve_temp_branch_prefix(run_input.metadata)
+                temp_branch_context = _create_temp_branch(
+                    repo_root,
+                    run_id=run_id,
+                    branch_prefix=branch_prefix,
+                )
+                accumulated_logs.extend(
+                    [
+                        "stage=git",
+                        f"git_original_branch={temp_branch_context.original_branch}",
+                        f"git_temp_branch={temp_branch_context.branch_name}",
+                    ]
+                )
+
             before_snapshot = _snapshot_repo_state(repo_root)
 
             proposal = _run_sync(
@@ -156,6 +192,8 @@ def run_agent_baseline(
                 iteration=iteration,
                 diff=latest_diff,
                 changed_files=changed_files,
+                temp_branch=temp_branch_context.branch_name if temp_branch_context is not None else None,
+                ignore_rules=ignore_rules,
             )
 
             diff_integrity_ok, diff_integrity_reason = _validate_diff_integrity(
@@ -163,6 +201,11 @@ def run_agent_baseline(
                 diff=latest_diff,
             )
             if not diff_integrity_ok:
+                branch_cleanup_error = _restore_temp_branch_for_debug(
+                    repo_root=repo_root,
+                    temp_branch_context=temp_branch_context,
+                    accumulated_logs=accumulated_logs,
+                )
                 accumulated_logs.extend(
                     [
                         "stage=validation",
@@ -199,6 +242,11 @@ def run_agent_baseline(
                 diff=latest_diff,
             )
             if not coherence_ok:
+                branch_cleanup_error = _restore_temp_branch_for_debug(
+                    repo_root=repo_root,
+                    temp_branch_context=temp_branch_context,
+                    accumulated_logs=accumulated_logs,
+                )
                 accumulated_logs.extend(
                     [
                         "stage=validation",
@@ -228,6 +276,11 @@ def run_agent_baseline(
                 baseline=baseline_test_execution,
                 current=test_execution,
             ):
+                branch_cleanup_error = _restore_temp_branch_for_debug(
+                    repo_root=repo_root,
+                    temp_branch_context=temp_branch_context,
+                    accumulated_logs=accumulated_logs,
+                )
                 accumulated_logs.extend(
                     [
                         "stage=validation",
@@ -282,6 +335,11 @@ def run_agent_baseline(
                 current_test_signature=test_execution.signature,
                 changed_files=changed_files,
             ):
+                branch_cleanup_error = _restore_temp_branch_for_debug(
+                    repo_root=repo_root,
+                    temp_branch_context=temp_branch_context,
+                    accumulated_logs=accumulated_logs,
+                )
                 return RunOutput(
                     identity=identity,
                     status=RunStatus.PARTIAL,
@@ -297,6 +355,49 @@ def run_agent_baseline(
             previous_test_signature = test_execution.signature
 
             if _can_complete_early(run_input=run_input, test_execution=test_execution):
+                if temp_branch_context is not None:
+                    try:
+                        _restore_original_branch(repo_root, original_branch=temp_branch_context.original_branch)
+                        _delete_branch(repo_root, branch_name=temp_branch_context.branch_name)
+                        accumulated_logs.extend(
+                            [
+                                "stage=git",
+                                "git_branch_cleanup=deleted_on_success",
+                            ]
+                        )
+                    except RuntimeError as exc:
+                        branch_cleanup_error = str(exc)
+                if branch_cleanup_error:
+                    accumulated_logs.extend(
+                        [
+                            "stage=git",
+                            "git_branch_cleanup=failed_on_success",
+                            f"git_branch_cleanup_error={branch_cleanup_error}",
+                        ]
+                    )
+                    return RunOutput(
+                        identity=identity,
+                        status=RunStatus.FAILED,
+                        stop_reason=StopReason.INFRA_FAILURE,
+                        diff=latest_diff,
+                        logs=accumulated_logs,
+                        tests=latest_tests,
+                        errors=[
+                            RunError(
+                                category=ErrorCategory.INFRA,
+                                message="Temporary branch cleanup failed after successful validation",
+                                retryable=False,
+                                details={
+                                    "branch_cleanup_error": branch_cleanup_error,
+                                    "temp_branch": (
+                                        temp_branch_context.branch_name if temp_branch_context is not None else None
+                                    ),
+                                },
+                            )
+                        ],
+                        artifacts=latest_artifacts,
+                        final_message=final_message,
+                    )
                 return RunOutput(
                     identity=identity,
                     status=RunStatus.SUCCESS,
@@ -309,6 +410,11 @@ def run_agent_baseline(
                 )
 
         assert final_message is not None
+        branch_cleanup_error = _restore_temp_branch_for_debug(
+            repo_root=repo_root,
+            temp_branch_context=temp_branch_context,
+            accumulated_logs=accumulated_logs,
+        )
         identity = build_run_identity(
             run_input=run_input,
             agent_config=resolved_settings.fingerprint_payload(),
@@ -326,6 +432,17 @@ def run_agent_baseline(
             final_message=final_message,
         )
     except Exception as exc:
+        if temp_branch_context is not None:
+            try:
+                _restore_original_branch(repo_root, original_branch=temp_branch_context.original_branch)
+                accumulated_logs.extend(
+                    [
+                        "stage=git",
+                        f"git_branch_cleanup=kept_for_debug:{temp_branch_context.branch_name}",
+                    ]
+                )
+            except RuntimeError as restore_exc:
+                branch_cleanup_error = str(restore_exc)
         failure_identity = build_run_identity(
             run_input=run_input,
             agent_config=resolved_settings.fingerprint_payload(),
@@ -352,7 +469,7 @@ def run_agent_baseline(
             errors=[
                 RunError(
                     category=ErrorCategory.MODEL,
-                    message=str(exc),
+                    message=_format_failure_message(exc, branch_cleanup_error),
                     retryable=False,
                     details={"provider": resolved_settings.provider.value},
                 )
@@ -415,6 +532,52 @@ def _resolve_max_iterations(metadata: dict[str, Any]) -> int:
     if value < 1 or value > 3:
         raise ValueError("metadata.max_iterations must be between 1 and 3")
     return value
+
+
+def _resolve_temp_branch_prefix(metadata: dict[str, Any]) -> str:
+    value = metadata.get("temp_branch_prefix")
+    if value is None:
+        return "autofix"
+    if not isinstance(value, str):
+        raise ValueError("metadata.temp_branch_prefix must be a string")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("metadata.temp_branch_prefix cannot be empty")
+    return normalized
+
+
+def _format_failure_message(exc: Exception, branch_cleanup_error: str | None) -> str:
+    if not branch_cleanup_error:
+        return str(exc)
+    return f"{exc}; branch_cleanup_error={branch_cleanup_error}"
+
+
+def _restore_temp_branch_for_debug(
+    *,
+    repo_root: Path,
+    temp_branch_context: TempBranchContext | None,
+    accumulated_logs: list[str],
+) -> str | None:
+    if temp_branch_context is None:
+        return None
+    try:
+        _restore_original_branch(repo_root, original_branch=temp_branch_context.original_branch)
+        accumulated_logs.extend(
+            [
+                "stage=git",
+                f"git_branch_cleanup=kept_for_debug:{temp_branch_context.branch_name}",
+            ]
+        )
+        return None
+    except RuntimeError as restore_exc:
+        accumulated_logs.extend(
+            [
+                "stage=git",
+                "git_branch_cleanup=restore_failed",
+                f"git_branch_cleanup_error={restore_exc}",
+            ]
+        )
+        return str(restore_exc)
 
 
 def _proposal_signature(proposal: AgentFixProposal) -> str:

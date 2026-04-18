@@ -73,3 +73,19 @@
 - Por que estuvo mal: sobrecomplica el archivo y añade comandos que en general no aportan tanto
 - Alternativa recomendada: Analizar siempre si un comando es muy importante y realmente ayuda meterlo en el makefile. Si no, simplemente ejectar de manera normal
 - Regla preventiva para futuras specs: No introducir comandos si no son imprescindibles
+
+## 2026-04-18 (tests de lifecycle Git)
+- Contexto: implementacion de rama temporal por run en SH4.
+- Anti-patron detectado: ejecutar tests de orquestador sobre el repo real sin aislar operaciones Git.
+- Que no hay que hacer: dejar que tests unitarios creen/cambien ramas en el workspace de desarrollo.
+- Por que estuvo mal: introduce efectos colaterales, ensucia ramas locales y puede ocultar fallos reales por estado mutable del repo.
+- Alternativa recomendada: en tests de flujo, mockear deteccion de repo Git por defecto; para validar operaciones reales, usar repos temporales dedicados.
+- Regla preventiva para futuras specs: cualquier test que toque Git debe ejecutarse en sandbox temporal o con mocks estrictos de comandos de rama.
+
+## 2026-04-18 (spec/tasks no absolutas)
+- Contexto: revisiones de alcance donde la vision del usuario no siempre coincide con tasks heredadas.
+- Anti-patron detectado: asumir specs y tasks como verdad absoluta y ejecutarlas de forma ciega.
+- Que no hay que hacer: implementar por inercia sin cuestionar si el subhito sigue alineado con objetivo, filosofia y direccion actual del proyecto.
+- Por que estuvo mal: en desarrollo incremental, decisiones antiguas pueden quedar desalineadas o ser incompatibles con el estado real del sistema y la vision vigente.
+- Alternativa recomendada: antes de analizar o implementar, validar explicitamente: (1) alineacion de spec con objetivo/filosofia, (2) utilidad real de tasks para el proposito, (3) posibles incompatibilidades tecnicas o de direccion.
+- Regla preventiva para futuras specs: no iniciar implementacion sin una mini-validacion estrategica previa y, si hay dudas de vision general, preguntar al usuario antes de ejecutar.
