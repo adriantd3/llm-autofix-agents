@@ -110,6 +110,41 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(result.changed_files, ["a.py"])
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_enriches_usage_and_tool_calls(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(
+            final_output={
+                "rationale": "Fix wrong literal",
+                "confidence": 0.72,
+                "changed_files": ["a.py"],
+            },
+            usage={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+            new_items=[
+                {
+                    "type": "tool_call",
+                    "name": "shell",
+                    "arguments": {"command": "uv run pytest"},
+                    "call_id": "call-1",
+                    "status": "completed",
+                }
+            ],
+        )
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(
+            provider.run_prompt(
+                instructions="repair",
+                user_input="failing test output",
+                max_turns=2,
+            )
+        )
+
+        self.assertEqual(result.input_tokens, 11)
+        self.assertEqual(result.output_tokens, 7)
+        self.assertEqual(result.total_tokens, 18)
+        self.assertEqual(len(result.tool_calls), 1)
+        self.assertEqual(result.tool_calls[0]["name"], "shell")
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_rejects_invalid_schema(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(final_output={"confidence": 0.3})
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())

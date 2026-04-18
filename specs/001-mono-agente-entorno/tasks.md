@@ -79,10 +79,10 @@ Asegurar gestion de cambios por run y artefactos comparables.
 Guardar metrica y trazabilidad para analisis posterior.
 
 ### Tasks
-- [ ] SH5-T01 Definir esquema de resultados para MongoDB Atlas con fallback JSONL local.
-- [ ] SH5-T02 Registrar metrica minima (exito, iteraciones, tiempo, tokens, coste).
-- [ ] SH5-T03 Implementar logging INFO/DEBUG.
-- [ ] SH5-T04 Registrar trazabilidad de tool calls.
+- [x] SH5-T01 Definir esquema de resultados para MongoDB Atlas con fallback JSONL local.
+- [x] SH5-T02 Registrar metrica minima (exito, iteraciones, tiempo, tokens, coste).
+- [x] SH5-T03 Implementar logging INFO/DEBUG.
+- [x] SH5-T04 Registrar trazabilidad de tool calls.
 - [x] SH5-T05 Cerrar OA-001 (versionado de prompt/config).
 
 ### Done cuando

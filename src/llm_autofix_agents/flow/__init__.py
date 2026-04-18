@@ -17,6 +17,11 @@ from llm_autofix_agents.flow.iteration import (
     is_regression,
 )
 from llm_autofix_agents.flow.models import PatchApplyResult, TestExecution
+from llm_autofix_agents.flow.observability import (
+    build_observability_record,
+    build_run_metrics,
+    persist_observability_record,
+)
 from llm_autofix_agents.flow.patch_ops import apply_unified_diff, run_git_apply
 from llm_autofix_agents.flow.repo_state import (
     collect_repo_diff,
@@ -58,6 +63,9 @@ __all__ = [
     "to_test_results",
     "validate_changed_files_coherence",
     "validate_diff_integrity",
+    "build_run_metrics",
+    "build_observability_record",
+    "persist_observability_record",
     "TempBranchContext",
     "load_ignore_rules",
     "is_git_repository",

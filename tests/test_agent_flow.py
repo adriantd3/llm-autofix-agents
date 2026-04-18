@@ -25,15 +25,21 @@ class AgentFlowTests(unittest.TestCase):
             "llm_autofix_agents.agent_flow._persist_iteration_artifacts",
             return_value={},
         )
+        self._persist_observability_patcher = patch(
+            "llm_autofix_agents.agent_flow._persist_observability_record",
+            return_value={"backend": "jsonl", "path": "results/run-id/result.jsonl"},
+        )
         self._git_repo_patcher = patch(
             "llm_autofix_agents.agent_flow._is_git_repository",
             return_value=False,
         )
         self._persist_patcher.start()
+        self._persist_observability_patcher.start()
         self._git_repo_patcher.start()
 
     def tearDown(self) -> None:
         self._persist_patcher.stop()
+        self._persist_observability_patcher.stop()
         self._git_repo_patcher.stop()
 
     def test_run_agent_baseline_success(self) -> None:
@@ -53,7 +59,11 @@ class AgentFlowTests(unittest.TestCase):
         self.assertIn("rationale: suggested fix", output.final_message or "")
         self.assertEqual(output.identity.iteration, 1)
         self.assertIn("stage=agent", output.logs)
+        self.assertIn("stage=observability", output.logs)
         self.assertIn("toolset=mcp-stdio", output.logs)
+        self.assertIn("observability_backend=jsonl", output.logs)
+        self.assertIn("observability", output.artifacts)
+        self.assertIn("metrics", output.artifacts["observability"])
         self.assertIsNotNone(provider.last_user_input)
         assert provider.last_user_input is not None
         self.assertEqual(provider.last_user_input, "Fix parser failure")
@@ -493,12 +503,20 @@ def _proposal(
     patch: str | None = None,
     confidence: float = 0.8,
     changed_files: list[str] | None = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    total_tokens: int = 0,
+    tool_calls: list[dict[str, str]] | None = None,
 ) -> AgentFixProposal:
     return AgentFixProposal(
         patch_unified_diff=patch,
         rationale=rationale,
         confidence=confidence,
         changed_files=changed_files if changed_files is not None else ["src/a.py"],
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        tool_calls=tool_calls if tool_calls is not None else [],
     )
 
 

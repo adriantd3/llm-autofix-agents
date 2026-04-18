@@ -75,6 +75,78 @@ class RunError(BaseModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+class ToolCallTrace(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    iteration: int = Field(ge=1)
+    name: str = Field(min_length=1)
+    kind: str = Field(min_length=1)
+    arguments: str | None = None
+    call_id: str | None = None
+    status: str | None = None
+
+    @field_validator("name", "kind")
+    @classmethod
+    def _normalize_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value cannot be empty")
+        return normalized
+
+    @field_validator("arguments", "call_id", "status")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        return normalized
+
+
+class RunMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool
+    iterations: int = Field(ge=1)
+    duration_seconds: float = Field(ge=0.0)
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+    estimated_cost_usd: float = Field(ge=0.0)
+    cost_source: str = Field(min_length=1)
+
+    @field_validator("cost_source")
+    @classmethod
+    def _normalize_cost_source(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value cannot be empty")
+        return normalized
+
+
+class RunObservabilityRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str = Field(min_length=1)
+    run_fingerprint: str = Field(min_length=16, max_length=16)
+    iteration_id: str = Field(min_length=1)
+    status: RunStatus
+    stop_reason: StopReason
+    metrics: RunMetrics
+    tool_calls: list[ToolCallTrace] = Field(default_factory=list)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = Field(min_length=1)
+
+    @field_validator("run_id", "iteration_id", "timestamp")
+    @classmethod
+    def _normalize_non_empty_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value cannot be empty")
+        return normalized
+
+
 class RunIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

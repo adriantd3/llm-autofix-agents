@@ -6,7 +6,12 @@ from pydantic import ValidationError
 
 from llm_autofix_agents.contracts import (
     RunInput,
+    RunMetrics,
+    RunObservabilityRecord,
+    RunStatus,
+    StopReason,
     TestResults,
+    ToolCallTrace,
     build_run_identity,
     compute_run_fingerprint,
     load_container_instantiation_from_env,
@@ -65,6 +70,42 @@ class ContractsTests(unittest.TestCase):
                     "RUN_AGENT_MODELS": "not-json",
                     "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                 }
+            )
+
+    def test_tool_call_trace_normalizes_optional_values(self) -> None:
+        trace = ToolCallTrace(
+            iteration=1,
+            name=" shell ",
+            kind=" tool_call ",
+            arguments="   ",
+            call_id="   ",
+            status=" ok ",
+        )
+        self.assertEqual(trace.name, "shell")
+        self.assertEqual(trace.kind, "tool_call")
+        self.assertIsNone(trace.arguments)
+        self.assertIsNone(trace.call_id)
+        self.assertEqual(trace.status, "ok")
+
+    def test_run_observability_record_requires_non_empty_identifiers(self) -> None:
+        with self.assertRaises(ValidationError):
+            RunObservabilityRecord(
+                run_id="",
+                run_fingerprint="0123456789abcdef",
+                iteration_id="run-1-it01",
+                status=RunStatus.SUCCESS,
+                stop_reason=StopReason.COMPLETED,
+                metrics=RunMetrics(
+                    success=True,
+                    iterations=1,
+                    duration_seconds=0.1,
+                    input_tokens=0,
+                    output_tokens=0,
+                    total_tokens=0,
+                    estimated_cost_usd=0.0,
+                    cost_source="missing_rate",
+                ),
+                timestamp="2026-04-18T10:00:00+00:00",
             )
 
 

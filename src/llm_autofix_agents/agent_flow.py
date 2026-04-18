@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from collections.abc import Coroutine
 from pathlib import Path
 from typing import Any
@@ -13,11 +15,18 @@ from llm_autofix_agents.contracts import (
     RunStatus,
     StopReason,
     TestResults,
+    ToolCallTrace,
     build_run_identity,
 )
 from llm_autofix_agents.flow import TestExecution
 from llm_autofix_agents.flow import (
     build_iteration_input as _build_iteration_input,
+)
+from llm_autofix_agents.flow import (
+    build_observability_record as _build_observability_record,
+)
+from llm_autofix_agents.flow import (
+    build_run_metrics as _build_run_metrics,
 )
 from llm_autofix_agents.flow import (
     can_complete_early as _can_complete_early,
@@ -48,6 +57,9 @@ from llm_autofix_agents.flow import (
 )
 from llm_autofix_agents.flow import (
     persist_iteration_artifacts as _persist_iteration_artifacts,
+)
+from llm_autofix_agents.flow import (
+    persist_observability_record as _persist_observability_record,
 )
 from llm_autofix_agents.flow import (
     resolve_repo_root as _resolve_repo_root,
@@ -88,6 +100,7 @@ _BASELINE_INSTRUCTIONS = (
 )
 
 _TestExecution = TestExecution
+logger = logging.getLogger(__name__)
 
 
 def run_agent_baseline(
@@ -104,6 +117,10 @@ def run_agent_baseline(
     previous_proposal_signature: str | None = None
     previous_test_signature: str | None = None
     accumulated_logs: list[str] = []
+    accumulated_tool_calls: list[ToolCallTrace] = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_tokens = 0
     mcp_server_count = 0
     latest_tests: TestResults | None = None
     latest_diff = ""
@@ -114,10 +131,12 @@ def run_agent_baseline(
     ignore_rules = _load_ignore_rules(repo_root)
     temp_branch_context: TempBranchContext | None = None
     branch_cleanup_error: str | None = None
+    run_started_monotonic = time.perf_counter()
 
     try:
         mcp_servers = build_mcp_servers(target_repo=run_input.target_repo)
         mcp_server_count = len(mcp_servers)
+        logger.info("starting baseline run with mcp_servers=%s", mcp_server_count)
 
         if run_input.test_command is not None:
             baseline_test_execution = _run_test_command(
@@ -176,6 +195,10 @@ def run_agent_baseline(
             )
             final_message = _render_final_message(proposal)
             latest_diff = _collect_repo_diff(repo_root)
+            total_input_tokens += proposal.input_tokens
+            total_output_tokens += proposal.output_tokens
+            total_tokens += proposal.total_tokens
+            accumulated_tool_calls.extend(_to_tool_call_traces(iteration=iteration, payload=proposal.tool_calls))
 
             after_snapshot = _snapshot_repo_state(repo_root)
             changed_files = _detect_changed_files(before_snapshot, after_snapshot)
@@ -213,7 +236,7 @@ def run_agent_baseline(
                         f"validation_reason={diff_integrity_reason}",
                     ]
                 )
-                return RunOutput(
+                output = RunOutput(
                     identity=identity,
                     status=RunStatus.FAILED,
                     stop_reason=StopReason.VALIDATION_FAILURE,
@@ -234,6 +257,17 @@ def run_agent_baseline(
                     artifacts=latest_artifacts,
                     final_message=final_message,
                 )
+                return _finalize_run_output(
+                    run_output=output,
+                    run_input=run_input,
+                    repo_root=repo_root,
+                    run_started_monotonic=run_started_monotonic,
+                    iterations=identity.iteration,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=accumulated_tool_calls,
+                )
 
             coherence_ok, coherence_details = _validate_changed_files_coherence(
                 proposal=proposal,
@@ -253,7 +287,7 @@ def run_agent_baseline(
                         "validation_result=changed_files_mismatch",
                     ]
                 )
-                return RunOutput(
+                output = RunOutput(
                     identity=identity,
                     status=RunStatus.FAILED,
                     stop_reason=StopReason.VALIDATION_FAILURE,
@@ -270,6 +304,17 @@ def run_agent_baseline(
                     ],
                     artifacts=latest_artifacts,
                     final_message=final_message,
+                )
+                return _finalize_run_output(
+                    run_output=output,
+                    run_input=run_input,
+                    repo_root=repo_root,
+                    run_started_monotonic=run_started_monotonic,
+                    iterations=identity.iteration,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=accumulated_tool_calls,
                 )
 
             if baseline_test_execution is not None and _is_regression(
@@ -290,7 +335,7 @@ def run_agent_baseline(
                         f"validation_current_exit_code={test_execution.exit_code}",
                     ]
                 )
-                return RunOutput(
+                output = RunOutput(
                     identity=identity,
                     status=RunStatus.FAILED,
                     stop_reason=StopReason.VALIDATION_FAILURE,
@@ -311,6 +356,17 @@ def run_agent_baseline(
                     ],
                     artifacts=latest_artifacts,
                     final_message=final_message,
+                )
+                return _finalize_run_output(
+                    run_output=output,
+                    run_input=run_input,
+                    repo_root=repo_root,
+                    run_started_monotonic=run_started_monotonic,
+                    iterations=identity.iteration,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=accumulated_tool_calls,
                 )
 
             accumulated_logs.extend(
@@ -340,7 +396,7 @@ def run_agent_baseline(
                     temp_branch_context=temp_branch_context,
                     accumulated_logs=accumulated_logs,
                 )
-                return RunOutput(
+                output = RunOutput(
                     identity=identity,
                     status=RunStatus.PARTIAL,
                     stop_reason=StopReason.NO_PROGRESS,
@@ -349,6 +405,17 @@ def run_agent_baseline(
                     tests=latest_tests,
                     artifacts=latest_artifacts,
                     final_message=final_message,
+                )
+                return _finalize_run_output(
+                    run_output=output,
+                    run_input=run_input,
+                    repo_root=repo_root,
+                    run_started_monotonic=run_started_monotonic,
+                    iterations=identity.iteration,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=accumulated_tool_calls,
                 )
 
             previous_proposal_signature = _proposal_signature(proposal)
@@ -375,7 +442,7 @@ def run_agent_baseline(
                             f"git_branch_cleanup_error={branch_cleanup_error}",
                         ]
                     )
-                    return RunOutput(
+                    output = RunOutput(
                         identity=identity,
                         status=RunStatus.FAILED,
                         stop_reason=StopReason.INFRA_FAILURE,
@@ -398,7 +465,18 @@ def run_agent_baseline(
                         artifacts=latest_artifacts,
                         final_message=final_message,
                     )
-                return RunOutput(
+                    return _finalize_run_output(
+                        run_output=output,
+                        run_input=run_input,
+                        repo_root=repo_root,
+                        run_started_monotonic=run_started_monotonic,
+                        iterations=identity.iteration,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        total_tokens=total_tokens,
+                        tool_calls=accumulated_tool_calls,
+                    )
+                output = RunOutput(
                     identity=identity,
                     status=RunStatus.SUCCESS,
                     stop_reason=StopReason.COMPLETED,
@@ -407,6 +485,17 @@ def run_agent_baseline(
                     tests=latest_tests,
                     artifacts=latest_artifacts,
                     final_message=final_message,
+                )
+                return _finalize_run_output(
+                    run_output=output,
+                    run_input=run_input,
+                    repo_root=repo_root,
+                    run_started_monotonic=run_started_monotonic,
+                    iterations=identity.iteration,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=accumulated_tool_calls,
                 )
 
         assert final_message is not None
@@ -421,7 +510,7 @@ def run_agent_baseline(
             iteration=max_iterations,
             run_id=run_id,
         )
-        return RunOutput(
+        output = RunOutput(
             identity=identity,
             status=RunStatus.PARTIAL,
             stop_reason=StopReason.MAX_ITERATIONS,
@@ -430,6 +519,17 @@ def run_agent_baseline(
             tests=latest_tests,
             artifacts=latest_artifacts,
             final_message=final_message,
+        )
+        return _finalize_run_output(
+            run_output=output,
+            run_input=run_input,
+            repo_root=repo_root,
+            run_started_monotonic=run_started_monotonic,
+            iterations=identity.iteration,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            total_tokens=total_tokens,
+            tool_calls=accumulated_tool_calls,
         )
     except Exception as exc:
         if temp_branch_context is not None:
@@ -449,7 +549,7 @@ def run_agent_baseline(
             iteration=1,
             run_id=run_id,
         )
-        return RunOutput(
+        output = RunOutput(
             identity=failure_identity,
             status=RunStatus.FAILED,
             stop_reason=StopReason.INFRA_FAILURE,
@@ -477,6 +577,103 @@ def run_agent_baseline(
             artifacts=latest_artifacts,
             final_message=None,
         )
+        return _finalize_run_output(
+            run_output=output,
+            run_input=run_input,
+            repo_root=repo_root,
+            run_started_monotonic=run_started_monotonic,
+            iterations=failure_identity.iteration,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            total_tokens=total_tokens,
+            tool_calls=accumulated_tool_calls,
+        )
+
+
+def _finalize_run_output(
+    *,
+    run_output: RunOutput,
+    run_input: RunInput,
+    repo_root: Path,
+    run_started_monotonic: float,
+    iterations: int,
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens: int,
+    tool_calls: list[ToolCallTrace],
+) -> RunOutput:
+    duration_seconds = max(0.0, time.perf_counter() - run_started_monotonic)
+    metrics = _build_run_metrics(
+        output=run_output,
+        iterations=iterations,
+        duration_seconds=duration_seconds,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        metadata=run_input.metadata,
+    )
+    record = _build_observability_record(
+        output=run_output,
+        metrics=metrics,
+        tool_calls=tool_calls,
+    )
+
+    persistence: dict[str, Any]
+    try:
+        persistence = _persist_observability_record(repo_root=repo_root, record=record)
+    except Exception as exc:
+        logger.exception("observability persistence failed for run_id=%s", run_output.identity.run_id)
+        persistence = {"backend": "none", "error": str(exc)}
+
+    run_output.artifacts = {
+        **run_output.artifacts,
+        "observability": record.model_dump(mode="json"),
+        "observability_persistence": persistence,
+    }
+    run_output.logs.extend(
+        [
+            "stage=observability",
+            f"observability_duration_seconds={metrics.duration_seconds:.3f}",
+            f"observability_total_tokens={metrics.total_tokens}",
+            f"observability_estimated_cost_usd={metrics.estimated_cost_usd:.6f}",
+            f"observability_tool_calls={len(tool_calls)}",
+            f"observability_backend={persistence.get('backend', 'unknown')}",
+        ]
+    )
+    logger.info(
+        "completed baseline run run_id=%s status=%s stop_reason=%s",
+        run_output.identity.run_id,
+        run_output.status.value,
+        run_output.stop_reason.value,
+    )
+    return run_output
+
+
+def _to_tool_call_traces(*, iteration: int, payload: list[dict[str, Any]]) -> list[ToolCallTrace]:
+    traces: list[ToolCallTrace] = []
+    for raw_entry in payload:
+        name = raw_entry.get("name")
+        kind = raw_entry.get("kind")
+        if not isinstance(name, str) or not isinstance(kind, str):
+            continue
+        trace = ToolCallTrace(
+            iteration=iteration,
+            name=name,
+            kind=kind,
+            arguments=_safe_optional_string(raw_entry.get("arguments")),
+            call_id=_safe_optional_string(raw_entry.get("call_id")),
+            status=_safe_optional_string(raw_entry.get("status")),
+        )
+        traces.append(trace)
+    return traces
+
+
+def _safe_optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def _run_sync(awaitable: Coroutine[object, object, AgentFixProposal]) -> AgentFixProposal:

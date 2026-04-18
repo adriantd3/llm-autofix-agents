@@ -4,6 +4,7 @@
 - El proyecto es una plataforma experimental de APR con LLMs para comparar arquitecturas de agentes y modelos.
 
 ## Alcance base actual
+- Politica de dependencias: cualquier alta o actualizacion de dependencia del proyecto debe realizarse con `uv add`.
 - Arrancar por una arquitectura mono-agente simple y extensible.
 - Definir entorno de ejecucion aislado y reproducible con Docker.
 - Registrar decisiones y estado en la carpeta specs.

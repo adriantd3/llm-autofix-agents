@@ -17,6 +17,10 @@ Comandos imprescindibles para esta fase:
 
 ## Bootstrap rapido
 
+Regla de gestion de dependencias del proyecto:
+
+- Todas las instalaciones o altas de dependencias deben hacerse con `uv add`.
+
 1. Synchronize dependencies:
 
 	uv sync

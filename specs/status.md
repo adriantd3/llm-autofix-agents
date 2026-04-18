@@ -42,13 +42,17 @@
 - SH4-T02/T04 completados: artefactos enriquecidos por iteracion con `patch_summary.json` y `file_changes.json`, mas consolidacion de trazabilidad por archivo en `manifest.json`.
 - SH4-T03 completado: filtrado de artefactos de build/test/cache con `.autofixignore` aplicado a snapshot y diff para parches limpios.
 - Cobertura SH4 agregada: tests unitarios dedicados para operaciones Git, reglas de exclusión y artefactos; suite total en verde.
+- SH5 completado: esquema de resultados experimental definido con persistencia MongoDB Atlas y fallback JSONL local.
+- SH5-T02 completado: metrica minima integrada en salida (exito, iteraciones, tiempo, tokens y coste estimado).
+- SH5-T03 completado: logging INFO/DEBUG por etapas del flujo y persistencia de observabilidad.
+- SH5-T04 completado: trazabilidad de tool calls integrada desde el provider al registro final de ejecucion.
+- Cobertura SH5 agregada: tests de contratos, provider, observabilidad y flujo baseline en verde (unittest).
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
-- Subhito activo: SH5 - Observabilidad y datos experimentales.
-- Task activa: SH5-T01 Definir esquema de resultados para MongoDB Atlas con fallback JSONL local.
+- Subhito activo: SH6 - Benchmark QuixBugs inicial.
+- Task activa: SH6-T00 Seleccionar 1 caso QuixBugs reproducible como gate MVP.
 
 ## Siguiente
-- Implementar SH5-T01/T02/T03/T04 (observabilidad y datos experimentales).
 - Ejecutar SH6-T00/T01/T02 para validar 1 caso QuixBugs reproducible como gate MVP.
