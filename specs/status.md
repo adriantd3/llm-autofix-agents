@@ -29,6 +29,9 @@
 - Alineacion SDD aplicada: spec/tasks/requirements actualizados para dejar explicito el enfoque execution-driven como direccion oficial del MVP.
 - SH3-T05 completado: baseline de tests pre-iteracion y rechazo automatico de regresiones (baseline exit_code=0 y post-run exit_code!=0) con corte `validation_failure`, `status=failed` y evidencia en logs.
 - SH3-T04 completado: consolidacion multiarchivo execution-driven desde estado real del repo, validacion bloqueante de coherencia `proposal.changed_files` vs cambios observados y empaquetado de artefactos por iteracion en `results/`.
+- SH3-T02D2 avance inicial: hardening de Compose y runner con `.env` opcional, defaults de entorno robustos, validaciones tempranas de `DockerRunner`/`ContainerRunRequest` y cobertura unitaria dedicada.
+- SH3-T02D2 completado: runtime Compose endurecido con validaciones de entrada y manejo robusto de errores en `docker-smoke` para evitar fallos operativos no controlados.
+- SH3 completado: baseline mono-agente operativo con iteracion (max 3), no-progreso objetivo, consolidacion execution-driven, empaquetado de artefactos y rechazo de regresiones.
 - Rebaseline iniciado: runtime completo en contenedores locales via Compose como base operativa previa a SH3-T03.
 - Rebaseline MVP aplicado: Ollama definido como provider por defecto para ejecucion local gratuita y compatibilidad opcional OpenAI/Gemini preservada.
 - Refactor estructural aplicado: separacion en submodulos `llm/` y `runtime/` con wrappers de compatibilidad para imports existentes.
@@ -39,10 +42,9 @@
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
-- Subhito activo: SH3 - Flujo mono-agente baseline.
-- Task activa: SH3-T02D2 Endurecer runtime Compose del runner unico.
+- Subhito activo: SH4 - Git y artefactos de parche.
+- Task activa: SH4-T01 Crear rama temporal por run.
 
 ## Siguiente
-- Implementar SH3-T02D2 (endurecimiento de runtime Compose no bloqueante para primer bugfix).
+- Implementar SH4-T01/T02/T03/T04 (git y artefactos de parche).
 - Ejecutar SH6-T00/T01/T02 para validar 1 caso QuixBugs reproducible como gate MVP.
-- Implementar SH4 (git y artefactos de parche) tras estabilizar SH3-T03/T04/T05.

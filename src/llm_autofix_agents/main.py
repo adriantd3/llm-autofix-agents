@@ -86,11 +86,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_docker_smoke(args: argparse.Namespace) -> int:
-    request = ContainerRunRequest(
-        repo_path=Path(args.repo),
-        command=args.command,
-        image=args.image,
-    )
+    try:
+        request = ContainerRunRequest(
+            repo_path=Path(args.repo),
+            command=args.command,
+            image=args.image,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     runner = DockerRunner()
 
     try:

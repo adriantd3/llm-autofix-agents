@@ -46,6 +46,8 @@ class ContainerRunRequest:
             raise ValueError("command cannot be empty")
         if not self.image.strip():
             raise ValueError("image cannot be empty")
+        if not self.repo_path.exists() or not self.repo_path.is_dir():
+            raise ValueError(f"repo_path must be an existing directory: {self.repo_path}")
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,10 @@ def resolve_dynamic_limits(repo_path: Path) -> ResourceLimits:
 
 class DockerRunner:
     def __init__(self, docker_executable: str = "docker", network_mode: str = "bridge") -> None:
+        if not docker_executable.strip():
+            raise ValueError("docker_executable cannot be empty")
+        if not network_mode.strip():
+            raise ValueError("network_mode cannot be empty")
         self._docker_executable = docker_executable
         self._network_mode = network_mode
 
@@ -92,9 +98,10 @@ class DockerRunner:
         command = [self._docker_executable, "version", "--format", "{{.Server.Version}}"]
         completed = subprocess.run(command, capture_output=True, check=False, text=True)
         if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or "unknown error").strip()
             raise DockerRunnerError(
                 "Docker no esta disponible. Ejecuta Docker Desktop y vuelve a intentarlo. "
-                f"Detalle: {completed.stderr.strip()}"
+                f"Detalle: {detail}"
             )
 
     def run(self, request: ContainerRunRequest) -> ContainerRunResult:
