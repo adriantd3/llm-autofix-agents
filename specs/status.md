@@ -27,6 +27,7 @@
 - Contrato APR endurecido: salida del agente migrada a propuesta tipada (`patch_unified_diff`, `rationale`, `confidence`, `changed_files`, `notes`) y eliminada extraccion de parches desde texto libre.
 - Pivot de ejecucion aplicado: flujo baseline pasa a execution-driven (el agente aplica cambios via MCP dentro del repo; el orquestador observa diff/tests y no aplica parches desde la salida del modelo).
 - Alineacion SDD aplicada: spec/tasks/requirements actualizados para dejar explicito el enfoque execution-driven como direccion oficial del MVP.
+- SH3-T05 completado: baseline de tests pre-iteracion y rechazo automatico de regresiones (baseline exit_code=0 y post-run exit_code!=0) con corte `validation_failure`, `status=failed` y evidencia en logs.
 - Rebaseline iniciado: runtime completo en contenedores locales via Compose como base operativa previa a SH3-T03.
 - Rebaseline MVP aplicado: Ollama definido como provider por defecto para ejecucion local gratuita y compatibilidad opcional OpenAI/Gemini preservada.
 - Refactor estructural aplicado: separacion en submodulos `llm/` y `runtime/` con wrappers de compatibilidad para imports existentes.
@@ -38,10 +39,10 @@
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
 - Subhito activo: SH3 - Flujo mono-agente baseline.
-- Task activa: SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
+- Task activa: SH3-T04 Implementar parches multiarchivo en loop execution-driven.
 
 ## Siguiente
-- Implementar SH3-T04 y SH3-T05 (parches multiarchivo + rechazo de regresiones).
+- Implementar SH3-T04 (parches multiarchivo en loop execution-driven).
 - Implementar SH3-T02D2 (endurecimiento de runtime Compose no bloqueante para primer bugfix).
 - Ejecutar SH6-T00/T01/T02 para validar 1 caso QuixBugs reproducible como gate MVP.
 - Implementar SH4 (git y artefactos de parche) tras estabilizar SH3-T03/T04/T05.

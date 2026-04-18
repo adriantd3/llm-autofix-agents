@@ -188,6 +188,10 @@ def can_complete_early(*, run_input: RunInput, test_execution: TestExecution) ->
     return test_execution.exit_code == 0 and not test_execution.timed_out
 
 
+def is_regression(*, baseline: TestExecution, current: TestExecution) -> bool:
+    return baseline.exit_code == 0 and current.exit_code != 0
+
+
 def apply_unified_diff(*, repo_root: Path, patch: str) -> PatchApplyResult:
     if not patch:
         return PatchApplyResult(applied=False, reason="no-patch")

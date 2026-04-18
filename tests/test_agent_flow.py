@@ -46,6 +46,7 @@ class AgentFlowTests(unittest.TestCase):
         with patch(
             "llm_autofix_agents.agent_flow._run_test_command",
             side_effect=[
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
                 SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                 SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
             ],
@@ -80,6 +81,7 @@ class AgentFlowTests(unittest.TestCase):
         with patch(
             "llm_autofix_agents.agent_flow._run_test_command",
             side_effect=[
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
                 SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                 SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                 SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
@@ -122,6 +124,69 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(output.stop_reason, StopReason.INFRA_FAILURE)
         self.assertEqual(len(output.errors), 1)
         self.assertEqual(output.errors[0].category, ErrorCategory.MODEL)
+
+    def test_run_agent_baseline_stops_on_regression_detected(self) -> None:
+        provider = _SequencedProvider([_proposal(rationale="introduce breaking change")])
+        with patch(
+            "llm_autofix_agents.agent_flow._run_test_command",
+            side_effect=[
+                SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-baseline-ok"),
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-now-fail"),
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._snapshot_repo_state",
+            side_effect=[
+                {"src/a.py": "v1"},
+                {"src/a.py": "v2"},
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="diff --git a/src/a.py b/src/a.py",
+        ):
+            output = run_agent_baseline(
+                RunInput(
+                    prompt="Fix parser failure",
+                    test_command="uv run python -m unittest",
+                ),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self.assertEqual(output.status, RunStatus.FAILED)
+        self.assertEqual(output.stop_reason, StopReason.VALIDATION_FAILURE)
+        self.assertEqual(len(output.errors), 1)
+        self.assertEqual(output.errors[0].category, ErrorCategory.VALIDATION)
+        self.assertIn("validation_result=regression_detected", output.logs)
+
+    def test_run_agent_baseline_no_regression_when_baseline_failing(self) -> None:
+        provider = _SequencedProvider([_proposal(rationale="fix tests")])
+        with patch(
+            "llm_autofix_agents.agent_flow._run_test_command",
+            side_effect=[
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline-fail"),
+                SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-now-ok"),
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._snapshot_repo_state",
+            side_effect=[
+                {"src/a.py": "v1"},
+                {"src/a.py": "v2"},
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="diff --git a/src/a.py b/src/a.py",
+        ):
+            output = run_agent_baseline(
+                RunInput(
+                    prompt="Fix parser failure",
+                    test_command="uv run python -m unittest",
+                ),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self.assertEqual(output.status, RunStatus.SUCCESS)
+        self.assertEqual(output.stop_reason, StopReason.COMPLETED)
 
 
 class _CapturingProvider:

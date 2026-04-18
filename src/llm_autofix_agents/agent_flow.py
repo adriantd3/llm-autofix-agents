@@ -33,6 +33,9 @@ from llm_autofix_agents.flow_support import (
     is_no_progress as _is_no_progress,
 )
 from llm_autofix_agents.flow_support import (
+    is_regression as _is_regression,
+)
+from llm_autofix_agents.flow_support import (
     resolve_repo_root as _resolve_repo_root,
 )
 from llm_autofix_agents.flow_support import (
@@ -80,12 +83,28 @@ def run_agent_baseline(
     mcp_server_count = 0
     latest_tests: TestResults | None = None
     latest_diff = ""
+    baseline_test_execution: _TestExecution | None = None
     test_timeout_seconds = _resolve_test_timeout_seconds(run_input.metadata)
     repo_root = _resolve_repo_root(run_input.target_repo)
 
     try:
         mcp_servers = build_mcp_servers(target_repo=run_input.target_repo)
         mcp_server_count = len(mcp_servers)
+
+        if run_input.test_command is not None:
+            baseline_test_execution = _run_test_command(
+                run_input.test_command,
+                cwd=repo_root,
+                timeout_seconds=test_timeout_seconds,
+            )
+            accumulated_logs.extend(
+                [
+                    "stage=baseline",
+                    f"baseline_test_exit_code={baseline_test_execution.exit_code}",
+                    f"baseline_test_timed_out={baseline_test_execution.timed_out}",
+                    f"baseline_test_signature={baseline_test_execution.signature}",
+                ]
+            )
 
         final_message: str | None = None
         for iteration in range(1, max_iterations + 1):
@@ -123,6 +142,41 @@ def run_agent_baseline(
                 timeout_seconds=test_timeout_seconds,
             )
             latest_tests = _to_test_results(test_execution)
+
+            if baseline_test_execution is not None and _is_regression(
+                baseline=baseline_test_execution,
+                current=test_execution,
+            ):
+                accumulated_logs.extend(
+                    [
+                        "stage=validation",
+                        "validation_result=regression_detected",
+                        "validation_rule=baseline_exit_code==0_and_current_exit_code!=0",
+                        f"validation_baseline_exit_code={baseline_test_execution.exit_code}",
+                        f"validation_current_exit_code={test_execution.exit_code}",
+                    ]
+                )
+                return RunOutput(
+                    identity=identity,
+                    status=RunStatus.FAILED,
+                    stop_reason=StopReason.VALIDATION_FAILURE,
+                    diff=latest_diff,
+                    logs=accumulated_logs,
+                    tests=latest_tests,
+                    errors=[
+                        RunError(
+                            category=ErrorCategory.VALIDATION,
+                            message="Regression detected against baseline test execution",
+                            retryable=False,
+                            details={
+                                "rule": "baseline_exit_code==0_and_current_exit_code!=0",
+                                "baseline_exit_code": baseline_test_execution.exit_code,
+                                "current_exit_code": test_execution.exit_code,
+                            },
+                        )
+                    ],
+                    final_message=final_message,
+                )
 
             accumulated_logs.extend(
                 _build_run_logs(
