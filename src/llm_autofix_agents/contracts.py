@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
+from os import environ as os_environ
 from typing import Any
 from uuid import uuid4
 
@@ -82,6 +84,38 @@ class RunIdentity(BaseModel):
     iteration_id: str = Field(min_length=1)
 
 
+class ContainerInstantiation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repository: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    architecture: str = Field(min_length=1)
+    agent_models: dict[str, str] = Field(min_length=1)
+    bootstrap_prompt: str = Field(min_length=1)
+
+    @field_validator("repository", "branch", "architecture", "bootstrap_prompt")
+    @classmethod
+    def _normalize_non_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value cannot be empty")
+        return normalized
+
+    @field_validator("agent_models")
+    @classmethod
+    def _validate_agent_models(cls, value: dict[str, str]) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for role, model in value.items():
+            role_name = role.strip()
+            model_name = model.strip()
+            if not role_name or not model_name:
+                raise ValueError("agent_models must contain non-empty role and model names")
+            normalized[role_name] = model_name
+        if not normalized:
+            raise ValueError("agent_models cannot be empty")
+        return normalized
+
+
 class RunOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -93,6 +127,33 @@ class RunOutput(BaseModel):
     logs: list[str] = Field(default_factory=list)
     errors: list[RunError] = Field(default_factory=list)
     final_message: str | None = None
+
+
+def load_container_instantiation_from_env(
+    env: Mapping[str, str] | None = None,
+) -> ContainerInstantiation:
+    source_env = os_environ if env is None else env
+    raw_agent_models = source_env.get("RUN_AGENT_MODELS", "")
+    try:
+        parsed_agent_models = json.loads(raw_agent_models)
+    except json.JSONDecodeError as exc:
+        raise ValueError("RUN_AGENT_MODELS must be valid JSON") from exc
+    if not isinstance(parsed_agent_models, dict):
+        raise ValueError("RUN_AGENT_MODELS must be a JSON object")
+
+    normalized_agent_models: dict[str, str] = {}
+    for role, model in parsed_agent_models.items():
+        if not isinstance(role, str) or not isinstance(model, str):
+            raise ValueError("RUN_AGENT_MODELS values must map string roles to string model names")
+        normalized_agent_models[role] = model
+
+    return ContainerInstantiation(
+        repository=source_env.get("RUN_REPOSITORY", ""),
+        branch=source_env.get("RUN_BRANCH", ""),
+        architecture=source_env.get("RUN_ARCHITECTURE", ""),
+        agent_models=normalized_agent_models,
+        bootstrap_prompt=source_env.get("RUN_BOOTSTRAP_PROMPT", ""),
+    )
 
 
 def new_run_id(now: datetime | None = None) -> str:

@@ -9,6 +9,7 @@ from llm_autofix_agents.contracts import (
     TestResults,
     build_run_identity,
     compute_run_fingerprint,
+    load_container_instantiation_from_env,
 )
 
 
@@ -38,6 +39,33 @@ class ContractsTests(unittest.TestCase):
         self.assertEqual(identity.run_id, "run-fixed-id")
         self.assertEqual(identity.iteration, 2)
         self.assertEqual(identity.iteration_id, "run-fixed-id-it02")
+
+    def test_container_instantiation_from_env_is_loaded(self) -> None:
+        instantiation = load_container_instantiation_from_env(
+            {
+                "RUN_REPOSITORY": "quixbugs",
+                "RUN_BRANCH": "main",
+                "RUN_ARCHITECTURE": "mono-agent",
+                "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
+                "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+            }
+        )
+        self.assertEqual(instantiation.repository, "quixbugs")
+        self.assertEqual(instantiation.branch, "main")
+        self.assertEqual(instantiation.architecture, "mono-agent")
+        self.assertEqual(instantiation.agent_models, {"main": "llama3.1:8b"})
+
+    def test_container_instantiation_rejects_invalid_models_json(self) -> None:
+        with self.assertRaisesRegex(ValueError, "RUN_AGENT_MODELS must be valid JSON"):
+            load_container_instantiation_from_env(
+                {
+                    "RUN_REPOSITORY": "quixbugs",
+                    "RUN_BRANCH": "main",
+                    "RUN_ARCHITECTURE": "mono-agent",
+                    "RUN_AGENT_MODELS": "not-json",
+                    "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+                }
+            )
 
 
 if __name__ == "__main__":

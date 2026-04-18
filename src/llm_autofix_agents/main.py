@@ -13,6 +13,7 @@ from llm_autofix_agents.contracts import (
     StopReason,
     TestResults,
     build_run_identity,
+    load_container_instantiation_from_env,
 )
 from llm_autofix_agents.runtime.docker_runner import ContainerRunRequest, DockerRunner, DockerRunnerError
 
@@ -27,6 +28,8 @@ def app() -> None:
         raise SystemExit(_run_contracts_smoke(args))
     if args.command_name == "agent-smoke":
         raise SystemExit(_run_agent_smoke(args))
+    if args.command_name == "runtime-contract-smoke":
+        raise SystemExit(_run_runtime_contract_smoke(args))
 
     print("Welcome to LLM Autofix Agents!")
 
@@ -73,6 +76,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--prompt",
         default="Analyze a failing test and suggest a minimal fix strategy.",
         help="Prompt passed to the baseline agent.",
+    )
+
+    subcommands.add_parser(
+        "runtime-contract-smoke",
+        help="Validate container runtime instantiation contract from RUN_* environment variables.",
     )
     return parser
 
@@ -138,6 +146,18 @@ def _run_agent_smoke(args: argparse.Namespace) -> int:
     }
     print(json.dumps(payload, indent=2, ensure_ascii=True))
     return 0 if run_output.status == RunStatus.SUCCESS else 1
+
+
+def _run_runtime_contract_smoke(args: argparse.Namespace) -> int:
+    del args
+    try:
+        instantiation = load_container_instantiation_from_env()
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    print(json.dumps(instantiation.model_dump(mode="json"), indent=2, ensure_ascii=True))
+    return 0
 
 
 if __name__ == "__main__":

@@ -57,3 +57,19 @@
 - Por que estuvo mal: aumenta complejidad operativa y ruido de debugging sin aportar capacidad esencial en fase inicial.
 - Alternativa recomendada: usar un runner unico parametrizable y crecer a multiples runners cuando existan necesidades experimentales concretas.
 - Regla preventiva para futuras specs: primero estabilizar una instancia funcional, luego replicar configuraciones.
+
+## 2026-04-16 (gate MVP vs expansion)
+- Contexto: priorizacion de tareas para cerrar primer bugfix funcional con Compose + Ollama.
+- Anti-patron detectado: mezclar en el gate del MVP objetivos de validacion minima con benchmark amplio de evaluacion.
+- Que no hay que hacer: exigir en el mismo hito inicial tanto la prueba de valor minima (1 caso) como la comparativa extensa (5 casos).
+- Por que estuvo mal: diluye foco, retrasa feedback temprano y complica depuracion del flujo base.
+- Alternativa recomendada: fijar gate MVP con 1 caso reproducible y mover benchmark de 5 casos a fase de expansion.
+- Regla preventiva para futuras specs: separar explicitamente criterios de cierre MVP de objetivos de escalado experimental.
+
+## 2026-04-18 Makefile mínimo
+- Contexto: archivo Makefile para la ejecucion de comandos regulares
+- Anti-patron detectado: El archivo esta creciendo con comandos que no son puramente imprescindibles.
+- Que no hay que hacer: añadir comandos al archivo que no son muy importantes
+- Por que estuvo mal: sobrecomplica el archivo y añade comandos que en general no aportan tanto
+- Alternativa recomendada: Analizar siempre si un comando es muy importante y realmente ayuda meterlo en el makefile. Si no, simplemente ejectar de manera normal
+- Regla preventiva para futuras specs: No introducir comandos si no son imprescindibles

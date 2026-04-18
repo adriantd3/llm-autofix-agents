@@ -42,13 +42,18 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 - [x] SH3-T02 Definir localizacion autonoma via tools/MCP y directrices de system prompt (sin pre-localizacion hardcodeada en el orquestador).
 - [x] SH3-T02B Habilitar MCPs definidos para localizacion autonoma efectiva (filesystem + web-search).
 - [x] SH3-T02C Definir contrato minimo de instanciacion por contenedor (repository, branch, architecture, agent_models, bootstrap_prompt).
-- [ ] SH3-T02D Contenerizar runtime completo del sistema para invocacion local via Docker Compose (runner unico).
+- [x] SH3-T02D1 Contenerizar runtime completo minimo del sistema para invocacion local via Docker Compose (runner unico funcional).
+- [ ] SH3-T02D2 Endurecer runtime Compose del runner unico (parametrizacion y robustez operativa no bloqueante para primer bugfix).
 - [ ] SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
 - [ ] SH3-T04 Implementar aplicacion de parches multiarchivo.
 - [ ] SH3-T05 Implementar rechazo automatico de regresiones.
 
 ### Done cuando
 - El flujo autonomo se ejecuta end-to-end sobre un caso controlado sin imponer pasos internos fijos al agente.
+
+### Secuencia MVP (ruta critica)
+- SH3-T02D1 -> SH3-T03 -> SH3-T04 -> SH3-T05.
+- SH3-T02D2 queda diferida mientras no bloquee la validacion de 1 bugfix reproducible.
 
 ## SH4 - Git y artefactos de parche (Pendiente)
 ### Objetivo
@@ -79,16 +84,19 @@ Guardar metrica y trazabilidad para analisis posterior.
 
 ## SH6 - Benchmark QuixBugs inicial (Pendiente)
 ### Objetivo
-Ejecutar baseline sobre 5 casos reproducibles.
+Validar baseline con un caso reproducible inicial y ampliar a 5 casos en fase posterior.
 
 ### Tasks
-- [ ] SH6-T01 Seleccionar 5 casos QuixBugs reproducibles.
-- [ ] SH6-T02 Ejecutar runs con configuracion controlada.
-- [ ] SH6-T03 Excluir casos no reproducibles con justificacion.
-- [ ] SH6-T04 Generar comparativa tasa exito/coste/tiempo.
+- [ ] SH6-T00 Seleccionar 1 caso QuixBugs reproducible como gate MVP.
+- [ ] SH6-T01 Ejecutar 1 run controlado end-to-end sobre el caso MVP.
+- [ ] SH6-T02 Registrar resultado y, si falla, documentar causa raiz en lessons.
+- [ ] SH6-T03 Seleccionar 5 casos QuixBugs reproducibles para la fase de expansion.
+- [ ] SH6-T04 Ejecutar runs con configuracion controlada en 5 casos.
+- [ ] SH6-T05 Excluir casos no reproducibles con justificacion.
+- [ ] SH6-T06 Generar comparativa tasa exito/coste/tiempo.
 
 ### Done cuando
-- Existe reporte de benchmark inicial con resultados trazables.
+- Existe evidencia trazable de 1 caso MVP y un plan ejecutable para ampliar a 5 casos.
 
 ## Dependencias entre subhitos
 - SH1 -> SH2 -> SH3 -> SH4 -> SH5 -> SH6

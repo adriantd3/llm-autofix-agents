@@ -10,7 +10,7 @@
 - Politica de red definida: internet libre con auditoria.
 - SH1 completado: imagen base Docker, runner efimero, bind mount, limites dinamicos y smoke test con logs/timeout.
 - SH2 completado: contratos Pydantic v2 para input/output, IDs reproducibles y modelo de errores con smoke de validacion.
-- Validacion reforzada: pruebas unitarias base y pipeline `make validate` para lint, typecheck, tests y smoke Docker.
+- Validacion reforzada: pruebas unitarias base y pipeline local de comprobaciones para formato, tests y smokes Docker.
 - SH3-T01 completado: integracion baseline de openai-agents-sdk con adaptador OpenAI/Gemini compatible OpenAI API y comando `agent-smoke`.
 - Cobertura de SH3-T01 agregada: tests de configuracion LLM, adaptador provider y flujo baseline con manejo de errores.
 - SH3-T02 realineado: localizacion autonomy-first definida via tools/MCP y directrices, sin pre-localizacion hardcodeada en el orquestador.
@@ -21,6 +21,7 @@
 - Refactor estructural aplicado: separacion en submodulos `llm/` y `runtime/` con wrappers de compatibilidad para imports existentes.
 - Simplificacion runner MVP aplicada: se eliminan limites dinamicos por defecto (CPU/RAM/PIDs) y se mantiene timeout operativo con limites opcionales.
 - Simplificacion infra aplicada: comando `docker run` reducido a flags minimas, Docker Compose reducido a un unico servicio `runner`, y consolidacion en un solo Dockerfile (`runtime.Dockerfile`).
+- SH3-T02D1 completado: contrato RUN_* validable en runtime con comando `runtime-contract-smoke` y smoke Compose asociado (`compose-contract-smoke`).
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
@@ -29,6 +30,7 @@
 - Task activa: SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
 
 ## Siguiente
-- Implementar SH3-T02D (runtime completo contenedizado via Docker Compose local con runner unico parametrizable).
 - Implementar SH3-T04 y SH3-T05 (parches multiarchivo + rechazo de regresiones).
+- Implementar SH3-T02D2 (endurecimiento de runtime Compose no bloqueante para primer bugfix).
+- Ejecutar SH6-T00/T01/T02 para validar 1 caso QuixBugs reproducible como gate MVP.
 - Implementar SH4 (git y artefactos de parche) tras estabilizar SH3-T03/T04/T05.

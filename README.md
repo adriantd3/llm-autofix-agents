@@ -1,26 +1,31 @@
 # llm-autofix-agents
 
-## SH1 Docker runner bootstrap
+## Make targets minimos
+
+Comandos imprescindibles para esta fase:
+
+- `make format`
+- `make test`
+- `make run`
+- `make compose-up`
+- `make compose-smoke`
+- `make compose-down`
+
+## Bootstrap rapido
 
 1. Synchronize dependencies:
 
 	uv sync
 
-2. Build the runner image:
+2. Run baseline in local host mode:
 
-	make docker-build
+	make run
 
-3. Execute a smoke command in an ephemeral container:
+3. Run baseline in Compose runtime mode:
 
-	make docker-smoke
-
-4. Validate run contracts (input/output/error models):
-
-	make contracts-smoke
-
-5. Run baseline agent smoke (defaults to Ollama):
-
-	make agent-smoke
+	make compose-up
+	make compose-smoke
+	make compose-down
 
 Baseline recomendado para MVP (gratis/local):
 
@@ -41,15 +46,11 @@ Para ejecutar el runtime completo dentro de un contenedor local:
 
 	make compose-up
 
-2. Ver estado de servicios:
-
-	make compose-ps
-
-3. Ejecutar smoke:
+2. Ejecutar smoke:
 
 	make compose-smoke
 
-4. Apagar el entorno:
+3. Apagar el entorno:
 
 	make compose-down
 
@@ -87,6 +88,7 @@ Optional environment overrides:
 - `WEB_SEARCH_MCP_ENTRYPOINT=<path-to-dist-index.js>`
 - `WEB_SEARCH_MCP_ENV_JSON={"KEY":"VALUE"}`
 
-6. Run full validator pipeline (lint, typecheck, unit tests, docker build and smoke checks):
+4. Format and run tests:
 
-	make validate
+	make format
+	make test

@@ -39,3 +39,13 @@
 - Ejecutar en contenedor efimero por run.
 - Generar diff, resultado de tests y logs.
 - Registrar metrica minima: exito/fallo, iteraciones, tiempo, tokens, coste estimado.
+
+## Criterios de aceptacion MVP (secuencia minima)
+- Runtime completo invocable por Compose con runner unico funcional.
+- Flujo autonomo con maximo 3 iteraciones por run.
+- Aplicacion de parche multiarchivo y validacion de tests en el repo objetivo.
+- Rechazo automatico de regresiones antes de aceptar resultado.
+- MCPs de filesystem y web-search habilitados durante el run.
+
+## Expansion posterior al MVP
+- Ampliar benchmark de QuixBugs a 5 casos reproducibles para comparativas agregadas.
