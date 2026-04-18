@@ -16,6 +16,17 @@
 - SH3-T02 realineado: localizacion autonomy-first definida via tools/MCP y directrices, sin pre-localizacion hardcodeada en el orquestador.
 - Ajuste de implementacion aplicado: se retiro la pre-localizacion heuristica del flujo baseline para respetar autonomia del agente.
 - SH3-T02B completado: integracion MCP stdio autonomy-first habilitada con servidores definidos de filesystem y web-search, inyectados al baseline via openai-agents-sdk.
+- Inicio implementacion SH3 activo: MCP shell opcional integrado en toolset baseline con pruebas unitarias y documentacion de entorno.
+- Rebaseline MCP aplicado: filesystem + shell pasan a ser default del baseline; web-search queda como MCP opt-in por entorno.
+- Ajuste de baseline MCP aplicado: filesystem + shell + web-search pasan a ser el baseline por defecto.
+- SH3-T03 avance inicial: ciclo iterativo (max 3) implementado con parada por `max_iterations` y `no_progress` en modo esqueleto.
+- SH3-T03 avance objetivo: no-progress reforzado con firma de resultados de test y deteccion de cambios de archivos por iteracion.
+- SH3-T04 avance inicial: extraccion/aplicacion de unified diff multiarchivo y captura de diff del repositorio por iteracion.
+- Refactor de mantenibilidad: `agent_flow` simplificado como orquestador y utilidades extraidas a modulo de soporte para mejorar SRP/legibilidad.
+- Provider LLM reforzado con salida estructurada (`output_type`) para homogenizar contrato de salida del agente y mantener interfaz externa estable.
+- Contrato APR endurecido: salida del agente migrada a propuesta tipada (`patch_unified_diff`, `rationale`, `confidence`, `changed_files`, `notes`) y eliminada extraccion de parches desde texto libre.
+- Pivot de ejecucion aplicado: flujo baseline pasa a execution-driven (el agente aplica cambios via MCP dentro del repo; el orquestador observa diff/tests y no aplica parches desde la salida del modelo).
+- Alineacion SDD aplicada: spec/tasks/requirements actualizados para dejar explicito el enfoque execution-driven como direccion oficial del MVP.
 - Rebaseline iniciado: runtime completo en contenedores locales via Compose como base operativa previa a SH3-T03.
 - Rebaseline MVP aplicado: Ollama definido como provider por defecto para ejecucion local gratuita y compatibilidad opcional OpenAI/Gemini preservada.
 - Refactor estructural aplicado: separacion en submodulos `llm/` y `runtime/` con wrappers de compatibilidad para imports existentes.

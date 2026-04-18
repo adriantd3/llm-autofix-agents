@@ -12,6 +12,8 @@ DEFAULT_FILESYSTEM_MCP_COMMAND: Final[str] = "npx"
 DEFAULT_FILESYSTEM_MCP_PACKAGE: Final[str] = "@modelcontextprotocol/server-filesystem"
 DEFAULT_WEB_SEARCH_MCP_COMMAND: Final[str] = "npx"
 DEFAULT_WEB_SEARCH_MCP_PACKAGE: Final[str] = "web-search-mcp"
+DEFAULT_SHELL_MCP_COMMAND: Final[str] = "npx"
+DEFAULT_SHELL_MCP_PACKAGE: Final[str] = "mcp-shell-server"
 
 
 def build_mcp_servers(*, target_repo: str | None, env: Mapping[str, str] | None = None) -> list[MCPServer]:
@@ -21,6 +23,8 @@ def build_mcp_servers(*, target_repo: str | None, env: Mapping[str, str] | None 
     servers: list[MCPServer] = []
     if _parse_bool(values.get("FILESYSTEM_MCP_ENABLED"), default=True):
         servers.append(_build_filesystem_server(repo_root=repo_root, env=values))
+    if _parse_bool(values.get("SHELL_MCP_ENABLED"), default=True):
+        servers.append(_build_shell_server(env=values))
     if _parse_bool(values.get("WEB_SEARCH_MCP_ENABLED"), default=True):
         servers.append(_build_web_search_server(env=values))
     return servers
@@ -79,6 +83,34 @@ def _build_web_search_server(*, env: Mapping[str, str]) -> MCPServerStdio:
     return MCPServerStdio(
         params=params,
         name="web-search",
+        cache_tools_list=True,
+    )
+
+
+def _build_shell_server(*, env: Mapping[str, str]) -> MCPServerStdio:
+    command = _normalize_required_text(
+        env.get("SHELL_MCP_COMMAND", DEFAULT_SHELL_MCP_COMMAND),
+        env_var="SHELL_MCP_COMMAND",
+    )
+    args = _parse_optional_list(env.get("SHELL_MCP_ARGS_JSON"))
+    if args is None:
+        package_name = _normalize_required_text(
+            env.get("SHELL_MCP_PACKAGE", DEFAULT_SHELL_MCP_PACKAGE),
+            env_var="SHELL_MCP_PACKAGE",
+        )
+        args = ["-y", package_name]
+
+    server_env = _parse_optional_mapping(env.get("SHELL_MCP_ENV_JSON"))
+    params: MCPServerStdioParams = {
+        "command": command,
+        "args": args,
+    }
+    if server_env is not None:
+        params["env"] = server_env
+
+    return MCPServerStdio(
+        params=params,
+        name="shell",
         cache_tools_list=True,
     )
 

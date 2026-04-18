@@ -137,7 +137,7 @@ def _run_agent_smoke(args: argparse.Namespace) -> int:
         prompt=args.prompt,
         metadata={"source": "agent-smoke"},
         target_repo=".",
-        test_command="uv run python -m unittest",
+        test_command=None,
     )
     run_output = run_agent_baseline(run_input)
     payload = {

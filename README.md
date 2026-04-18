@@ -1,5 +1,9 @@
 # llm-autofix-agents
 
+# Target datasets to test:
+- QuixBugs: https://github.com/jkoppel/QuixBugs
+- SWE-Bench (Lite): https://github.com/swe-bench/SWE-bench
+
 ## Make targets minimos
 
 Comandos imprescindibles para esta fase:
@@ -70,11 +74,12 @@ Nota sobre recursos del runner Docker (MVP):
 
 ### MCP servers used by baseline agent
 
-The baseline run uses MCP stdio servers for filesystem and web search.
+The baseline run uses MCP stdio servers for filesystem, shell command execution, and web search.
 
 Default server commands:
 
 - Filesystem MCP: `npx -y @modelcontextprotocol/server-filesystem <target_repo>`
+- Shell MCP: `npx -y mcp-shell-server`
 - Web search MCP: `npx -y web-search-mcp`
 
 Optional environment overrides:
@@ -82,7 +87,12 @@ Optional environment overrides:
 - `FILESYSTEM_MCP_ENABLED=true|false`
 - `FILESYSTEM_MCP_COMMAND=<command>`
 - `FILESYSTEM_MCP_ARGS_JSON=["..."]`
-- `WEB_SEARCH_MCP_ENABLED=true|false`
+- `SHELL_MCP_ENABLED=true|false` (default: true)
+- `SHELL_MCP_COMMAND=<command>`
+- `SHELL_MCP_ARGS_JSON=["..."]`
+- `SHELL_MCP_PACKAGE=<npm-package>`
+- `SHELL_MCP_ENV_JSON={"KEY":"VALUE"}`
+- `WEB_SEARCH_MCP_ENABLED=true|false` (default: true)
 - `WEB_SEARCH_MCP_COMMAND=<command>`
 - `WEB_SEARCH_MCP_ARGS_JSON=["..."]`
 - `WEB_SEARCH_MCP_ENTRYPOINT=<path-to-dist-index.js>`

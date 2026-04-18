@@ -22,3 +22,21 @@ Contexto funcional: `docs/general-definition.md` y `docs/anteproyecto.md`.
 Este proyecto usa **uv**: usar siempre `uv` para entorno, dependencias y ejecucion (`uv sync`, `uv add`, `uv run ...`).
 
 Tambien usa **Makefile** para la ejecucion de ciertos comandos de manera sencilla (lint, checker, ejecucion del sistema...)
+
+## Regla OpenAI Agents SDK (documentation-first)
+
+Referencia oficial obligatoria:
+- https://openai.github.io/openai-agents-python/
+
+Politica obligatoria para cualquier implementacion del flujo de agente:
+1. Antes de implementar una capacidad nueva, verificar primero si ya existe en el SDK oficial.
+2. Si la capacidad existe en el SDK, priorizar su uso directo sobre implementaciones ad-hoc.
+3. Si la capacidad no existe o no es facilmente aplicabe a APR, implementar extension handcrafted y documentar por que.
+
+## Regla de disenio y calidad de codigo
+
+Aplicar siempre, con cambios minimos y bien justificados:
+1. Favorecer diseno modular con principios SOLID (en especial SRP y DIP).
+2. Evitar duplicacion (DRY) y centralizar logica comun en componentes reutilizables.
+3. Considerar patrones de diseno cuando simplifiquen extension, testabilidad y mantenimiento.
+4. Revisar cada cambio con criterio de staff engineer: claridad, robustez, trazabilidad y facilidad de evolucion.

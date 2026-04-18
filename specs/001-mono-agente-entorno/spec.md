@@ -34,6 +34,7 @@
 
 ### C) Flujo interno
 - C10: Flujo de referencia = analizar fallo -> localizar -> proponer -> aplicar -> validar, sin imponer un orden interno estricto al agente.
+- C10b: Enfoque de ejecucion baseline = execution-driven: el agente aplica cambios directamente sobre el workspace/repo via MCP tools; el orquestador no aplica parches desde la salida del modelo y se limita a observar/validar estado del repo y tests.
 - C11: Estrategia inicial de localizacion = autonomia del agente via MCPs definidos (filesystem + web-search) y directrices, sin pre-localizador hardcodeado en el orquestador.
 - C12: Politica de edicion = hacer los cambios necesarios para resolver el problema (sin limite estricto de archivos).
 - C13: No progreso (estandar) = mismos tests fallando en iteraciones consecutivas.
@@ -50,7 +51,7 @@
 - D21: Runtime completo del sistema contenedizado para invocacion local via Compose con un runner unico parametrizable.
 
 ### E) Herramientas y MCPs
-- E21: Set minimo inicial de MCPs definidos para baseline (filesystem + web-search).
+- E21: Set minimo inicial de MCPs definidos para baseline (filesystem + shell + web-search).
 - E22: Politica de comandos = amplia con auditoria.
 - E23: Fallo de tools = reintentos acotados + fallback + log.
 - E24: Trazabilidad completa de tool calls.
@@ -59,6 +60,7 @@
 ### F) Git y parches
 - F26: Rama temporal por run.
 - F27: Entrega de parche en formato unified diff + resumen.
+- F27b: Fuente de verdad del parche = diff real del repositorio tras la ejecucion del agente (execution-driven), no un parche textual aplicado por el orquestador a partir de la salida del modelo.
 - F28: Permitir multiples archivos si hace falta para reparar de forma efectiva.
 - F29: Limpiar o ignorar artefactos generados por build/test.
 

@@ -7,15 +7,26 @@ from unittest.mock import AsyncMock, patch
 
 from pydantic import SecretStr
 
-from llm_autofix_agents.llm.provider import OpenAIAgentsSDKProvider, create_provider
+from llm_autofix_agents.llm.provider import (
+    AgentFixProposal,
+    OpenAIAgentsSDKProvider,
+    create_provider,
+)
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
 
 class LLMProviderTests(unittest.TestCase):
     @patch("llm_autofix_agents.llm.provider.set_tracing_disabled")
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
-    def test_provider_returns_string_output(self, runner_run: AsyncMock, set_tracing_disabled: AsyncMock) -> None:
-        runner_run.return_value = SimpleNamespace(final_output="  fix strategy  ")
+    def test_provider_returns_structured_output(self, runner_run: AsyncMock, set_tracing_disabled: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(
+            final_output=AgentFixProposal(
+                patch_unified_diff="--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-print('bad')\n+print('good')",
+                rationale="Fix wrong literal",
+                confidence=0.72,
+                changed_files=["a.py"],
+            )
+        )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
@@ -26,7 +37,8 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result, "fix strategy")
+        self.assertIsInstance(result, AgentFixProposal)
+        self.assertEqual(result.rationale, "Fix wrong literal")
         set_tracing_disabled.assert_called_once_with(True)
         self.assertTrue(runner_run.await_count == 1)
 
@@ -39,7 +51,14 @@ class LLMProviderTests(unittest.TestCase):
         agent_ctor: AsyncMock,
         mcp_manager_ctor: AsyncMock,
     ) -> None:
-        runner_run.return_value = SimpleNamespace(final_output="ok")
+        runner_run.return_value = SimpleNamespace(
+            final_output=AgentFixProposal(
+                patch_unified_diff="--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-print('bad')\n+print('good')",
+                rationale="Fix wrong literal",
+                confidence=0.72,
+                changed_files=["a.py"],
+            )
+        )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
         configured_server = object()
         connected_server = object()
@@ -69,8 +88,15 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(agent_ctor.call_args.kwargs["mcp_servers"], [connected_server])
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
-    def test_provider_serializes_non_string_output(self, runner_run: AsyncMock) -> None:
-        runner_run.return_value = SimpleNamespace(final_output={"plan": "edit file"})
+    def test_provider_parses_dict_output(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(
+            final_output={
+                "patch_unified_diff": "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-print('bad')\n+print('good')",
+                "rationale": "Fix wrong literal",
+                "confidence": 0.72,
+                "changed_files": ["a.py"],
+            }
+        )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
@@ -81,14 +107,59 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('"plan": "edit file"', result)
+        self.assertEqual(result.changed_files, ["a.py"])
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
-    def test_provider_rejects_empty_output(self, runner_run: AsyncMock) -> None:
-        runner_run.return_value = SimpleNamespace(final_output="   ")
+    def test_provider_rejects_invalid_schema(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(final_output={"confidence": 0.3})
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        with self.assertRaisesRegex(RuntimeError, "empty output"):
+        with self.assertRaisesRegex(RuntimeError, "invalid structured output"):
+            asyncio.run(
+                provider.run_prompt(
+                    instructions="repair",
+                    user_input="failing test output",
+                    max_turns=2,
+                )
+            )
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_accepts_execution_report_without_patch(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(
+            final_output={
+                "rationale": "Applied edits via MCP tools and validated with tests",
+                "confidence": 0.81,
+                "changed_files": ["src/a.py"],
+            }
+        )
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(
+            provider.run_prompt(
+                instructions="repair",
+                user_input="failing test output",
+                max_turns=2,
+            )
+        )
+
+        self.assertIsNone(result.patch_unified_diff)
+        self.assertEqual(result.changed_files, ["src/a.py"])
+
+    @patch("llm_autofix_agents.llm.provider.Agent")
+    def test_provider_sets_structured_output_type(self, agent_ctor: AsyncMock) -> None:
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        provider._build_agent(instructions="repair", tools=[], mcp_servers=None)
+
+        self.assertTrue(agent_ctor.called)
+        self.assertIs(agent_ctor.call_args.kwargs["output_type"], AgentFixProposal)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_rejects_unparseable_output(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(final_output=object())
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        with self.assertRaisesRegex(RuntimeError, "invalid structured output"):
             asyncio.run(
                 provider.run_prompt(
                     instructions="repair",

@@ -41,11 +41,17 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 - [x] SH3-T01 Integrar openai-agents-sdk en version baseline.
 - [x] SH3-T02 Definir localizacion autonoma via tools/MCP y directrices de system prompt (sin pre-localizacion hardcodeada en el orquestador).
 - [x] SH3-T02B Habilitar MCPs definidos para localizacion autonoma efectiva (filesystem + web-search).
+- [x] SH3-T02B1 Integrar MCP shell opcional para ejecucion de comandos del agente (parametrizable por entorno).
+- [x] SH3-T02B2 Rebaselinar MCPs por defecto a filesystem + shell.
+- [x] SH3-T02B3 Incluir web-search en baseline por defecto junto a filesystem y shell.
 - [x] SH3-T02C Definir contrato minimo de instanciacion por contenedor (repository, branch, architecture, agent_models, bootstrap_prompt).
 - [x] SH3-T02D1 Contenerizar runtime completo minimo del sistema para invocacion local via Docker Compose (runner unico funcional).
 - [ ] SH3-T02D2 Endurecer runtime Compose del runner unico (parametrizacion y robustez operativa no bloqueante para primer bugfix).
 - [ ] SH3-T03 Implementar ciclo de iteracion (max 3) con criterio de no progreso.
-- [ ] SH3-T04 Implementar aplicacion de parches multiarchivo.
+- [x] SH3-T03A Implementar esqueleto de ciclo iterativo (max 3) con razones de parada `max_iterations` y `no_progress` por señal textual.
+- [x] SH3-T03B Reforzar no-progreso con senales objetivas (firma de tests + cambios de archivos) manteniendo loop interno del SDK.
+- [ ] SH3-T04 Consolidar salida de parche multiarchivo basada en estado real del repo (execution-driven) y empaquetado de artefactos.
+- [x] SH3-T04A Migrar de aplicacion de parche desde salida textual del modelo a enfoque execution-driven (agente aplica cambios via MCP; orquestador observa diff/tests).
 - [ ] SH3-T05 Implementar rechazo automatico de regresiones.
 
 ### Done cuando
