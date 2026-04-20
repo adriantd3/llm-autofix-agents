@@ -47,6 +47,9 @@
 - SH5-T03 completado: logging INFO/DEBUG por etapas del flujo y persistencia de observabilidad.
 - SH5-T04 completado: trazabilidad de tool calls integrada desde el provider al registro final de ejecucion.
 - Cobertura SH5 agregada: tests de contratos, provider, observabilidad y flujo baseline en verde (unittest).
+- SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
+- SH6-T01 preparacion aplicada: `agent-smoke` ahora consume contrato `RUN_*`, resuelve/clona repositorio objetivo (path/URL/slug GitHub) y ejecuta validacion con `RUN_TEST_COMMAND`.
+- Evidencia operativa SH6 agregada en README y Compose para ejecucion reproducible del caso MVP (`python_testcases/test_gcd.py`).
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md

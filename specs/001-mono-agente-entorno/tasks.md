@@ -2,7 +2,7 @@
 
 ## Estado global
 - Spec: SPEC-001
-- Subhito activo: SH4
+- Subhito activo: SH6
 - Estado: En curso
 
 ## SH1 - Entorno Docker base y runner (Completado)

@@ -69,6 +69,15 @@ Contrato minimo de instanciacion por contenedor (SH3-T02C):
 - `RUN_ARCHITECTURE`
 - `RUN_AGENT_MODELS`
 - `RUN_BOOTSTRAP_PROMPT`
+- `RUN_TEST_COMMAND` (opcional, recomendado para validacion objetiva)
+
+`RUN_REPOSITORY` acepta:
+
+- Ruta local existente.
+- URL git remota (`https://...`, `git@...`).
+- Slug de GitHub (`owner/repo`), que se resuelve a `https://github.com/owner/repo.git`.
+
+Si el repo no existe localmente, el runtime lo clona de forma temporal antes del run.
 
 Nota sobre recursos del runner Docker (MVP):
 
@@ -106,3 +115,31 @@ Optional environment overrides:
 
 	make format
 	make test
+
+## QuixBugs: run MVP listo
+
+Configuracion recomendada para un primer gate reproducible (caso unico):
+
+- `RUN_REPOSITORY=https://github.com/jkoppel/QuixBugs.git`
+- `RUN_BRANCH=master`
+- `RUN_TEST_COMMAND=uv run --with pytest pytest python_testcases/test_gcd.py`
+
+Comando con Compose:
+
+```bash
+make compose-up
+make compose-smoke
+make compose-down
+```
+
+Comando local equivalente (sin Compose):
+
+```bash
+RUN_REPOSITORY=https://github.com/jkoppel/QuixBugs.git \
+RUN_BRANCH=master \
+RUN_ARCHITECTURE=mono-agent \
+RUN_AGENT_MODELS='{"main":"llama3.1:8b"}' \
+RUN_BOOTSTRAP_PROMPT='Fix failing tests with minimal changes.' \
+RUN_TEST_COMMAND='uv run --with pytest pytest python_testcases/test_gcd.py' \
+uv run autofix agent-smoke
+```
