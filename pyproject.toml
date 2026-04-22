@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "langchain>=1.2.15",
-    "openai-agents>=0.13.6",
+    "openai-agents>=0.14.4",
     "pydantic>=2.11.0",
     "pymongo>=4.16.0",
 ]
