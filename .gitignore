@@ -211,3 +211,7 @@ __marimo__/
 .specify/integrations/
 .specify/scripts/
 .specify/*.json
+
+
+openai-examples/
+results/

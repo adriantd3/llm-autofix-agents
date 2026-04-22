@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apr-toolkit-openai-agents"
+version = "0.1.0"
+description = "Compact APR filesystem and shell tools for openai-agents"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["openai-agents>=0.14,<0.15"]
+
+[tool.setuptools]
+packages = ["apr_toolkit"]
