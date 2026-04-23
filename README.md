@@ -85,31 +85,17 @@ Nota sobre recursos del runner Docker (MVP):
 - No se aplican flags extra de hardening/aislamiento en `docker run` para reducir complejidad inicial.
 - Limites de CPU/RAM/PIDs quedan como configuracion opcional para fases posteriores.
 
-### MCP servers used by baseline agent
+### Local APR tools used by the baseline agent
 
-The baseline run uses MCP stdio servers for filesystem, shell command execution, and web search.
+The baseline run uses local APR tools from `src/llm_autofix_agents/tools/`. The default profile is `full`, which includes filesystem inspection, command execution, validation helpers, and git/diff helpers.
 
-Default server commands:
+Available profiles:
 
-- Filesystem MCP: `npx -y @modelcontextprotocol/server-filesystem <target_repo>`
-- Shell MCP: `npx -y mcp-shell-server`
-- Web search MCP: `npx -y web-search-mcp`
+- `minimal`: read/search/edit plus command execution.
+- `core`: workspace inspection plus search, editing, command execution, and targeted test running.
+- `full`: `core` plus git status/diff and unified diff application.
 
-Optional environment overrides:
-
-- `FILESYSTEM_MCP_ENABLED=true|false`
-- `FILESYSTEM_MCP_COMMAND=<command>`
-- `FILESYSTEM_MCP_ARGS_JSON=["..."]`
-- `SHELL_MCP_ENABLED=true|false` (default: true)
-- `SHELL_MCP_COMMAND=<command>`
-- `SHELL_MCP_ARGS_JSON=["..."]`
-- `SHELL_MCP_PACKAGE=<npm-package>`
-- `SHELL_MCP_ENV_JSON={"KEY":"VALUE"}`
-- `WEB_SEARCH_MCP_ENABLED=true|false` (default: true)
-- `WEB_SEARCH_MCP_COMMAND=<command>`
-- `WEB_SEARCH_MCP_ARGS_JSON=["..."]`
-- `WEB_SEARCH_MCP_ENTRYPOINT=<path-to-dist-index.js>`
-- `WEB_SEARCH_MCP_ENV_JSON={"KEY":"VALUE"}`
+The active profile is resolved by the runtime and can be overridden through run metadata when needed.
 
 4. Format and run tests:
 

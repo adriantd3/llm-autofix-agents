@@ -15,18 +15,19 @@
 - Versionar por run la configuracion de prompt/agente en resultados.
 - Usar Ollama como baseline por defecto en SH3 para ejecucion local gratuita sobre endpoint OpenAI-compatible.
 - Mantener OpenAI y Gemini como providers opcionales compatibles con el mismo adaptador.
-- Mantener enfoque autonomy-first: el agente decide secuencia interna de acciones usando tools/MCP bajo limites y guardrails.
-- Adoptar enfoque execution-driven en SH3: el agente aplica cambios y ejecuta validaciones dentro del repo via MCP tools; el orquestador no aplica parches desde la salida textual del modelo.
+- Mantener enfoque autonomy-first: el agente decide secuencia interna de acciones usando tools locales del runtime bajo limites y guardrails.
+- Adoptar enfoque tool-driven en SH3: el agente usa tools APR locales del SDK para explorar, editar, validar y registrar cambios; el orquestador no aplica parches desde la salida textual del modelo.
 - Priorizar MVP simple: sin limites de CPU/RAM/PIDs por defecto en el Docker runner; aplicar solo timeout y dejar limites opcionales.
 - Evitar pre-localizacion heuristica hardcodeada en el orquestador; la localizacion debe emerger del uso autonomo de tools.
-- En SH3-T02B priorizar MCPs definidos para capacidad externa (filesystem + shell) sobre tools embebidas ad-hoc para localizacion y ejecucion.
-- Incluir web-search en el baseline MCP por defecto junto a filesystem y shell; mantener parametrizacion por entorno para desactivacion controlada.
+- En SH3-T02B priorizar tools APR locales (filesystem + comandos + validacion + git/parche helpers) sobre dependencias externas adicionales en fase MVP.
+- Eliminar web-search del baseline del APR en fase MVP; mantener foco en filesystem, comandos de ejecucion/validacion y helpers de git/parche.
 - Ejecutar runtime completo del sistema en contenedores locales (Compose), no solo el sandbox de ejecucion por run.
 - Definir por contenedor un contrato minimo de instanciacion con: repository, branch, architecture, agent_models y bootstrap_prompt.
 - Permitir invocacion local simple (CLI/Compose) con un runner base parametrizable; ampliar a multiples runners en fases posteriores.
 - Mantener fuera de alcance en esta fase: colas, workers distribuidos y control plane.
 - Usar MongoDB Atlas como almacenamiento primario de resultados con fallback JSONL local en caso de fallo temporal.
 - Aceptar no determinismo del flujo interno y validar por resultados por run + estimaciones medias sobre multiples runs.
+- No introducir MCP servers en el baseline MVP: la capa operativa debe ser local y tool-driven.
 
 ## Referencias de especificacion activa
 - Spec principal: specs/001-mono-agente-entorno/spec.md
@@ -49,7 +50,7 @@
 - Aplicacion de cambios multiarchivo por el agente y validacion de tests en el repo objetivo.
 - Generacion de parche final (unified diff) desde el estado real del repositorio al finalizar el run.
 - Rechazo automatico de regresiones antes de aceptar resultado.
-- MCPs de filesystem, shell y web-search habilitados durante el run (baseline).
+- Tools APR locales de filesystem y comandos habilitadas durante el run (baseline).
 
 ## Expansion posterior al MVP
 - Ampliar benchmark de QuixBugs a 5 casos reproducibles para comparativas agregadas.

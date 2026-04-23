@@ -72,19 +72,13 @@ class ContractsTests(unittest.TestCase):
                 }
             )
 
-    def test_tool_call_trace_normalizes_optional_values(self) -> None:
+    def test_tool_call_trace_normalizes_status(self) -> None:
         trace = ToolCallTrace(
             iteration=1,
             name=" shell ",
-            kind=" tool_call ",
-            arguments="   ",
-            call_id="   ",
             status=" ok ",
         )
         self.assertEqual(trace.name, "shell")
-        self.assertEqual(trace.kind, "tool_call")
-        self.assertIsNone(trace.arguments)
-        self.assertIsNone(trace.call_id)
         self.assertEqual(trace.status, "ok")
 
     def test_run_observability_record_requires_non_empty_identifiers(self) -> None:

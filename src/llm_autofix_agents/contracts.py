@@ -80,12 +80,9 @@ class ToolCallTrace(BaseModel):
 
     iteration: int = Field(ge=1)
     name: str = Field(min_length=1)
-    kind: str = Field(min_length=1)
-    arguments: str | None = None
-    call_id: str | None = None
     status: str | None = None
 
-    @field_validator("name", "kind")
+    @field_validator("name")
     @classmethod
     def _normalize_required_text(cls, value: str) -> str:
         normalized = value.strip()
@@ -93,7 +90,7 @@ class ToolCallTrace(BaseModel):
             raise ValueError("value cannot be empty")
         return normalized
 
-    @field_validator("arguments", "call_id", "status")
+    @field_validator("status")
     @classmethod
     def _normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:

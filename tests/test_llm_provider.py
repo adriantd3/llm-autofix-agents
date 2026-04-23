@@ -5,10 +5,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from agents import AgentOutputSchema
 from pydantic import SecretStr
 
 from llm_autofix_agents.llm.provider import (
-    AgentFixProposal,
+    AgentFixIterationRecord,
     OpenAIAgentsSDKProvider,
     create_provider,
 )
@@ -20,8 +21,8 @@ class LLMProviderTests(unittest.TestCase):
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_returns_structured_output(self, runner_run: AsyncMock, set_tracing_disabled: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
-            final_output=AgentFixProposal(
-                patch_unified_diff="--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-print('bad')\n+print('good')",
+            final_output=AgentFixIterationRecord(
+                action="finish",
                 rationale="Fix wrong literal",
                 confidence=0.72,
                 changed_files=["a.py"],
@@ -37,61 +38,50 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
 
-        self.assertIsInstance(result, AgentFixProposal)
+        self.assertIsInstance(result, AgentFixIterationRecord)
         self.assertEqual(result.rationale, "Fix wrong literal")
         set_tracing_disabled.assert_called_once_with(True)
         self.assertTrue(runner_run.await_count == 1)
 
-    @patch("llm_autofix_agents.llm.provider.MCPServerManager")
     @patch("llm_autofix_agents.llm.provider.Agent")
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
-    def test_provider_forwards_mcp_servers_to_agent(
+    def test_provider_forwards_tools_and_context_to_agent(
         self,
         runner_run: AsyncMock,
         agent_ctor: AsyncMock,
-        mcp_manager_ctor: AsyncMock,
     ) -> None:
         runner_run.return_value = SimpleNamespace(
-            final_output=AgentFixProposal(
-                patch_unified_diff="--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-print('bad')\n+print('good')",
+            final_output=AgentFixIterationRecord(
+                action="finish",
                 rationale="Fix wrong literal",
                 confidence=0.72,
                 changed_files=["a.py"],
             )
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
-        configured_server = object()
-        connected_server = object()
-
-        manager = AsyncMock()
-        manager.active_servers = [connected_server]
-        manager.__aenter__.return_value = manager
-        manager.__aexit__.return_value = None
-        mcp_manager_ctor.return_value = manager
+        configured_tool = object()
+        context = object()
 
         asyncio.run(
             provider.run_prompt(
                 instructions="repair",
                 user_input="failing test output",
                 max_turns=2,
-                mcp_servers=[configured_server],
+                tools=[configured_tool],
+                context=context,
             )
         )
 
-        mcp_manager_ctor.assert_called_once_with(
-            [configured_server],
-            drop_failed_servers=True,
-            strict=False,
-            connect_in_parallel=True,
-        )
         self.assertTrue(agent_ctor.called)
-        self.assertEqual(agent_ctor.call_args.kwargs["mcp_servers"], [connected_server])
+        self.assertEqual(agent_ctor.call_args.kwargs["tools"], [configured_tool])
+        self.assertNotIn("mcp_servers", agent_ctor.call_args.kwargs)
+        self.assertEqual(runner_run.await_args.kwargs["context"], context)
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_parses_dict_output(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output={
-                "patch_unified_diff": "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-print('bad')\n+print('good')",
+                "action": "continue",
                 "rationale": "Fix wrong literal",
                 "confidence": 0.72,
                 "changed_files": ["a.py"],
@@ -108,11 +98,13 @@ class LLMProviderTests(unittest.TestCase):
         )
 
         self.assertEqual(result.changed_files, ["a.py"])
+        self.assertEqual(result.action, "continue")
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_enriches_usage_and_tool_calls(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output={
+                "action": "finish",
                 "rationale": "Fix wrong literal",
                 "confidence": 0.72,
                 "changed_files": ["a.py"],
@@ -122,8 +114,6 @@ class LLMProviderTests(unittest.TestCase):
                 {
                     "type": "tool_call",
                     "name": "shell",
-                    "arguments": {"command": "uv run pytest"},
-                    "call_id": "call-1",
                     "status": "completed",
                 }
             ],
@@ -142,7 +132,7 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(result.output_tokens, 7)
         self.assertEqual(result.total_tokens, 18)
         self.assertEqual(len(result.tool_calls), 1)
-        self.assertEqual(result.tool_calls[0]["name"], "shell")
+        self.assertEqual(result.tool_calls[0], {"name": "shell", "status": "completed"})
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_rejects_invalid_schema(self, runner_run: AsyncMock) -> None:
@@ -162,7 +152,8 @@ class LLMProviderTests(unittest.TestCase):
     def test_provider_accepts_execution_report_without_patch(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output={
-                "rationale": "Applied edits via MCP tools and validated with tests",
+                "action": "finish",
+                "rationale": "Applied edits via local tools and validated with tests",
                 "confidence": 0.81,
                 "changed_files": ["src/a.py"],
             }
@@ -177,17 +168,21 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
 
-        self.assertIsNone(result.patch_unified_diff)
+        self.assertEqual(result.action, "finish")
         self.assertEqual(result.changed_files, ["src/a.py"])
 
     @patch("llm_autofix_agents.llm.provider.Agent")
     def test_provider_sets_structured_output_type(self, agent_ctor: AsyncMock) -> None:
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        provider._build_agent(instructions="repair", tools=[], mcp_servers=None)
+        provider._build_agent(instructions="repair", tools=[])
 
         self.assertTrue(agent_ctor.called)
-        self.assertIs(agent_ctor.call_args.kwargs["output_type"], AgentFixProposal)
+        output_type = agent_ctor.call_args.kwargs["output_type"]
+        self.assertIsInstance(output_type, AgentOutputSchema)
+        self.assertIs(output_type.output_type, AgentFixIterationRecord)
+        self.assertFalse(output_type.is_strict_json_schema())
+        self.assertNotIn("mcp_servers", agent_ctor.call_args.kwargs)
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_rejects_unparseable_output(self, runner_run: AsyncMock) -> None:

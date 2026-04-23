@@ -25,13 +25,14 @@ Tambien usa **Makefile** para la ejecucion de ciertos comandos de manera sencill
 
 ## Regla OpenAI Agents SDK (documentation-first)
 
-Referencia oficial obligatoria:
+Referencia oficial obligatoria (version 0.14+):
 - https://openai.github.io/openai-agents-python/
 
 Politica obligatoria para cualquier implementacion del flujo de agente:
 1. Antes de implementar una capacidad nueva, verificar primero si ya existe en el SDK oficial.
 2. Si la capacidad existe en el SDK, priorizar su uso directo sobre implementaciones ad-hoc.
 3. Si la capacidad no existe o no es facilmente aplicabe a APR, implementar extension handcrafted y documentar por que.
+4. Siempre revisar la documentacion teniendo en cuenta la version más actualizada (0.14+)
 
 ## Regla de disenio y calidad de codigo
 

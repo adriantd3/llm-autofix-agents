@@ -39,11 +39,11 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 
 ### Tasks
 - [x] SH3-T01 Integrar openai-agents-sdk en version baseline.
-- [x] SH3-T02 Definir localizacion autonoma via tools/MCP y directrices de system prompt (sin pre-localizacion hardcodeada en el orquestador).
-- [x] SH3-T02B Habilitar MCPs definidos para localizacion autonoma efectiva (filesystem + web-search).
-- [x] SH3-T02B1 Integrar MCP shell opcional para ejecucion de comandos del agente (parametrizable por entorno).
-- [x] SH3-T02B2 Rebaselinar MCPs por defecto a filesystem + shell.
-- [x] SH3-T02B3 Incluir web-search en baseline por defecto junto a filesystem y shell.
+- [x] SH3-T02 Definir localizacion autonoma via tools locales y directrices de system prompt (sin pre-localizacion hardcodeada en el orquestador).
+- [x] SH3-T02B Habilitar tools locales definidos para localizacion autonoma efectiva (filesystem + comandos + validacion).
+- [x] SH3-T02B1 Integrar helpers de comandos/validacion para ejecucion del agente (parametrizable por entorno).
+- [x] SH3-T02B2 Rebaselinar el baseline a tools locales del SDK para filesystem + shell/comandos.
+- [x] SH3-T02B3 Eliminar websearch del runtime principal del MVP.
 - [x] SH3-T02C Definir contrato minimo de instanciacion por contenedor (repository, branch, architecture, agent_models, bootstrap_prompt).
 - [x] SH3-T02D1 Contenerizar runtime completo minimo del sistema para invocacion local via Docker Compose (runner unico funcional).
 - [x] SH3-T02D2 Endurecer runtime Compose del runner unico (parametrizacion y robustez operativa no bloqueante para primer bugfix).
@@ -53,9 +53,13 @@ Habilitar ejecucion autonoma del agente bajo limites de run y validacion de resu
 - [x] SH3-T04 Consolidar salida de parche multiarchivo basada en estado real del repo (execution-driven) y empaquetado de artefactos.
 - [x] SH3-T04A Migrar de aplicacion de parche desde salida textual del modelo a enfoque execution-driven (agente aplica cambios via MCP; orquestador observa diff/tests).
 - [x] SH3-T05 Implementar rechazo automatico de regresiones.
+- [ ] SH3-T06 Migrar el toolkit APR de demo al runtime principal como tools locales con perfiles minimal/core/full.
+- [ ] SH3-T07 Reconvertir toolset/provider/flow para operar sin MCPServer ni MCPServerManager.
+- [ ] SH3-T08 Ajustar contrato de salida a informe tool-driven y validar nuevas trazas de iteracion.
 
 ### Done cuando
 - El flujo autonomo se ejecuta end-to-end sobre un caso controlado sin imponer pasos internos fijos al agente.
+- El baseline ya no depende de MCP servers ni de websearch para localizar o validar cambios.
 
 ### Secuencia MVP (ruta critica)
 - SH3-T02D1 -> SH3-T03 -> SH3-T04 -> SH3-T05.

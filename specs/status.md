@@ -46,6 +46,9 @@
 - SH5-T02 completado: metrica minima integrada en salida (exito, iteraciones, tiempo, tokens y coste estimado).
 - SH5-T03 completado: logging INFO/DEBUG por etapas del flujo y persistencia de observabilidad.
 - SH5-T04 completado: trazabilidad de tool calls integrada desde el provider al registro final de ejecucion.
+- Hardening provider aplicado: extraccion de tool calls alineada al contrato oficial de openai-agents (`RunResult.new_items` / `tool_call_item`) para evitar dependencia fragil de tracing.
+- Simplificacion aplicada: `tool_calls` del provider se reduce a lista de nombres de tools para observabilidad minima (sin metadatos extra).
+- Ajuste final aplicado: se conserva `status` por tool call y `ToolCallTrace` queda reducido a `iteration`, `name`, `status`.
 - Cobertura SH5 agregada: tests de contratos, provider, observabilidad y flujo baseline en verde (unittest).
 - SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
 - SH6-T01 preparacion aplicada: `agent-smoke` ahora consume contrato `RUN_*`, resuelve/clona repositorio objetivo (path/URL/slug GitHub) y ejecuta validacion con `RUN_TEST_COMMAND`.
@@ -54,8 +57,8 @@
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
-- Subhito activo: SH6 - Benchmark QuixBugs inicial.
-- Task activa: SH6-T00 Seleccionar 1 caso QuixBugs reproducible como gate MVP.
+- Subhito activo: refactor MVP tool-driven sin MCP.
+- Task activa: migrar toolkit/provider/flow al baseline local tool-driven.
 
 ## Siguiente
-- Ejecutar SH6-T00/T01/T02 para validar 1 caso QuixBugs reproducible como gate MVP.
+- Portar y adaptar tests de demo/toolset/provider/flow al nuevo baseline tool-driven.

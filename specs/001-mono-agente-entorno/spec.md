@@ -10,6 +10,7 @@
 - Construir una base mono-agente simple para APR, con ejecucion aislada y reproducible.
 - Ser capaz de arreglar al menos 1 bug reproducible en QuixBugs.
 - Dejar preparada la base para crecer a multi-agente en fases posteriores.
+- Baseline MVP: tools locales del SDK (filesystem + comandos + validacion + helpers de git/parche), sin MCP servers ni websearch en el runtime principal.
 
 ## Alcance confirmado
 - Arquitectura mono-agente (multi-agente fuera de alcance en esta fase).
@@ -34,8 +35,8 @@
 
 ### C) Flujo interno
 - C10: Flujo de referencia = analizar fallo -> localizar -> proponer -> aplicar -> validar, sin imponer un orden interno estricto al agente.
-- C10b: Enfoque de ejecucion baseline = execution-driven: el agente aplica cambios directamente sobre el workspace/repo via MCP tools; el orquestador no aplica parches desde la salida del modelo y se limita a observar/validar estado del repo y tests.
-- C11: Estrategia inicial de localizacion = autonomia del agente via MCPs definidos (filesystem + web-search) y directrices, sin pre-localizador hardcodeado en el orquestador.
+- C10b: Enfoque de ejecucion baseline = tool-driven: el agente usa tools APR locales del SDK para explorar, editar y validar; el orquestador no aplica parches desde la salida del modelo y se limita a observar/validar estado del repo y tests.
+- C11: Estrategia inicial de localizacion = autonomia del agente via tools APR definidos (filesystem + comandos + git/parche + validacion) y directrices, sin pre-localizador hardcodeado en el orquestador.
 - C12: Politica de edicion = hacer los cambios necesarios para resolver el problema (sin limite estricto de archivos).
 - C13: No progreso (estandar) = mismos tests fallando en iteraciones consecutivas.
 - C14: Al agotar iteraciones = fallo controlado con informe y artefactos.
@@ -50,12 +51,13 @@
 - D20: Dependencias resueltas dentro del contenedor segun gestor/lockfile del proyecto objetivo.
 - D21: Runtime completo del sistema contenedizado para invocacion local via Compose con un runner unico parametrizable.
 
-### E) Herramientas y MCPs
-- E21: Set minimo inicial de MCPs definidos para baseline (filesystem + shell + web-search).
+### E) Herramientas baseline
+- E21: Set minimo inicial de tools APR locales para baseline (filesystem + shell/comandos + validacion + git/parche helpers).
 - E22: Politica de comandos = amplia con auditoria.
 - E23: Fallo de tools = reintentos acotados + fallback + log.
 - E24: Trazabilidad completa de tool calls.
 - E25: Presupuesto de tools por iteracion habilitado.
+- E26: No usar MCP servers ni websearch en el baseline MVP; cualquier helper externo queda fuera de este alcance.
 
 ### F) Git y parches
 - F26: Rama temporal por run.
@@ -77,6 +79,7 @@
 - H37: Configuracion minima por entorno habilitada en v1 para provider/model y timeout operativo, mas contrato de instanciacion por contenedor (repository, branch, architecture, agent_models, bootstrap_prompt).
 - H38: Fallos de API = retry exponencial + backoff + failover opcional.
 - H39: Versionado obligatorio por run con `prompt_version` y `agent_config_hash` en resultados persistidos.
+- H40: El provider baseline recibe tools locales del SDK y contexto local del run; no debe depender de MCPServer/MCPServerManager.
 
 ### I) Observabilidad y datos
 - I40: Unidad de analisis = run e iteracion.
@@ -142,3 +145,4 @@
 - Se valida al menos 1 caso QuixBugs reproducible como gate MVP y se documenta resultado.
 - Se deja plan de expansion para benchmark de 5 casos QuixBugs en fase posterior.
 - El sistema no fuerza una trayectoria determinista interna; se evalua por resultados reproducibles a nivel de run y por metricas agregadas entre multiples runs.
+- El runtime baseline opera en modo tool-driven con tools locales del SDK y no requiere MCP servers ni websearch para el MVP.

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from llm_autofix_agents.tools.apr import (
     APR_CORE_TOOLS,
     APR_FUNCTION_TOOLS,

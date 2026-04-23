@@ -86,17 +86,17 @@ from llm_autofix_agents.flow import (
     validate_diff_integrity as _validate_diff_integrity,
 )
 from llm_autofix_agents.flow.git_ops import TempBranchContext
-from llm_autofix_agents.llm.provider import AgentFixProposal, LLMProvider, create_provider
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider, create_provider
 from llm_autofix_agents.llm.settings import LLMSettings
-from llm_autofix_agents.toolset import build_mcp_servers
+from llm_autofix_agents.tools import APRToolContext, build_apr_tools
 
 _BASELINE_INSTRUCTIONS = (
     "You are an APR baseline agent operating autonomously. "
-    "Decide the flow using available MCP tools, avoid hardcoded assumptions, "
-    "run commands through the shell MCP when validation is needed, "
-    "apply and validate changes directly in the target repository via MCP tools, "
-    "and then return a structured execution report with: "
-    "patch_unified_diff, rationale, confidence, changed_files, notes."
+    "Decide the flow using the available local APR tools, avoid hardcoded assumptions, "
+    "run commands through the local command tool when validation is needed, "
+    "apply and validate changes directly in the target repository via local tools, "
+    "and then return a structured iteration report with: "
+    "action, rationale, confidence, changed_files, notes."
 )
 
 _TestExecution = TestExecution
@@ -121,22 +121,30 @@ def run_agent_baseline(
     total_input_tokens = 0
     total_output_tokens = 0
     total_tokens = 0
-    mcp_server_count = 0
+    tool_profile = _resolve_tool_profile(run_input.metadata)
     latest_tests: TestResults | None = None
     latest_diff = ""
     latest_artifacts: dict[str, Any] = {}
     baseline_test_execution: _TestExecution | None = None
     test_timeout_seconds = _resolve_test_timeout_seconds(run_input.metadata)
     repo_root = _resolve_repo_root(run_input.target_repo)
+    agent_context = APRToolContext(root_dir=str(repo_root))
+    agent_tools = build_apr_tools(tool_profile)
+    agent_config = {
+        **resolved_settings.fingerprint_payload(),
+        "tool_profile": tool_profile,
+    }
     ignore_rules = _load_ignore_rules(repo_root)
     temp_branch_context: TempBranchContext | None = None
     branch_cleanup_error: str | None = None
     run_started_monotonic = time.perf_counter()
 
     try:
-        mcp_servers = build_mcp_servers(target_repo=run_input.target_repo)
-        mcp_server_count = len(mcp_servers)
-        logger.info("starting baseline run with mcp_servers=%s", mcp_server_count)
+        logger.info(
+            "starting baseline run with tool_profile=%s tool_count=%s",
+            tool_profile,
+            len(agent_tools),
+        )
 
         if run_input.test_command is not None:
             baseline_test_execution = _run_test_command(
@@ -157,7 +165,7 @@ def run_agent_baseline(
         for iteration in range(1, max_iterations + 1):
             identity = build_run_identity(
                 run_input=run_input,
-                agent_config=resolved_settings.fingerprint_payload(),
+                agent_config=agent_config,
                 iteration=iteration,
                 run_id=run_id,
             )
@@ -190,9 +198,11 @@ def run_agent_baseline(
                         previous_message=final_message,
                     ),
                     max_turns=resolved_settings.max_turns,
-                    mcp_servers=mcp_servers,
+                    tools=agent_tools,
+                    context=agent_context,
                 )
             )
+
             final_message = _render_final_message(proposal)
             latest_diff = _collect_repo_diff(repo_root)
             total_input_tokens += proposal.input_tokens
@@ -374,7 +384,8 @@ def run_agent_baseline(
                     provider=resolved_settings.provider.value,
                     model=resolved_settings.model,
                     result="ok",
-                    mcp_server_count=mcp_server_count,
+                    tool_profile=tool_profile,
+                    tool_count=len(agent_tools),
                     iteration=iteration,
                     max_iterations=max_iterations,
                     changed_files=changed_files,
@@ -421,7 +432,7 @@ def run_agent_baseline(
             previous_proposal_signature = _proposal_signature(proposal)
             previous_test_signature = test_execution.signature
 
-            if _can_complete_early(run_input=run_input, test_execution=test_execution):
+            if proposal.action == "finish" and _can_complete_early(run_input=run_input, test_execution=test_execution):
                 if temp_branch_context is not None:
                     try:
                         _restore_original_branch(repo_root, original_branch=temp_branch_context.original_branch)
@@ -558,7 +569,8 @@ def run_agent_baseline(
                 provider=resolved_settings.provider.value,
                 model=resolved_settings.model,
                 result="error",
-                mcp_server_count=mcp_server_count,
+                tool_profile=tool_profile,
+                tool_count=len(agent_tools),
                 iteration=1,
                 max_iterations=max_iterations,
                 changed_files=[],
@@ -649,22 +661,22 @@ def _finalize_run_output(
     return run_output
 
 
-def _to_tool_call_traces(*, iteration: int, payload: list[dict[str, Any]]) -> list[ToolCallTrace]:
+def _to_tool_call_traces(*, iteration: int, payload: list[Any]) -> list[ToolCallTrace]:
     traces: list[ToolCallTrace] = []
     for raw_entry in payload:
-        name = raw_entry.get("name")
-        kind = raw_entry.get("kind")
-        if not isinstance(name, str) or not isinstance(kind, str):
+        if not isinstance(raw_entry, dict):
             continue
-        trace = ToolCallTrace(
-            iteration=iteration,
-            name=name,
-            kind=kind,
-            arguments=_safe_optional_string(raw_entry.get("arguments")),
-            call_id=_safe_optional_string(raw_entry.get("call_id")),
-            status=_safe_optional_string(raw_entry.get("status")),
+
+        name = raw_entry.get("name")
+        if not isinstance(name, str):
+            continue
+        traces.append(
+            ToolCallTrace(
+                iteration=iteration,
+                name=name,
+                status=_safe_optional_string(raw_entry.get("status")),
+            )
         )
-        traces.append(trace)
     return traces
 
 
@@ -676,7 +688,7 @@ def _safe_optional_string(value: Any) -> str | None:
     return str(value)
 
 
-def _run_sync(awaitable: Coroutine[object, object, AgentFixProposal]) -> AgentFixProposal:
+def _run_sync(awaitable: Coroutine[object, object, AgentFixIterationRecord]) -> AgentFixIterationRecord:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
@@ -689,7 +701,8 @@ def _build_run_logs(
     provider: str,
     model: str,
     result: str,
-    mcp_server_count: int,
+    tool_profile: str,
+    tool_count: int,
     iteration: int,
     max_iterations: int,
     changed_files: list[str],
@@ -699,8 +712,9 @@ def _build_run_logs(
 ) -> list[str]:
     lines = [
         "stage=agent",
-        "toolset=mcp-stdio",
-        f"mcp_servers={mcp_server_count}",
+        "toolset=apr-local",
+        f"tool_profile={tool_profile}",
+        f"tool_count={tool_count}",
         f"provider={provider}",
         f"model={model}",
         f"iteration={iteration}/{max_iterations}",
@@ -777,16 +791,34 @@ def _restore_temp_branch_for_debug(
         return str(restore_exc)
 
 
-def _proposal_signature(proposal: AgentFixProposal) -> str:
+def _proposal_signature(proposal: AgentFixIterationRecord) -> str:
+    action = proposal.action.strip().lower()
     rationale = " ".join(proposal.rationale.split()).strip().lower()
     changed = "|".join(proposal.changed_files)
     notes = " ".join((proposal.notes or "").split()).strip().lower()
-    return f"rationale={rationale}|changed={changed}|notes={notes}"
+    return f"action={action}|rationale={rationale}|changed={changed}|notes={notes}"
 
 
-def _render_final_message(proposal: AgentFixProposal) -> str:
-    return (
-        f"rationale: {proposal.rationale}\n"
-        f"confidence: {proposal.confidence:.3f}\n"
-        f"changed_files: {', '.join(proposal.changed_files) if proposal.changed_files else '(unspecified)'}"
-    )
+def _render_final_message(proposal: AgentFixIterationRecord) -> str:
+    changed_files = ", ".join(proposal.changed_files) if proposal.changed_files else "(unspecified)"
+    lines = [
+        f"action: {proposal.action}",
+        f"rationale: {proposal.rationale}",
+        f"confidence: {proposal.confidence:.3f}",
+        f"changed_files: {changed_files}",
+    ]
+    if proposal.notes:
+        lines.append(f"notes: {proposal.notes}")
+    return "\n".join(lines)
+
+
+def _resolve_tool_profile(metadata: dict[str, Any]) -> str:
+    value = metadata.get("tool_profile")
+    if value is None:
+        return "full"
+    if not isinstance(value, str):
+        raise ValueError("metadata.tool_profile must be a string")
+    normalized = value.strip().lower()
+    if normalized not in {"minimal", "core", "full"}:
+        raise ValueError("metadata.tool_profile must be one of: minimal, core, full")
+    return normalized

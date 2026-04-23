@@ -6,7 +6,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from llm_autofix_agents.llm.provider import AgentFixProposal
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
 
 def normalize_paths(paths: list[str]) -> list[str]:
@@ -15,7 +15,7 @@ def normalize_paths(paths: list[str]) -> list[str]:
 
 def validate_changed_files_coherence(
     *,
-    proposal: AgentFixProposal,
+    proposal: AgentFixIterationRecord,
     changed_files: list[str],
     repo_changed: bool,
     diff: str,
