@@ -22,8 +22,8 @@ class LLMProviderTests(unittest.TestCase):
     def test_provider_returns_structured_output(self, runner_run: AsyncMock, set_tracing_disabled: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output=AgentFixIterationRecord(
-                action="finish",
-                rationale="Fix wrong literal",
+                status="done",
+                reasoning_summary="Fix wrong literal",
                 confidence=0.72,
                 changed_files=["a.py"],
             )
@@ -39,7 +39,7 @@ class LLMProviderTests(unittest.TestCase):
         )
 
         self.assertIsInstance(result, AgentFixIterationRecord)
-        self.assertEqual(result.rationale, "Fix wrong literal")
+        self.assertEqual(result.reasoning_summary, "Fix wrong literal")
         set_tracing_disabled.assert_called_once_with(True)
         self.assertTrue(runner_run.await_count == 1)
 
@@ -52,8 +52,8 @@ class LLMProviderTests(unittest.TestCase):
     ) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output=AgentFixIterationRecord(
-                action="finish",
-                rationale="Fix wrong literal",
+                status="done",
+                reasoning_summary="Fix wrong literal",
                 confidence=0.72,
                 changed_files=["a.py"],
             )
@@ -81,8 +81,8 @@ class LLMProviderTests(unittest.TestCase):
     def test_provider_parses_dict_output(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output={
-                "action": "continue",
-                "rationale": "Fix wrong literal",
+                "status": "in_progress",
+                "reasoning_summary": "Fix wrong literal",
                 "confidence": 0.72,
                 "changed_files": ["a.py"],
             }
@@ -98,14 +98,14 @@ class LLMProviderTests(unittest.TestCase):
         )
 
         self.assertEqual(result.changed_files, ["a.py"])
-        self.assertEqual(result.action, "continue")
+        self.assertEqual(result.status, "in_progress")
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_enriches_usage_and_tool_calls(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output={
-                "action": "finish",
-                "rationale": "Fix wrong literal",
+                "status": "done",
+                "reasoning_summary": "Fix wrong literal",
                 "confidence": 0.72,
                 "changed_files": ["a.py"],
             },
@@ -152,8 +152,8 @@ class LLMProviderTests(unittest.TestCase):
     def test_provider_accepts_execution_report_without_patch(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output={
-                "action": "finish",
-                "rationale": "Applied edits via local tools and validated with tests",
+                "status": "done",
+                "reasoning_summary": "Applied edits via local tools and validated with tests",
                 "confidence": 0.81,
                 "changed_files": ["src/a.py"],
             }
@@ -168,7 +168,7 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result.action, "finish")
+        self.assertEqual(result.status, "done")
         self.assertEqual(result.changed_files, ["src/a.py"])
 
     @patch("llm_autofix_agents.llm.provider.Agent")
@@ -205,7 +205,7 @@ class LLMProviderTests(unittest.TestCase):
                 provider=ProviderType.OLLAMA,
                 model="llama3.1:8b",
                 api_key=None,
-                base_url="http://localhost:11434/v1",
+                base_url="http://localhost:11500/v1",
                 max_turns=3,
                 tracing_disabled=True,
             )
@@ -213,7 +213,7 @@ class LLMProviderTests(unittest.TestCase):
 
         provider._build_model()
 
-        async_openai.assert_called_once_with(api_key="ollama", base_url="http://localhost:11434/v1")
+        async_openai.assert_called_once_with(api_key="ollama", base_url="http://localhost:11500/v1")
 
     def test_create_provider_returns_sdk_adapter(self) -> None:
         provider = create_provider(_gemini_settings())

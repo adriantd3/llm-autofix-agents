@@ -71,3 +71,11 @@ def can_complete_early(*, run_input: RunInput, test_execution: TestExecution) ->
 
 def is_regression(*, baseline: TestExecution, current: TestExecution) -> bool:
     return baseline.exit_code == 0 and current.exit_code != 0
+
+
+def _proposal_signature(proposal) -> str:
+    status = proposal.status.strip().lower()
+    reasoning_summary = " ".join(proposal.reasoning_summary.split()).strip().lower()
+    changed = "|".join(proposal.changed_files)
+    notes = " ".join((proposal.notes or "").split()).strip().lower()
+    return f"status={status}|reasoning_summary={reasoning_summary}|changed={changed}|notes={notes}"

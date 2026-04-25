@@ -37,8 +37,10 @@ Regla de gestion de dependencias del proyecto:
 
 Baseline recomendado para MVP (gratis/local):
 
+Configura estas variables en un archivo `.env` (puedes partir de `.env.example`):
+
 - `LLM_PROVIDER=ollama`
-- `OLLAMA_BASE_URL=http://localhost:11434/v1`
+- `OLLAMA_BASE_URL=http://localhost:11500/v1`
 - `LLM_MODEL=llama3.1:8b`
 
 Compatibilidad opcional:
@@ -129,3 +131,37 @@ RUN_BOOTSTRAP_PROMPT='Fix failing tests with minimal changes.' \
 RUN_TEST_COMMAND='uv run --with pytest pytest python_testcases/test_gcd.py' \
 uv run autofix agent-smoke
 ```
+
+## Observabilidad local
+
+Cada ejecucion genera:
+
+- `results/observability.db`: base SQLite para analisis/ETL.
+- `results/<run_id>/live.md`: log interactivo legible.
+- `results/<run_id>/summary.json`: resumen final del run.
+- `results/<run_id>/itXX/`: artefactos por iteracion (diff.patch, patch_summary.json, file_changes.json).
+
+La base SQLite registra:
+- runs
+- architectures
+- model_configs
+- run_agents
+- iterations
+- agent_executions
+- tool_calls
+- test_executions
+- file_changes
+
+Las tool calls se registran de forma minima:
+- nombre
+- status/success
+- iteracion
+- agente
+
+### Variables de observabilidad
+
+- `AUTOFIX_OBSERVABILITY_ENABLED=true|false` (default: true)
+- `AUTOFIX_INTERACTIVE=true|false` (default: false)
+- `AUTOFIX_RESULTS_DIR=results` (default: results)
+- `AUTOFIX_OBSERVABILITY_DB=results/observability.db` (default: results/observability.db)
+- `AUTOFIX_LIVE_LOG=true|false` (default: true)

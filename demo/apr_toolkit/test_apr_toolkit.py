@@ -82,19 +82,25 @@ async def main() -> None:
         res = await call(run_test_target, tmp, '{"target":"tests/test_maths.py","cwd":".","timeout_seconds":60}')
         assert res["ok"] is True and res["exit_code"] != 0
 
-        res = await call(replace_in_file, tmp, '{"path":"src/maths.py","old":"return a - b","new":"return a + b","expected_occurrences":1}')
+        res = await call(
+            replace_in_file,
+            tmp,
+            '{"path":"src/maths.py","old":"return a - b","new":"return a + b","expected_occurrences":1}',
+        )
         assert res["ok"] is True
 
-        res = await call(replace_lines, tmp, '{"path":"src/maths.py","start_line":1,"end_line":1,"new_lines":"def add(a, b):\\n"}')
+        res = await call(
+            replace_lines, tmp, '{"path":"src/maths.py","start_line":1,"end_line":1,"new_lines":"def add(a, b):\\n"}'
+        )
         assert res["ok"] is True
 
         res = await call(write_file, tmp, '{"path":"notes.txt","content":"done\\n"}')
         assert res["ok"] is True
 
-        res = await call(git_status_summary, tmp, '{}')
+        res = await call(git_status_summary, tmp, "{}")
         assert res["ok"] is True and res["changed_files"] >= 1
 
-        res = await call(git_diff_summary, tmp, '{}')
+        res = await call(git_diff_summary, tmp, "{}")
         assert res["ok"] is True and "src/maths.py" in res["summary"]
 
         diff = """--- notes.txt\n+++ notes.txt\n@@ -1 +1 @@\n-done\n+done fixed\n"""
@@ -102,7 +108,7 @@ async def main() -> None:
         assert res["exit_code"] == 0
         assert (root / "notes.txt").read_text(encoding="utf-8") == "done fixed\n"
 
-        res = await call(execute_command, tmp, '{"command":"python -c \\\"print(2+3)\\\""}')
+        res = await call(execute_command, tmp, '{"command":"python -c \\"print(2+3)\\""}')
         assert res["ok"] is True and res["exit_code"] == 0 and res["stdout"].strip() == "5"
 
         tools = build_apr_tools("core")

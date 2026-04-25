@@ -42,15 +42,8 @@
 - SH4-T02/T04 completados: artefactos enriquecidos por iteracion con `patch_summary.json` y `file_changes.json`, mas consolidacion de trazabilidad por archivo en `manifest.json`.
 - SH4-T03 completado: filtrado de artefactos de build/test/cache con `.autofixignore` aplicado a snapshot y diff para parches limpios.
 - Cobertura SH4 agregada: tests unitarios dedicados para operaciones Git, reglas de exclusión y artefactos; suite total en verde.
-- SH5 completado: esquema de resultados experimental definido con persistencia MongoDB Atlas y fallback JSONL local.
-- SH5-T02 completado: metrica minima integrada en salida (exito, iteraciones, tiempo, tokens y coste estimado).
-- SH5-T03 completado: logging INFO/DEBUG por etapas del flujo y persistencia de observabilidad.
-- SH5-T04 completado: trazabilidad de tool calls integrada desde el provider al registro final de ejecucion.
-- Hardening provider aplicado: extraccion de tool calls alineada al contrato oficial de openai-agents (`RunResult.new_items` / `tool_call_item`) para evitar dependencia fragil de tracing.
-- Simplificacion aplicada: `tool_calls` del provider se reduce a lista de nombres de tools para observabilidad minima (sin metadatos extra).
-- Ajuste final aplicado: se conserva `status` por tool call y `ToolCallTrace` queda reducido a `iteration`, `name`, `status`.
-- Flujo baseline adaptado a schema status-driven del agente (`status`/`reasoning_summary`) y no-progreso endurecido para corte temprano por estancamiento real.
-- Cobertura SH5 agregada: tests de contratos, provider, observabilidad y flujo baseline en verde (unittest).
+- Decision de observabilidad revisada: MongoDB deja de ser backend principal del MVP; se adopta SQLite local normalizado + artefactos por run (live.md, summary.json, diff.patch) para facilitar ETL y reducir complejidad operativa.
+- SH5 completado: observabilidad SQLite-first con observers desacoplados (Null/Composite/SQLite/Markdown/Console), lifecycle hooks del SDK, live.md y summary.json por run.
 - SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
 - SH6-T01 preparacion aplicada: `agent-smoke` ahora consume contrato `RUN_*`, resuelve/clona repositorio objetivo (path/URL/slug GitHub) y ejecuta validacion con `RUN_TEST_COMMAND`.
 - Evidencia operativa SH6 agregada en README y Compose para ejecucion reproducible del caso MVP (`python_testcases/test_gcd.py`).
@@ -58,8 +51,9 @@
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
-- Subhito activo: refactor MVP tool-driven sin MCP.
-- Task activa: migrar toolkit/provider/flow al baseline local tool-driven.
+- Subhito activo: SH6 - Benchmark QuixBugs inicial
+- Task activa: validar baseline mono-agente tool-driven con caso QuixBugs MVP.
 
 ## Siguiente
-- Portar y adaptar tests de demo/toolset/provider/flow al nuevo baseline tool-driven.
+- Validar observability.db con una ejecucion QuixBugs MVP y preparar queries basicas para analisis experimental.
+- Ejecutar run baseline mono-agente end-to-end sobre caso gcd QuixBugs.

@@ -41,3 +41,4 @@ Aplicar siempre, con cambios minimos y bien justificados:
 2. Evitar duplicacion (DRY) y centralizar logica comun en componentes reutilizables.
 3. Considerar patrones de diseno cuando simplifiquen extension, testabilidad y mantenimiento.
 4. Revisar cada cambio con criterio de staff engineer: claridad, robustez, trazabilidad y facilidad de evolucion.
+5. SIEMPRE cumplir con las convenciones codigo para planear, desarrollar y refactorizar expuestos en `specs/conventions.md`.

@@ -1,89 +1,163 @@
 from __future__ import annotations
 
-import json
+import sqlite3
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
 
-from llm_autofix_agents.contracts import RunIdentity, RunInput, RunOutput, RunStatus, StopReason
-from llm_autofix_agents.flow.observability import (
-    build_observability_record,
-    build_run_metrics,
-    persist_observability_record,
+from llm_autofix_agents.observability.models import (
+    AgentDescriptor,
+    AgentExecutionRecord,
+    IterationRecord,
+    ModelConfigDescriptor,
+    RunDescriptor,
+    RunFinishedRecord,
+    ToolCallRecord,
 )
+from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore
 
 
 class ObservabilityTests(unittest.TestCase):
-    def test_persist_observability_uses_jsonl_when_mongodb_not_configured(self) -> None:
-        with TemporaryDirectory() as tmp_dir, patch.dict("os.environ", {}, clear=True):
-            repo_root = Path(tmp_dir)
-            output = _build_run_output(run_id="run-obs-1")
-            metrics = build_run_metrics(
-                output=output,
-                iterations=1,
-                duration_seconds=1.25,
-                input_tokens=10,
-                output_tokens=20,
-                total_tokens=30,
-                metadata={},
+    def test_sqlite_store_persists_minimal_run_graph(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "observability.db"
+            store = SQLiteObservabilityStore(db_path=db_path)
+            store.initialize()
+
+            architecture_id = store.upsert_architecture("mono_agent")
+            self.assertTrue(architecture_id)
+
+            model_config_id = store.upsert_model_config(
+                ModelConfigDescriptor(
+                    provider="ollama",
+                    model="llama3.1:8b",
+                    max_turns=3,
+                    base_url="http://localhost:11500/v1",
+                    tracing_disabled=True,
+                )
             )
-            record = build_observability_record(output=output, metrics=metrics, tool_calls=[])
+            self.assertTrue(model_config_id)
 
-            persistence = persist_observability_record(repo_root=repo_root, record=record)
-
-            self.assertEqual(persistence["backend"], "jsonl")
-            result_path = repo_root / persistence["path"]
-            self.assertTrue(result_path.exists())
-            lines = result_path.read_text(encoding="utf-8").strip().splitlines()
-            self.assertEqual(len(lines), 1)
-            payload = json.loads(lines[0])
-            self.assertEqual(payload["run_id"], "run-obs-1")
-
-    def test_persist_observability_fallbacks_to_jsonl_when_mongodb_fails(self) -> None:
-        with TemporaryDirectory() as tmp_dir, patch.dict(
-            "os.environ",
-            {"MONGODB_CONNECTION_URL": "mongodb://example:27017"},
-            clear=True,
-        ), patch(
-            "llm_autofix_agents.flow.observability._persist_to_mongodb",
-            side_effect=RuntimeError("mongo unavailable"),
-        ):
-            repo_root = Path(tmp_dir)
-            output = _build_run_output(run_id="run-obs-2")
-            metrics = build_run_metrics(
-                output=output,
-                iterations=1,
-                duration_seconds=2.0,
-                input_tokens=0,
-                output_tokens=0,
-                total_tokens=0,
-                metadata={"cost_per_1k_tokens_usd": 0.25},
+            run_id = "run-obs-1"
+            store.insert_run_started(
+                descriptor=RunDescriptor(
+                    run_id=run_id,
+                    architecture="mono_agent",
+                    target_repo=".",
+                    target_branch="main",
+                    run_fingerprint="0123456789abcdef",
+                ),
+                architecture_id=architecture_id,
+                started_at="2026-01-01T00:00:00+00:00",
             )
-            record = build_observability_record(output=output, metrics=metrics, tool_calls=[])
 
-            persistence = persist_observability_record(repo_root=repo_root, record=record)
+            run_agent_id = store.upsert_run_agent(
+                run_id=run_id,
+                descriptor=AgentDescriptor(
+                    agent_name="baseline",
+                    agent_role="fixer",
+                    model_config=ModelConfigDescriptor(
+                        provider="ollama",
+                        model="llama3.1:8b",
+                        max_turns=3,
+                        base_url="http://localhost:11500/v1",
+                        tracing_disabled=True,
+                    ),
+                    tool_profile="full",
+                    agent_order=1,
+                ),
+                model_config_id=model_config_id,
+                instructions_hash="abcdef0123456789",
+            )
+            self.assertTrue(run_agent_id)
 
-            self.assertEqual(persistence["backend"], "jsonl")
-            self.assertIn("fallback_reason", persistence)
-            self.assertTrue((repo_root / persistence["path"]).exists())
+            iteration_id = f"{run_id}-it01"
+            store.insert_iteration(
+                IterationRecord(
+                    run_id=run_id,
+                    iteration_id=iteration_id,
+                    iteration_index=1,
+                    started_at="2026-01-01T00:00:01+00:00",
+                    finished_at="2026-01-01T00:00:10+00:00",
+                    duration_seconds=9.0,
+                    status="done",
+                    stop_reason="completed",
+                    input_tokens=10,
+                    output_tokens=8,
+                    total_tokens=18,
+                    tool_calls_count=1,
+                    changed_files_count=1,
+                    repo_changed=True,
+                    test_exit_code=0,
+                    test_timed_out=False,
+                    test_signature="sig-ok",
+                )
+            )
 
+            agent_execution_id = f"{run_id}-it01-agent01"
+            store.insert_agent_execution(
+                AgentExecutionRecord(
+                    agent_execution_id=agent_execution_id,
+                    run_id=run_id,
+                    iteration_id=iteration_id,
+                    run_agent_id=run_agent_id,
+                    execution_index=1,
+                    started_at="2026-01-01T00:00:02+00:00",
+                    finished_at="2026-01-01T00:00:09+00:00",
+                    duration_seconds=7.0,
+                    status="done",
+                    reasoning_summary="fix candidate",
+                    confidence=0.8,
+                    notes=None,
+                    input_tokens=10,
+                    output_tokens=8,
+                    total_tokens=18,
+                    tool_calls_count=1,
+                )
+            )
 
+            store.insert_tool_call(
+                ToolCallRecord(
+                    tool_call_id=f"{agent_execution_id}-tool001",
+                    run_id=run_id,
+                    iteration_id=iteration_id,
+                    agent_execution_id=agent_execution_id,
+                    seq=1,
+                    tool_name="read_file",
+                    status="success",
+                    success=True,
+                )
+            )
 
-def _build_run_output(*, run_id: str) -> RunOutput:
-    run_input = RunInput(prompt="Fix failing tests")
-    return RunOutput(
-        identity=RunIdentity(
-            run_id=run_id,
-            run_fingerprint="0123456789abcdef",
-            iteration=1,
-            iteration_id=f"{run_id}-it01",
-        ),
-        status=RunStatus.SUCCESS,
-        stop_reason=StopReason.COMPLETED,
-        artifacts={"directory": "results/run-id/it01"},
-        final_message=run_input.prompt,
-    )
+            store.update_run_finished(
+                RunFinishedRecord(
+                    run_id=run_id,
+                    finished_at="2026-01-01T00:00:11+00:00",
+                    final_status="success",
+                    stop_reason="completed",
+                    duration_seconds=11.0,
+                    total_iterations=1,
+                    total_input_tokens=10,
+                    total_output_tokens=8,
+                    total_tokens=18,
+                    files_changed_count=1,
+                    resolved=True,
+                    live_log_path="results/run-obs-1/live.md",
+                    summary_path="results/run-obs-1/summary.json",
+                    diff_path="results/run-obs-1/it01/patch.diff",
+                )
+            )
+
+            with sqlite3.connect(db_path) as conn:
+                run_count = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+                iteration_count = conn.execute("SELECT COUNT(*) FROM iterations").fetchone()[0]
+                execution_count = conn.execute("SELECT COUNT(*) FROM agent_executions").fetchone()[0]
+                tool_count = conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0]
+
+            self.assertEqual(run_count, 1)
+            self.assertEqual(iteration_count, 1)
+            self.assertEqual(execution_count, 1)
+            self.assertEqual(tool_count, 1)
 
 
 if __name__ == "__main__":

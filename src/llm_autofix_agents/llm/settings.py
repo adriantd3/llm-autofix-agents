@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
 DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
-DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11500/v1"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"

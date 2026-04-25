@@ -36,17 +36,14 @@ def _ctx(wrapper: RunContextWrapper[APRToolContext]) -> APRToolContext:
     return wrapper.context
 
 
-
 def _json(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-
 
 
 def _workspace_root(ctx: APRToolContext) -> Path:
     root = Path(ctx.root_dir).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     return root
-
 
 
 def _resolve_path(ctx: APRToolContext, rel_path: str) -> Path:
@@ -59,10 +56,8 @@ def _resolve_path(ctx: APRToolContext, rel_path: str) -> Path:
     return candidate
 
 
-
 def _safe_rel(root: Path, path: Path) -> str:
     return str(path.relative_to(root))
-
 
 
 def _is_probably_text(path: Path) -> bool:
@@ -80,26 +75,22 @@ def _is_probably_text(path: Path) -> bool:
         return False
 
 
-
 def _truncate(text: str, limit: int) -> tuple[str, bool]:
     if len(text) <= limit:
         return text, False
     return text[:limit], True
 
 
-
 def _slice_lines(lines: list[str], start_line: int | None, end_line: int | None) -> tuple[list[str], int, int]:
     start = 1 if start_line is None else max(1, start_line)
     end = len(lines) if end_line is None else min(len(lines), max(start, end_line))
-    return lines[start - 1:end], start, end
-
+    return lines[start - 1 : end], start, end
 
 
 def _iter_files(root: Path, pattern: str) -> Iterable[Path]:
     for path in root.glob(pattern):
         if path.is_file():
             yield path
-
 
 
 def _read_text_checked(cfg: APRToolContext, path: Path) -> tuple[bool, str | None, str | None]:
@@ -112,7 +103,6 @@ def _read_text_checked(cfg: APRToolContext, path: Path) -> tuple[bool, str | Non
     if not _is_probably_text(path):
         return False, "binary_or_non_text", None
     return True, None, path.read_text(encoding="utf-8", errors="replace")
-
 
 
 def _detect_test_command(root: Path) -> tuple[str, str] | None:
@@ -129,7 +119,6 @@ def _detect_test_command(root: Path) -> tuple[str, str] | None:
     if (root / "Cargo.toml").exists():
         return "cargo", "cargo test --quiet"
     return None
-
 
 
 def _run_shell(cfg: APRToolContext, command: str, cwd: str = ".", timeout_seconds: int = 30) -> dict[str, Any]:
@@ -315,7 +304,7 @@ def search_files(
             if matcher.search(line):
                 start = max(1, line_no - context_lines)
                 end = min(len(lines), line_no + context_lines)
-                block = "\n".join(f"{n}: {lines[n-1]}" for n in range(start, end + 1))
+                block = "\n".join(f"{n}: {lines[n - 1]}" for n in range(start, end + 1))
                 block, block_truncated = _truncate(block, 500)
                 results.append(
                     {
@@ -363,7 +352,7 @@ def write_file(
     elif not file_path.parent.exists():
         return _json({"ok": False, "error": "parent_missing", "path": path})
     file_path.write_text(content, encoding="utf-8")
-    return _json({"ok": True, "path": path, "bytes_written": len(content.encode('utf-8'))})
+    return _json({"ok": True, "path": path, "bytes_written": len(content.encode("utf-8"))})
 
 
 @function_tool

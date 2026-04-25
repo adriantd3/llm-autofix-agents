@@ -78,16 +78,26 @@ Asegurar gestion de cambios por run y artefactos comparables.
 ### Done cuando
 - Cada run deja diff limpio y auditable.
 
-## SH5 - Observabilidad y datos experimentales (Pendiente)
+## SH5 - Observabilidad SQLite-first y logging estructurado (Completado)
 ### Objetivo
-Guardar metrica y trazabilidad para analisis posterior.
+Separar la observabilidad interactiva de la analitica, eliminar MongoDB del MVP y persistir datos experimentales en SQLite local.
 
 ### Tasks
-- [x] SH5-T01 Definir esquema de resultados para MongoDB Atlas con fallback JSONL local.
-- [x] SH5-T02 Registrar metrica minima (exito, iteraciones, tiempo, tokens, coste).
-- [x] SH5-T03 Implementar logging INFO/DEBUG.
-- [x] SH5-T04 Registrar trazabilidad de tool calls.
-- [x] SH5-T05 Cerrar OA-001 (versionado de prompt/config).
+- [x] SH5-T01 Eliminar MongoDB/pymongo del runtime principal.
+- [x] SH5-T02 Definir esquema SQLite normalizado para runs, architectures, model_configs, run_agents, iterations, agent_executions, tool_calls, test_executions y file_changes.
+- [x] SH5-T03 Implementar SQLiteObservabilityStore con migracion inicial.
+- [x] SH5-T04 Implementar observers desacoplados: Null, Composite, SQLite y Markdown/Console.
+- [x] SH5-T05 Integrar lifecycle hooks oficiales del openai-agents-sdk para registrar tool calls minimas.
+- [x] SH5-T06 Refactorizar agent_flow para emitir eventos y dejar de persistir observabilidad directamente.
+- [x] SH5-T07 Generar live.md y summary.json por run.
+- [x] SH5-T08 Actualizar tests y retirar cobertura MongoDB.
+- [x] SH5-T09 Actualizar README/status/spec con la decision SQLite-first.
+
+### Done cuando
+- Una ejecucion genera observability.db, live.md y summary.json.
+- SQLite permite consultar runs, iteraciones, agentes, modelos, tests, cambios y tool calls minimas.
+- agent_flow no contiene logica de backend de persistencia.
+- MongoDB no forma parte del core del proyecto.
 
 ### Done cuando
 - Se puede reconstruir una ejecucion desde datos guardados.

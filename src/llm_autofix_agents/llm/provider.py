@@ -10,6 +10,7 @@ from agents import (
     AgentOutputSchema,
     OpenAIChatCompletionsModel,
     RunConfig,
+    RunHooks,
     Runner,
     RunResult,
     Tool,
@@ -45,6 +46,7 @@ class LLMProvider(Protocol):
         max_turns: int,
         tools: Sequence[object] | None = None,
         context: Any | None = None,
+        hooks: RunHooks[Any] | None = None,
     ) -> AgentFixIterationRecord:
         """Run a single prompt turn and return a structured APR proposal."""
 
@@ -61,6 +63,7 @@ class OpenAIAgentsSDKProvider:
         max_turns: int,
         tools: Sequence[object] | None = None,
         context: Any | None = None,
+        hooks: RunHooks[Any] | None = None,
     ) -> AgentFixIterationRecord:
         set_tracing_disabled(self.settings.tracing_disabled)
 
@@ -73,6 +76,7 @@ class OpenAIAgentsSDKProvider:
             user_input,
             context=context,
             max_turns=max_turns,
+            hooks=hooks,
             run_config=RunConfig(tracing_disabled=self.settings.tracing_disabled),
         )
 
@@ -133,7 +137,9 @@ def create_provider(settings: LLMSettings) -> LLMProvider:
 
 
 def _extract_token_usage(result: RunResult) -> dict[str, int]:
-    usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
+    usage = getattr(result, "usage", None)
+    if not usage:
+        usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
     if not usage:
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 

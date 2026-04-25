@@ -82,7 +82,9 @@ class APRToolkitTests(unittest.TestCase):
             res = asyncio.run(call(read_file, tmp, '{"path":"src/maths.py"}'))
             self.assertIn("1: def add(a, b):", res["content"])
 
-            res = asyncio.run(call(run_test_target, tmp, '{"target":"tests/test_maths.py","cwd":".","timeout_seconds":60}'))
+            res = asyncio.run(
+                call(run_test_target, tmp, '{"target":"tests/test_maths.py","cwd":".","timeout_seconds":60}')
+            )
             self.assertTrue(res["ok"])
             self.assertNotEqual(res["exit_code"], 0)
 
@@ -107,11 +109,11 @@ class APRToolkitTests(unittest.TestCase):
             res = asyncio.run(call(write_file, tmp, '{"path":"notes.txt","content":"done\\n"}'))
             self.assertTrue(res["ok"])
 
-            res = asyncio.run(call(git_status_summary, tmp, '{}'))
+            res = asyncio.run(call(git_status_summary, tmp, "{}"))
             self.assertTrue(res["ok"])
             self.assertGreaterEqual(res["changed_files"], 1)
 
-            res = asyncio.run(call(git_diff_summary, tmp, '{}'))
+            res = asyncio.run(call(git_diff_summary, tmp, "{}"))
             self.assertTrue(res["ok"])
             self.assertIn("src/maths.py", res["summary"])
 
@@ -125,7 +127,7 @@ class APRToolkitTests(unittest.TestCase):
             self.assertEqual(res["exit_code"], 0)
             self.assertEqual((root / "notes.txt").read_text(encoding="utf-8"), "done fixed\n")
 
-            res = asyncio.run(call(execute_command, tmp, '{"command":"python -c \\\"print(2+3)\\\""}'))
+            res = asyncio.run(call(execute_command, tmp, '{"command":"python -c \\"print(2+3)\\""}'))
             self.assertTrue(res["ok"])
             self.assertEqual(res["exit_code"], 0)
             self.assertEqual(res["stdout"].strip(), "5")

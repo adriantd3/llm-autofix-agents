@@ -36,23 +36,27 @@ class MainCliTests(unittest.TestCase):
                 status=RunStatus.SUCCESS,
                 stop_reason=StopReason.COMPLETED,
             )
-            with patch(
-                "llm_autofix_agents.main.load_container_instantiation_from_env",
-                return_value=argparse.Namespace(
-                    repository=tmp_dir,
-                    branch="master",
-                    architecture="mono-agent",
-                    bootstrap_prompt="Fix failing tests with minimal changes.",
+            with (
+                patch(
+                    "llm_autofix_agents.main.load_container_instantiation_from_env",
+                    return_value=argparse.Namespace(
+                        repository=tmp_dir,
+                        branch="master",
+                        architecture="mono-agent",
+                        bootstrap_prompt="Fix failing tests with minimal changes.",
+                    ),
                 ),
-            ), patch(
-                "llm_autofix_agents.main.run_agent_baseline",
-                return_value=output,
-            ) as mocked_run_agent, patch.dict(
-                "os.environ",
-                {
-                    "RUN_TEST_COMMAND": "uv run --with pytest pytest python_testcases/test_gcd.py",
-                },
-                clear=False,
+                patch(
+                    "llm_autofix_agents.main.run_agent_baseline",
+                    return_value=output,
+                ) as mocked_run_agent,
+                patch.dict(
+                    "os.environ",
+                    {
+                        "RUN_TEST_COMMAND": "uv run --with pytest pytest python_testcases/test_gcd.py",
+                    },
+                    clear=False,
+                ),
             ):
                 exit_code = _run_agent_smoke(args)
 
@@ -64,15 +68,18 @@ class MainCliTests(unittest.TestCase):
     def test_run_agent_smoke_returns_2_when_runtime_repository_is_invalid(self) -> None:
         args = argparse.Namespace(prompt="Analyze a failing test and suggest a minimal fix strategy.")
         stderr = StringIO()
-        with patch(
-            "llm_autofix_agents.main.load_container_instantiation_from_env",
-            return_value=argparse.Namespace(
-                repository="not a repo",
-                branch="master",
-                architecture="mono-agent",
-                bootstrap_prompt="Fix failing tests with minimal changes.",
+        with (
+            patch(
+                "llm_autofix_agents.main.load_container_instantiation_from_env",
+                return_value=argparse.Namespace(
+                    repository="not a repo",
+                    branch="master",
+                    architecture="mono-agent",
+                    bootstrap_prompt="Fix failing tests with minimal changes.",
+                ),
             ),
-        ), redirect_stderr(stderr):
+            redirect_stderr(stderr),
+        ):
             exit_code = _run_agent_smoke(args)
 
         self.assertEqual(exit_code, 2)

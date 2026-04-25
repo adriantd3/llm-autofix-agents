@@ -55,7 +55,8 @@
 - E21: Set minimo inicial de tools APR locales para baseline (filesystem + shell/comandos + validacion + git/parche helpers).
 - E22: Politica de comandos = amplia con auditoria.
 - E23: Fallo de tools = reintentos acotados + fallback + log.
-- E24: Trazabilidad completa de tool calls.
+- E24: Trazabilidad minima de tool calls mediante lifecycle hooks oficiales del SDK: tool_name, status/success, iteracion y agente.
+- E24a: No se mide duracion por tool individual; la duracion se mide por run, iteracion y ejecucion de agente.
 - E25: Presupuesto de tools por iteracion habilitado.
 - E26: No usar MCP servers ni websearch en el baseline MVP; cualquier helper externo queda fuera de este alcance.
 
@@ -84,9 +85,10 @@
 ### I) Observabilidad y datos
 - I40: Unidad de analisis = run e iteracion.
 - I41: Metricas minimas = exito/fallo, iteraciones, tiempo, tokens, coste estimado.
-- I42: Persistencia inicial de resultados = MongoDB Atlas como primario + fallback JSONL local.
-- I43: Logging = INFO por defecto y DEBUG activable.
+- I42: Persistencia de resultados = SQLite local normalizado para ETL + artefactos por run (live.md, summary.json, diff.patch, changed_files.json).
+- I43: Observabilidad separada en capa interactiva (consola/live.md) y analitica (SQLite local para ETL).
 - I44: Trazabilidad config -> resultado con identificador reproducible.
+- I42 (legacy): MongoDB Atlas + fallback JSONL local -- ARCHIVO. Se adopta SQLite local normalizado para reducir complejidad operativa y facilitar consultas ETL.
 
 ### J) Seguridad
 - J45: Aislamiento minimo = contenedor + privilegios minimos.
@@ -141,7 +143,11 @@
 - Se ejecuta en contenedor Docker efimero por run.
 - El runtime completo se puede levantar localmente con Docker Compose usando un runner base parametrizable.
 - El runner respeta el contrato minimo de instanciacion (repository, branch, architecture, agent_models, bootstrap_prompt).
-- Se registran resultados en MongoDB Atlas con fallback JSONL local y trazabilidad de configuracion.
+- Se registran resultados en SQLite local con esquema normalizado para runs, arquitecturas, agentes, modelos, iteraciones, ejecuciones de agente, tests, cambios de archivo y tool calls minimas.
+- Se genera live.md por run sin mezclarse con la capa analitica.
+- Se genera summary.json al final del run.
+- Se registran tool calls minimas (tool_name, status/success, iteracion, agente) mediante lifecycle hooks oficiales del SDK.
+- Se mide duracion por run, iteracion y ejecucion de agente sin medir duracion por tool individual.
 - Se valida al menos 1 caso QuixBugs reproducible como gate MVP y se documenta resultado.
 - Se deja plan de expansion para benchmark de 5 casos QuixBugs en fase posterior.
 - El sistema no fuerza una trayectoria determinista interna; se evalua por resultados reproducibles a nivel de run y por metricas agregadas entre multiples runs.

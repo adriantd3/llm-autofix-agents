@@ -82,7 +82,7 @@ def _truncate(text: str, limit: int) -> tuple[str, bool]:
 def _slice_lines(lines: list[str], start_line: int | None, end_line: int | None) -> tuple[list[str], int, int]:
     start = 1 if start_line is None else max(1, start_line)
     end = len(lines) if end_line is None else min(len(lines), max(start, end_line))
-    return lines[start - 1:end], start, end
+    return lines[start - 1 : end], start, end
 
 
 def _iter_files(root: Path, pattern: str) -> Iterable[Path]:
@@ -299,7 +299,7 @@ def search_files(
             if matcher.search(line):
                 start = max(1, line_no - context_lines)
                 end = min(len(lines), line_no + context_lines)
-                block = "\n".join(f"{n}: {lines[n-1]}" for n in range(start, end + 1))
+                block = "\n".join(f"{n}: {lines[n - 1]}" for n in range(start, end + 1))
                 block, block_truncated = _truncate(block, 500)
                 results.append(
                     {

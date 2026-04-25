@@ -81,6 +81,21 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_AGENT_PROMPT,
         help="Prompt passed to the baseline agent.",
     )
+    agent_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Enable interactive console observability output.",
+    )
+    agent_parser.add_argument(
+        "--observability-db",
+        default=None,
+        help="Override observability SQLite database path.",
+    )
+    agent_parser.add_argument(
+        "--results-dir",
+        default=None,
+        help="Override results directory path.",
+    )
 
     subcommands.add_parser(
         "runtime-contract-smoke",
@@ -144,6 +159,15 @@ def _run_agent_smoke(args: argparse.Namespace) -> int:
     prepared_repo: PreparedRepository | None = None
     prompt = args.prompt
     metadata: dict[str, str] = {"source": "agent-smoke"}
+    interactive = bool(getattr(args, "interactive", False))
+    observability_db = getattr(args, "observability_db", None)
+    results_dir = getattr(args, "results_dir", None)
+    if interactive:
+        metadata["interactive"] = "true"
+    if observability_db:
+        metadata["observability_db"] = str(observability_db)
+    if results_dir:
+        metadata["results_dir"] = str(results_dir)
     target_repo = "."
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
 

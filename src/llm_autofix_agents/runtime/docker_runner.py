@@ -100,8 +100,7 @@ class DockerRunner:
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout or "unknown error").strip()
             raise DockerRunnerError(
-                "Docker no esta disponible. Ejecuta Docker Desktop y vuelve a intentarlo. "
-                f"Detalle: {detail}"
+                f"Docker no esta disponible. Ejecuta Docker Desktop y vuelve a intentarlo. Detalle: {detail}"
             )
 
     def run(self, request: ContainerRunRequest) -> ContainerRunResult:
@@ -199,12 +198,14 @@ class DockerRunner:
             rendered_command.extend(["--memory", limits.memory])
         if limits.pids_limit is not None:
             rendered_command.extend(["--pids-limit", str(limits.pids_limit)])
-        rendered_command.extend([
-            image,
-            "sh",
-            "-lc",
-            command,
-        ])
+        rendered_command.extend(
+            [
+                image,
+                "sh",
+                "-lc",
+                command,
+            ]
+        )
         return rendered_command
 
     def _force_remove_container(self, container_name: str) -> None:
