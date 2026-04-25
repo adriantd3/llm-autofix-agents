@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from llm_autofix_agents.contracts import RunInput, build_run_identity
+from llm_autofix_agents.contracts import RunIdentity, RunInput
 from llm_autofix_agents.flow.architecture import AgentIterationContext
 from llm_autofix_agents.flow.policies.iteration import build_iteration_input
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
@@ -20,14 +20,10 @@ class IterationContextBuilder:
         cfg: RunConfig,
         state: RunState,
         iteration: int,
+        identity: RunIdentity,
         iteration_telemetry: IterationTelemetry,
     ) -> AgentIterationContext:
-        identity = build_run_identity(
-            run_input=run_input,
-            agent_config=cfg.agent_config,
-            iteration=iteration,
-            run_id=cfg.run_id,
-        )
+
         return AgentIterationContext(
             run_id=cfg.run_id,
             iteration_id=identity.iteration_id,

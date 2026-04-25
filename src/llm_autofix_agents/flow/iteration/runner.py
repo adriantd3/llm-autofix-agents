@@ -71,6 +71,7 @@ class IterationRunner:
                 cfg=cfg,
                 state=state,
                 iteration=iteration,
+                identity=identity,
                 iteration_telemetry=iteration_telemetry,
             )
         )
