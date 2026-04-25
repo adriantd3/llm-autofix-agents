@@ -29,9 +29,13 @@ class WorkspaceChangeSet:
     diff_complete: bool
 
     @property
-    def changed_files(self) -> list[str]:
+    def tracked_changed_files(self) -> list[str]:
         return sorted({*self.modified_files, *self.added_files, *self.deleted_files})
 
     @property
+    def all_changed_files(self) -> list[str]:
+        return sorted({*self.tracked_changed_files, *self.untracked_files})
+
+    @property
     def repo_changed(self) -> bool:
-        return bool(self.changed_files or self.untracked_files)
+        return bool(self.all_changed_files)

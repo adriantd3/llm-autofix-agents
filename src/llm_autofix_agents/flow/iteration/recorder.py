@@ -37,17 +37,17 @@ class IterationRecorder:
         state.total_tokens += proposal.total_tokens
         state.final_message = render_final_message(proposal)
         state.latest_diff = observation.changes.diff
-        state.latest_changed_files = list(observation.changes.changed_files)
+        state.latest_changed_files = list(observation.changes.all_changed_files)
         state.latest_proposal_changed_files = list(proposal.changed_files)
         state.latest_tests = _to_test_results(observation.test_execution)
-        state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.changed_files))
+        state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
 
         self.events.file_changes(
             cfg=cfg,
             iteration=observation.iteration,
             iteration_id=observation.iteration_id,
             agent_execution_id=observation.agent_execution_id,
-            changed_files=observation.changes.changed_files,
+            changed_files=observation.changes.all_changed_files,
         )
         self.events.finished(
             cfg=cfg,
@@ -57,7 +57,7 @@ class IterationRecorder:
             proposal=proposal,
             duration_seconds=max(0.0, time.perf_counter() - observation.started_monotonic),
             tool_calls_count=observation.tool_calls_count,
-            changed_files_count=len(observation.changes.changed_files),
+            changed_files_count=len(observation.changes.all_changed_files),
             repo_changed=observation.changes.repo_changed,
             test_execution=observation.test_execution,
         )
@@ -82,7 +82,7 @@ class IterationRecorder:
             build_iteration_logs(
                 cfg=cfg,
                 iteration=iteration,
-                changed_files=changes.changed_files,
+                changed_files=changes.all_changed_files,
                 test_execution=test_execution,
                 confidence=confidence,
             )

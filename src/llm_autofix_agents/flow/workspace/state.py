@@ -5,6 +5,7 @@ import hashlib
 import subprocess
 from pathlib import Path
 
+from llm_autofix_agents.flow.errors import WorkspaceError
 from llm_autofix_agents.flow.models import WorkspaceChangeSet
 
 _DEFAULT_IGNORE_PATTERNS = [
@@ -68,6 +69,9 @@ def detect_workspace_change_set(
     before: dict[str, str],
     after: dict[str, str],
 ) -> WorkspaceChangeSet:
+    untracked_files = detect_untracked_files(repo_root)
+    untracked_set = set(untracked_files)
+
     modified_files: list[str] = []
     added_files: list[str] = []
     deleted_files: list[str] = []
@@ -81,9 +85,10 @@ def detect_workspace_change_set(
 
     for path in after:
         if path not in before:
+            if path in untracked_set:
+                continue
             added_files.append(path)
 
-    untracked_files = detect_untracked_files(repo_root)
     diff = collect_repo_diff(repo_root)
 
     # `git diff` does not include untracked files, so mark completeness explicitly.
@@ -99,26 +104,32 @@ def detect_workspace_change_set(
 
 
 def collect_repo_diff(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "diff", "--no-color"],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--no-color"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise WorkspaceError(f"failed to collect repository diff: {exc}") from exc
     if result.returncode != 0:
         return ""
     return filter_diff_by_ignore_rules(result.stdout.strip(), load_ignore_rules(repo_root)).strip()
 
 
 def detect_untracked_files(repo_root: Path) -> list[str]:
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise WorkspaceError(f"failed to detect untracked files: {exc}") from exc
     if result.returncode != 0:
         return []
 

@@ -74,7 +74,7 @@ class RunOutputBuilder:
             ],
         )
 
-    def model_failure(
+    def exception_failure(
         self,
         *,
         identity: RunIdentity,

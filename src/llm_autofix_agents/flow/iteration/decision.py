@@ -12,7 +12,7 @@ from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
 
 
 @dataclass(frozen=True)
-class IterationDecision:
+class IterationOutcomeHandler:
     """Decides terminal run outputs from iteration outcomes."""
 
     workspace: WorkspaceManager
@@ -31,7 +31,7 @@ class IterationDecision:
     ) -> RunOutput | None:
         proposal = observation.proposal
         test_execution = observation.test_execution
-        changed_files = observation.changes.changed_files
+        changed_files = observation.changes.tracked_changed_files
 
         if not validation.ok:
             self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)

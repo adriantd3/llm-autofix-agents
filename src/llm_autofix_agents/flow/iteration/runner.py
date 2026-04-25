@@ -7,7 +7,7 @@ from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
 from llm_autofix_agents.flow.architecture import ArchitectureRunner
 from llm_autofix_agents.flow.execution.tests import run_test_command
 from llm_autofix_agents.flow.iteration.context_builder import IterationContextBuilder
-from llm_autofix_agents.flow.iteration.decision import IterationDecision
+from llm_autofix_agents.flow.iteration.decision import IterationOutcomeHandler
 from llm_autofix_agents.flow.iteration.recorder import IterationObservation, IterationRecorder
 from llm_autofix_agents.flow.lifecycle.events import IterationEvents
 from llm_autofix_agents.flow.lifecycle.logs import record_validation_logs
@@ -30,7 +30,7 @@ class IterationRunner:
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
     context_builder: IterationContextBuilder = field(default_factory=IterationContextBuilder)
     recorder: IterationRecorder | None = None
-    decision: IterationDecision | None = None
+    outcome_handler: IterationOutcomeHandler | None = None
 
     def run(
         self,
@@ -50,7 +50,7 @@ class IterationRunner:
         started_monotonic = time.perf_counter()
 
         recorder = self.recorder or IterationRecorder(events=self.events)
-        decision = self.decision or IterationDecision(
+        outcome_handler = self.outcome_handler or IterationOutcomeHandler(
             workspace=self.workspace,
             output_builder=self.output_builder,
             stop_policy=self.stop_policy,
@@ -113,7 +113,7 @@ class IterationRunner:
         state.latest_artifacts["validation"] = validation.details
         record_validation_logs(state=state, validation=validation)
 
-        output = decision.evaluate(
+        output = outcome_handler.evaluate(
             identity=identity,
             run_input=run_input,
             cfg=cfg,

@@ -39,15 +39,18 @@ def validate_iteration(
     baseline_test_execution: TestExecution | None,
 ) -> IterationValidationResult:
     proposal_files = _normalize_paths(proposal.changed_files)
-    observed_files = _normalize_paths(changes.changed_files)
+    tracked_files = _normalize_paths(changes.tracked_changed_files)
+    observed_files = _normalize_paths(changes.all_changed_files)
     untracked_files = _normalize_paths(changes.untracked_files)
 
     details: dict[str, Any] = {
         "proposal_changed_files": proposal_files,
         "observed_changed_files": observed_files,
+        "observed_tracked_changed_files": tracked_files,
         "observed_untracked_files": untracked_files,
         "proposal_matches_observed_files": proposal_files == observed_files,
         "diff_complete": changes.diff_complete,
+        "untracked_files_policy": "allowed_and_captured",
     }
 
     if changes.repo_changed and not changes.diff.strip() and changes.diff_complete:
