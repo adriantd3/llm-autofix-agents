@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 
 from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs
+from llm_autofix_agents.flow.lifecycle.telemetry_mapping import (
+    to_file_change_telemetry_set,
+    to_iteration_telemetry_result,
+)
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.policies.iteration import proposal_signature
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
@@ -35,6 +38,23 @@ class IterationRecorder:
         state: RunState,
         observation: IterationObservation,
     ) -> None:
+        self._record_state(state=state, observation=observation)
+
+        iteration_telemetry.record_file_changes(
+            agent_execution_id=observation.agent_execution_id,
+            changes=to_file_change_telemetry_set(observation.changes),
+        )
+
+        iteration_telemetry.finish_iteration(
+            result=to_iteration_telemetry_result(observation),
+        )
+
+    def _record_state(
+        self,
+        *,
+        state: RunState,
+        observation: IterationObservation,
+    ) -> None:
         proposal = observation.proposal
         state.total_input_tokens += proposal.input_tokens
         state.total_output_tokens += proposal.output_tokens
@@ -45,28 +65,6 @@ class IterationRecorder:
         state.latest_proposal_changed_files = list(proposal.changed_files)
         state.latest_tests = _to_test_results(observation.test_execution)
         state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
-
-        iteration_telemetry.record_file_changes(
-            agent_execution_id=observation.agent_execution_id,
-            modified_files=observation.changes.modified_files,
-            added_files=observation.changes.added_files,
-            deleted_files=observation.changes.deleted_files,
-            untracked_files=observation.changes.untracked_files,
-        )
-        iteration_telemetry.finish_iteration(
-            started_at=observation.started_at,
-            status=proposal.status,
-            duration_seconds=max(0.0, time.perf_counter() - observation.started_monotonic),
-            input_tokens=proposal.input_tokens,
-            output_tokens=proposal.output_tokens,
-            total_tokens=proposal.total_tokens,
-            tool_calls_count=observation.tool_calls_count,
-            changed_files_count=len(observation.changes.all_changed_files),
-            repo_changed=observation.changes.repo_changed,
-            test_exit_code=observation.test_execution.exit_code,
-            test_timed_out=observation.test_execution.timed_out,
-            test_signature=observation.test_execution.signature,
-        )
 
     def remember_progress(self, *, state: RunState, proposal: AgentFixIterationRecord, test_signature: str) -> None:
         state.previous_proposal_signature = proposal_signature(proposal)

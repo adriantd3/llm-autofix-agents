@@ -17,6 +17,7 @@ from llm_autofix_agents.observability.models import (
     make_test_execution_id,
     utc_now_iso,
 )
+from llm_autofix_agents.observability.telemetry_models import FileChangeTelemetrySet, IterationTelemetryResult
 
 
 @dataclass(frozen=True)
@@ -199,36 +200,25 @@ class IterationTelemetry:
     def finish_iteration(
         self,
         *,
-        started_at: str,
-        status: str,
-        duration_seconds: float,
-        input_tokens: int,
-        output_tokens: int,
-        total_tokens: int,
-        tool_calls_count: int,
-        changed_files_count: int,
-        repo_changed: bool,
-        test_exit_code: int,
-        test_timed_out: bool,
-        test_signature: str,
+        result: IterationTelemetryResult,
     ) -> None:
         self.observer.on_iteration_finished(
             record=IterationRecord.finished(
                 run_id=self.run_id,
                 iteration_id=self.iteration_id,
                 iteration_index=self.iteration_index,
-                started_at=started_at,
-                status=status,
-                duration_seconds=duration_seconds,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                tool_calls_count=tool_calls_count,
-                changed_files_count=changed_files_count,
-                repo_changed=repo_changed,
-                test_exit_code=test_exit_code,
-                test_timed_out=test_timed_out,
-                test_signature=test_signature,
+                started_at=result.started_at,
+                status=result.status,
+                duration_seconds=result.duration_seconds,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                total_tokens=result.total_tokens,
+                tool_calls_count=result.tool_calls_count,
+                changed_files_count=result.changed_files_count,
+                repo_changed=result.repo_changed,
+                test_exit_code=result.test_exit_code,
+                test_timed_out=result.test_timed_out,
+                test_signature=result.test_signature,
             )
         )
 
@@ -260,60 +250,22 @@ class IterationTelemetry:
         self,
         *,
         agent_execution_id: str,
-        modified_files: list[str],
-        added_files: list[str],
-        deleted_files: list[str],
-        untracked_files: list[str],
+        changes: FileChangeTelemetrySet,
     ) -> None:
-        index = 0
-        for path in modified_files:
-            index += 1
+        entries = [
+            *[(path, "modified") for path in changes.modified_files],
+            *[(path, "added") for path in changes.added_files],
+            *[(path, "deleted") for path in changes.deleted_files],
+            *[(path, "untracked") for path in changes.untracked_files],
+        ]
+        for index, (path, change_type) in enumerate(entries, start=1):
             self.observer.on_file_change(
                 record=FileChangeRecord.create(
                     file_change_id=make_file_change_id(self.run_id, self.iteration_index, index),
                     run_id=self.run_id,
                     path=path,
-                    change_type="modified",
-                    detected_by="snapshot_diff",
-                    iteration_id=self.iteration_id,
-                    agent_execution_id=agent_execution_id,
-                )
-            )
-        for path in added_files:
-            index += 1
-            self.observer.on_file_change(
-                record=FileChangeRecord.create(
-                    file_change_id=make_file_change_id(self.run_id, self.iteration_index, index),
-                    run_id=self.run_id,
-                    path=path,
-                    change_type="added",
-                    detected_by="snapshot_diff",
-                    iteration_id=self.iteration_id,
-                    agent_execution_id=agent_execution_id,
-                )
-            )
-        for path in deleted_files:
-            index += 1
-            self.observer.on_file_change(
-                record=FileChangeRecord.create(
-                    file_change_id=make_file_change_id(self.run_id, self.iteration_index, index),
-                    run_id=self.run_id,
-                    path=path,
-                    change_type="deleted",
-                    detected_by="snapshot_diff",
-                    iteration_id=self.iteration_id,
-                    agent_execution_id=agent_execution_id,
-                )
-            )
-        for path in untracked_files:
-            index += 1
-            self.observer.on_file_change(
-                record=FileChangeRecord.create(
-                    file_change_id=make_file_change_id(self.run_id, self.iteration_index, index),
-                    run_id=self.run_id,
-                    path=path,
-                    change_type="untracked",
-                    detected_by="snapshot_diff",
+                    change_type=change_type,
+                    detected_by="workspace_snapshot",
                     iteration_id=self.iteration_id,
                     agent_execution_id=agent_execution_id,
                 )

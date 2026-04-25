@@ -1,6 +1,7 @@
 from llm_autofix_agents.flow.lifecycle.telemetry_mapping import to_file_change_telemetry_set
 from llm_autofix_agents.flow.models import WorkspaceChangeSet
 from llm_autofix_agents.observability.telemetry import RunTelemetry
+from llm_autofix_agents.observability.telemetry_models import FileChangeTelemetrySet
 
 
 class FakeObserver:
@@ -45,16 +46,21 @@ def test_file_change_telemetry_set_registers_correct_types() -> None:
 
 
 def test_iteration_telemetry_records_file_changes_with_correct_types() -> None:
+    from llm_autofix_agents.observability.telemetry_models import FileChangeTelemetrySet
+
     observer = FakeObserver()
     run_telemetry = RunTelemetry(observer=observer, run_id="run-1")
     iteration_telemetry = run_telemetry.start_iteration(iteration_id="it-1", iteration_index=1)
 
-    iteration_telemetry.record_file_changes(
-        agent_execution_id="agent-1",
+    telemetry_set = FileChangeTelemetrySet(
         modified_files=["a.py"],
         added_files=["new.py"],
         deleted_files=["deleted.py"],
         untracked_files=["untracked.py"],
+    )
+    iteration_telemetry.record_file_changes(
+        agent_execution_id="agent-1",
+        changes=telemetry_set,
     )
 
     types_by_path = {r.path: r.change_type for r in observer.file_change_records}

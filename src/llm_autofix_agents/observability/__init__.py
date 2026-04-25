@@ -20,6 +20,7 @@ from llm_autofix_agents.observability.observer import CompositeObserver, NullObs
 from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore, stable_id
 from llm_autofix_agents.observability.summary import write_summary
 from llm_autofix_agents.observability.telemetry import RunTelemetry
+from llm_autofix_agents.observability.telemetry_models import FileChangeTelemetrySet, IterationTelemetryResult
 
 __all__ = [
     "APRRunHooks",
@@ -28,7 +29,9 @@ __all__ = [
     "CompositeObserver",
     "ConsoleObserver",
     "FileChangeRecord",
+    "FileChangeTelemetrySet",
     "IterationRecord",
+    "IterationTelemetryResult",
     "MarkdownLiveObserver",
     "ModelConfigDescriptor",
     "NullObserver",
