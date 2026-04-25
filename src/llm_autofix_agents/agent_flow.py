@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from llm_autofix_agents.agents.instructions import BASELINE_APR_INSTRUCTIONS
+from llm_autofix_agents.agents.instructions import MONO_AGENT_APR_INSTRUCTIONS
 from llm_autofix_agents.architectures import MonoAgentArchitecture
 from llm_autofix_agents.contracts import RunInput, RunOutput
 from llm_autofix_agents.flow.orchestrator import RunOrchestrator
@@ -23,7 +23,7 @@ def run_agent_baseline(
     resolved_provider = provider if provider is not None else create_provider(resolved_settings)
 
     return RunOrchestrator(
-        architecture=MonoAgentArchitecture(instructions=BASELINE_APR_INSTRUCTIONS),
+        architecture=MonoAgentArchitecture(instructions=MONO_AGENT_APR_INSTRUCTIONS),
     ).run(
         run_input=run_input,
         settings=resolved_settings,
