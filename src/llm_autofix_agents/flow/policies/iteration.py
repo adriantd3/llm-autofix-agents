@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from llm_autofix_agents.contracts import RunInput
 from llm_autofix_agents.flow.models import TestExecution
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
 
 def build_iteration_input(
@@ -36,9 +36,7 @@ def is_no_progress(
     if previous_message is None or previous_test_signature is None:
         return False
 
-    previous_normalized = " ".join(previous_message.split()).strip().lower()
-    current_normalized = " ".join(current_message.split()).strip().lower()
-    same_message = previous_normalized == current_normalized
+    same_message = _normalize(previous_message) == _normalize(current_message)
     same_test_signature = previous_test_signature == current_test_signature
     no_file_changes = len(changed_files) == 0
 
@@ -47,35 +45,27 @@ def is_no_progress(
 
     if no_file_changes and same_test_signature and normalized_status == "stuck":
         return True
-    if (
-        no_file_changes
-        and same_test_signature
-        and normalized_previous_status == "stuck"
-        and normalized_status == "stuck"
-    ):
+    if no_file_changes and same_test_signature and normalized_previous_status == "stuck" and normalized_status == "stuck":
         return True
 
     if previous_confidence is None:
         return same_message and same_test_signature and no_file_changes
 
     confidence_not_improving = current_confidence <= previous_confidence + 1e-9
-    same_or_worse_state = no_file_changes and same_test_signature and confidence_not_improving
-    return same_message and same_or_worse_state
-
-
-def can_complete_early(*, run_input: RunInput, test_execution: TestExecution) -> bool:
-    if run_input.test_command is None:
-        return True
-    return test_execution.exit_code == 0 and not test_execution.timed_out
+    return same_message and no_file_changes and same_test_signature and confidence_not_improving
 
 
 def is_regression(*, baseline: TestExecution, current: TestExecution) -> bool:
     return baseline.exit_code == 0 and current.exit_code != 0
 
 
-def _proposal_signature(proposal) -> str:
+def proposal_signature(proposal: AgentFixIterationRecord) -> str:
     status = proposal.status.strip().lower()
-    reasoning_summary = " ".join(proposal.reasoning_summary.split()).strip().lower()
+    reasoning_summary = _normalize(proposal.reasoning_summary)
     changed = "|".join(proposal.changed_files)
-    notes = " ".join((proposal.notes or "").split()).strip().lower()
+    notes = _normalize(proposal.notes or "")
     return f"status={status}|reasoning_summary={reasoning_summary}|changed={changed}|notes={notes}"
+
+
+def _normalize(text: str) -> str:
+    return " ".join(text.split()).strip().lower()

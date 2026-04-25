@@ -35,17 +35,20 @@ def run_test_command(test_command: str | None, *, cwd: Path, timeout_seconds: in
             check=False,
         )
         output = f"{completed.stdout}\n{completed.stderr}".strip()
-        signature = build_test_signature(exit_code=completed.returncode, timed_out=False, output=output)
         return TestExecution(
             exit_code=completed.returncode,
             timed_out=False,
             output=output,
-            signature=signature,
+            signature=build_test_signature(exit_code=completed.returncode, timed_out=False, output=output),
         )
     except subprocess.TimeoutExpired as exc:
         output = f"timeout: {exc}"
-        signature = build_test_signature(exit_code=124, timed_out=True, output=output)
-        return TestExecution(exit_code=124, timed_out=True, output=output, signature=signature)
+        return TestExecution(
+            exit_code=124,
+            timed_out=True,
+            output=output,
+            signature=build_test_signature(exit_code=124, timed_out=True, output=output),
+        )
 
 
 def build_test_signature(*, exit_code: int, timed_out: bool, output: str) -> str:
@@ -56,17 +59,9 @@ def build_test_signature(*, exit_code: int, timed_out: bool, output: str) -> str
 
 def to_test_results(test_execution: TestExecution) -> TestResults:
     output = test_execution.output
-    total = extract_int(output, r"Ran\s+(\d+)\s+tests?")
-
-    passed = sum_counts(output, [r"(\d+)\s+passed"])
-    failed = sum_counts(
-        output,
-        [
-            r"(\d+)\s+failed",
-            r"failures?=(\d+)",
-            r"errors?=(\d+)",
-        ],
-    )
+    total = _extract_int(output, r"Ran\s+(\d+)\s+tests?")
+    passed = _sum_counts(output, [r"(\d+)\s+passed"])
+    failed = _sum_counts(output, [r"(\d+)\s+failed", r"failures?=(\d+)", r"errors?=(\d+)"])
 
     if test_execution.exit_code == 0 and failed == 0:
         if total == 0:
@@ -82,14 +77,14 @@ def to_test_results(test_execution: TestExecution) -> TestResults:
     return TestResults(total=total, passed=passed, failed=failed)
 
 
-def extract_int(text: str, pattern: str) -> int:
+def _extract_int(text: str, pattern: str) -> int:
     match = re.search(pattern, text, flags=re.IGNORECASE)
     if match is None:
         return 0
     return int(match.group(1))
 
 
-def sum_counts(text: str, patterns: list[str]) -> int:
+def _sum_counts(text: str, patterns: list[str]) -> int:
     total = 0
     for pattern in patterns:
         for value in re.findall(pattern, text, flags=re.IGNORECASE):

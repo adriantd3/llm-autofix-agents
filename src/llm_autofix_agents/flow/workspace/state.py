@@ -70,8 +70,7 @@ def collect_repo_diff(repo_root: Path) -> str:
     )
     if result.returncode != 0:
         return ""
-    ignore_rules = load_ignore_rules(repo_root)
-    return filter_diff_by_ignore_rules(result.stdout.strip(), ignore_rules).strip()
+    return filter_diff_by_ignore_rules(result.stdout.strip(), load_ignore_rules(repo_root)).strip()
 
 
 def load_ignore_rules(repo_root: Path) -> list[str]:
@@ -99,9 +98,7 @@ def should_ignore_path(path: str, ignore_rules: list[str]) -> bool:
             continue
         if cleaned_rule.endswith("/"):
             prefix = cleaned_rule.removeprefix("./")
-            if directory_path.startswith(prefix):
-                return True
-            if f"/{prefix}" in directory_path:
+            if directory_path.startswith(prefix) or f"/{prefix}" in directory_path:
                 return True
             continue
         if "/" in cleaned_rule:
@@ -117,31 +114,40 @@ def filter_diff_by_ignore_rules(diff: str, ignore_rules: list[str]) -> str:
     if not diff.strip():
         return ""
 
-    chunks: list[list[str]] = []
-    current_chunk: list[str] = []
-    for line in diff.splitlines():
-        if line.startswith("diff --git "):
-            if current_chunk:
-                chunks.append(current_chunk)
-            current_chunk = [line]
-            continue
-        if not current_chunk:
-            continue
-        current_chunk.append(line)
-    if current_chunk:
-        chunks.append(current_chunk)
-
+    chunks = _split_diff_chunks(diff)
     filtered_chunks: list[str] = []
+
     for chunk in chunks:
         header = chunk[0]
         parts = header.split(" ")
         if len(parts) < 4:
             filtered_chunks.append("\n".join(chunk))
             continue
+
         a_path = parts[2].removeprefix("a/")
         b_path = parts[3].removeprefix("b/")
         if should_ignore_path(a_path, ignore_rules) and should_ignore_path(b_path, ignore_rules):
             continue
+
         filtered_chunks.append("\n".join(chunk))
 
     return "\n\n".join(filtered_chunks)
+
+
+def _split_diff_chunks(diff: str) -> list[list[str]]:
+    chunks: list[list[str]] = []
+    current_chunk: list[str] = []
+
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            if current_chunk:
+                chunks.append(current_chunk)
+            current_chunk = [line]
+            continue
+        if current_chunk:
+            current_chunk.append(line)
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks
