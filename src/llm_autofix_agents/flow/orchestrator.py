@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
 from llm_autofix_agents.flow.architecture import ArchitectureRunner
+from llm_autofix_agents.flow.errors import error_category_from_exception
 from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds, run_test_command
 from llm_autofix_agents.flow.iteration_runner import IterationRunner
 from llm_autofix_agents.flow.lifecycle.events import IterationEvents
 from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
+from llm_autofix_agents.flow.policies.stop import StopPolicy
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.runtime.initializer import RunInitializer
 from llm_autofix_agents.flow.runtime.options import resolve_max_iterations, resolve_tool_profile
@@ -38,6 +40,7 @@ class RunOrchestrator:
         finalizer: RunFinalizer | None = None,
         workspace: WorkspaceManager | None = None,
         events: IterationEvents | None = None,
+        stop_policy: StopPolicy | None = None,
     ) -> None:
         self._architecture = architecture
         self._initializer = initializer or RunInitializer(architecture=architecture)
@@ -50,6 +53,7 @@ class RunOrchestrator:
             workspace=self._workspace,
             events=self._events,
             output_builder=self._output_builder,
+            stop_policy=stop_policy or StopPolicy(),
         )
 
     def run(
@@ -75,6 +79,7 @@ class RunOrchestrator:
                 state=state,
                 cfg=cfg,
                 message=str(exc),
+                category=error_category_from_exception(exc),
             )
             self._workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
             return self._finalizer.finalize(output=output, state=state, cfg=cfg)

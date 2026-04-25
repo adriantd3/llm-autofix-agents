@@ -45,7 +45,12 @@ def is_no_progress(
 
     if no_file_changes and same_test_signature and normalized_status == "stuck":
         return True
-    if no_file_changes and same_test_signature and normalized_previous_status == "stuck" and normalized_status == "stuck":
+    if (
+        no_file_changes
+        and same_test_signature
+        and normalized_previous_status == "stuck"
+        and normalized_status == "stuck"
+    ):
         return True
 
     if previous_confidence is None:

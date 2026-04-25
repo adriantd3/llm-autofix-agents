@@ -5,6 +5,8 @@ import hashlib
 import subprocess
 from pathlib import Path
 
+from llm_autofix_agents.flow.models import WorkspaceChangeSet
+
 _DEFAULT_IGNORE_PATTERNS = [
     ".git/",
     ".venv/",
@@ -60,6 +62,42 @@ def detect_changed_files(before: dict[str, str], after: dict[str, str]) -> list[
     return sorted(changed)
 
 
+def detect_workspace_change_set(
+    *,
+    repo_root: Path,
+    before: dict[str, str],
+    after: dict[str, str],
+) -> WorkspaceChangeSet:
+    modified_files: list[str] = []
+    added_files: list[str] = []
+    deleted_files: list[str] = []
+
+    for path, digest in before.items():
+        if path not in after:
+            deleted_files.append(path)
+            continue
+        if after[path] != digest:
+            modified_files.append(path)
+
+    for path in after:
+        if path not in before:
+            added_files.append(path)
+
+    untracked_files = detect_untracked_files(repo_root)
+    diff = collect_repo_diff(repo_root)
+
+    # `git diff` does not include untracked files, so mark completeness explicitly.
+    diff_complete = not bool(untracked_files)
+    return WorkspaceChangeSet(
+        modified_files=sorted(modified_files),
+        added_files=sorted(added_files),
+        deleted_files=sorted(deleted_files),
+        untracked_files=sorted(untracked_files),
+        diff=diff,
+        diff_complete=diff_complete,
+    )
+
+
 def collect_repo_diff(repo_root: Path) -> str:
     result = subprocess.run(
         ["git", "diff", "--no-color"],
@@ -71,6 +109,28 @@ def collect_repo_diff(repo_root: Path) -> str:
     if result.returncode != 0:
         return ""
     return filter_diff_by_ignore_rules(result.stdout.strip(), load_ignore_rules(repo_root)).strip()
+
+
+def detect_untracked_files(repo_root: Path) -> list[str]:
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+
+    ignore_rules = load_ignore_rules(repo_root)
+    untracked: list[str] = []
+    for line in result.stdout.splitlines():
+        if not line.startswith("?? "):
+            continue
+        path = line[3:].strip().replace("\\", "/")
+        if path and not should_ignore_path(path, ignore_rules):
+            untracked.append(path)
+    return sorted(untracked)
 
 
 def load_ignore_rules(repo_root: Path) -> list[str]:

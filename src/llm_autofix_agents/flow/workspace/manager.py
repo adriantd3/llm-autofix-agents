@@ -5,8 +5,13 @@ from dataclasses import dataclass
 from llm_autofix_agents.flow.models import WorkspaceChangeSet
 from llm_autofix_agents.flow.runtime.context import RunConfig
 from llm_autofix_agents.flow.runtime.options import resolve_temp_branch_prefix
-from llm_autofix_agents.flow.workspace.git import create_temp_branch, delete_branch, is_git_repository, restore_original_branch
-from llm_autofix_agents.flow.workspace.state import collect_repo_diff, detect_changed_files, snapshot_repo_state
+from llm_autofix_agents.flow.workspace.git import (
+    create_temp_branch,
+    delete_branch,
+    is_git_repository,
+    restore_original_branch,
+)
+from llm_autofix_agents.flow.workspace.state import detect_workspace_change_set, snapshot_repo_state
 
 
 @dataclass(frozen=True)
@@ -34,9 +39,10 @@ class WorkspaceManager:
 
     def inspect_changes(self, *, cfg: RunConfig, before_snapshot: dict[str, str]) -> WorkspaceChangeSet:
         after_snapshot = snapshot_repo_state(cfg.repo_root)
-        return WorkspaceChangeSet(
-            changed_files=detect_changed_files(before_snapshot, after_snapshot),
-            diff=collect_repo_diff(cfg.repo_root),
+        return detect_workspace_change_set(
+            repo_root=cfg.repo_root,
+            before=before_snapshot,
+            after=after_snapshot,
         )
 
     def restore_temp_branch_for_debug(self, *, cfg: RunConfig, logs: list[str]) -> None:

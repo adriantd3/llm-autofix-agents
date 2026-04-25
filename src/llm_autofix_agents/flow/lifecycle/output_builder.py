@@ -26,10 +26,10 @@ class RunOutputBuilder:
             status=status,
             stop_reason=stop_reason,
             diff=state.latest_diff,
-            logs=state.accumulated_logs,
+            logs=list(state.accumulated_logs),
             tests=state.latest_tests,
             errors=errors or [],
-            artifacts=state.latest_artifacts,
+            artifacts=dict(state.latest_artifacts),
             final_message=state.final_message,
         )
 
@@ -81,6 +81,7 @@ class RunOutputBuilder:
         state: RunState,
         cfg: RunConfig,
         message: str,
+        category: ErrorCategory = ErrorCategory.MODEL,
     ) -> RunOutput:
         return self.build(
             identity=identity,
@@ -88,5 +89,5 @@ class RunOutputBuilder:
             stop_reason=StopReason.INFRA_FAILURE,
             state=state,
             cfg=cfg,
-            errors=[RunError(category=ErrorCategory.MODEL, message=message, retryable=False)],
+            errors=[RunError(category=category, message=message, retryable=False)],
         )

@@ -47,6 +47,8 @@
 - SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
 - SH6-T01 preparacion aplicada: `agent-smoke` ahora consume contrato `RUN_*`, resuelve/clona repositorio objetivo (path/URL/slug GitHub) y ejecuta validacion con `RUN_TEST_COMMAND`.
 - Evidencia operativa SH6 agregada en README y Compose para ejecucion reproducible del caso MVP (`python_testcases/test_gcd.py`).
+- Hardening de flujo aplicado: import roto en `agent_flow` corregido hacia `flow.orchestrator`, `IterationRunner` dividido en colaboradores (`iteration/context_builder`, `iteration/recorder`, `iteration/decision`), `RunInitializer` desacoplado con `RunRegistration`, ciclo de ejecucion de agente extraido a `flow/agent_execution`, `WorkspaceChangeSet` enriquecido (added/modified/deleted/untracked + `diff_complete`), clasificacion de errores de flujo incorporada y `RunOutputBuilder` reforzado con copias defensivas.
+- Validacion del refactor ejecutada: smoke de imports del flujo en verde y nueva suite unitaria focalizada (`tests/test_flow_refactor.py`) con 3 tests en verde.
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md
