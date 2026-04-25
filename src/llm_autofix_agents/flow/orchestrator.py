@@ -5,7 +5,6 @@ from llm_autofix_agents.flow.architecture import ArchitectureRunner
 from llm_autofix_agents.flow.errors import error_category_from_exception
 from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds, run_test_command
 from llm_autofix_agents.flow.iteration_runner import IterationRunner
-from llm_autofix_agents.flow.lifecycle.events import IterationEvents
 from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.policies.stop import StopPolicy
@@ -39,19 +38,16 @@ class RunOrchestrator:
         output_builder: RunOutputBuilder | None = None,
         finalizer: RunFinalizer | None = None,
         workspace: WorkspaceManager | None = None,
-        events: IterationEvents | None = None,
         stop_policy: StopPolicy | None = None,
     ) -> None:
         self._architecture = architecture
         self._initializer = initializer or RunInitializer(architecture=architecture)
         self._workspace = workspace or WorkspaceManager()
-        self._events = events or IterationEvents()
         self._output_builder = output_builder or RunOutputBuilder()
         self._finalizer = finalizer or RunFinalizer()
         self._iteration_runner = iteration_runner or IterationRunner(
             architecture=architecture,
             workspace=self._workspace,
-            events=self._events,
             output_builder=self._output_builder,
             stop_policy=stop_policy or StopPolicy(),
         )
@@ -109,13 +105,14 @@ class RunOrchestrator:
             cwd=cfg.repo_root,
             timeout_seconds=cfg.test_timeout_seconds,
         )
-        self._events.test_execution(
-            observer=cfg.observer,
+        cfg.telemetry.record_test_execution(
             run_id=cfg.run_id,
-            phase="baseline",
-            test_execution=execution,
-            command=run_input.test_command,
             iteration=0,
+            phase="baseline",
+            command=run_input.test_command,
+            exit_code=execution.exit_code,
+            timed_out=execution.timed_out,
+            signature=execution.signature,
         )
         state.accumulated_logs.extend(
             [

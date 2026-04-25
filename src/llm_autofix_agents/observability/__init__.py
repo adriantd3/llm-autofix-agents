@@ -19,6 +19,7 @@ from llm_autofix_agents.observability.models import (
 from llm_autofix_agents.observability.observer import CompositeObserver, NullObserver, RunObserver, SQLiteObserver
 from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore, stable_id
 from llm_autofix_agents.observability.summary import write_summary
+from llm_autofix_agents.observability.telemetry import RunTelemetry
 
 __all__ = [
     "APRRunHooks",
@@ -39,6 +40,7 @@ __all__ = [
     "SQLiteObserver",
     "TestExecutionRecord",
     "ToolCallRecord",
+    "RunTelemetry",
     "infer_tool_status",
     "make_agent_execution_id",
     "make_file_change_id",

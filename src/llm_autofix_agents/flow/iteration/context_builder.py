@@ -37,6 +37,7 @@ class IterationContextBuilder:
             agent_context=cfg.agent_context,
             agent_tools=cfg.agent_tools,
             observer=cfg.observer,
+            telemetry=cfg.telemetry,
             user_input=build_iteration_input(
                 prompt=run_input.prompt,
                 iteration=iteration,

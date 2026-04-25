@@ -9,7 +9,6 @@ from llm_autofix_agents.flow.execution.tests import run_test_command
 from llm_autofix_agents.flow.iteration.context_builder import IterationContextBuilder
 from llm_autofix_agents.flow.iteration.decision import IterationOutcomeHandler
 from llm_autofix_agents.flow.iteration.recorder import IterationObservation, IterationRecorder
-from llm_autofix_agents.flow.lifecycle.events import IterationEvents
 from llm_autofix_agents.flow.lifecycle.logs import record_validation_logs
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.policies.stop import StopPolicy
@@ -25,7 +24,6 @@ class IterationRunner:
 
     architecture: ArchitectureRunner
     workspace: WorkspaceManager
-    events: IterationEvents
     output_builder: RunOutputBuilder
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
     context_builder: IterationContextBuilder = field(default_factory=IterationContextBuilder)
@@ -49,14 +47,18 @@ class IterationRunner:
         started_at = utc_now_iso()
         started_monotonic = time.perf_counter()
 
-        recorder = self.recorder or IterationRecorder(events=self.events)
+        recorder = self.recorder or IterationRecorder()
         outcome_handler = self.outcome_handler or IterationOutcomeHandler(
             workspace=self.workspace,
             output_builder=self.output_builder,
             stop_policy=self.stop_policy,
         )
 
-        self.events.started(cfg=cfg, iteration_id=identity.iteration_id, iteration_index=iteration)
+        cfg.telemetry.start_iteration(
+            run_id=cfg.run_id,
+            iteration_id=identity.iteration_id,
+            iteration_index=iteration,
+        )
         self.workspace.ensure_temp_branch_for_first_iteration(
             cfg=cfg,
             iteration=iteration,
@@ -80,13 +82,14 @@ class IterationRunner:
             timeout_seconds=cfg.test_timeout_seconds,
         )
 
-        self.events.test_execution(
-            observer=cfg.observer,
+        cfg.telemetry.record_test_execution(
             run_id=cfg.run_id,
-            phase="iteration_validation",
-            test_execution=test_execution,
-            command=run_input.test_command,
             iteration=iteration,
+            phase="iteration_validation",
+            command=run_input.test_command,
+            exit_code=test_execution.exit_code,
+            timed_out=test_execution.timed_out,
+            signature=test_execution.signature,
             iteration_id=identity.iteration_id,
             agent_execution_id=agent_result.agent_execution_id,
         )

@@ -50,6 +50,7 @@
 - Hardening de flujo aplicado: import roto en `agent_flow` corregido hacia `flow.orchestrator`, `IterationRunner` dividido en colaboradores (`iteration/context_builder`, `iteration/recorder`, `iteration/decision`), `RunInitializer` desacoplado con `RunRegistration`, ciclo de ejecucion de agente extraido a `flow/agent_execution`, `WorkspaceChangeSet` enriquecido (added/modified/deleted/untracked + `diff_complete`), clasificacion de errores de flujo incorporada y `RunOutputBuilder` reforzado con copias defensivas.
 - Validacion del refactor ejecutada: smoke de imports del flujo en verde y nueva suite unitaria focalizada (`tests/test_flow_refactor.py`) con 3 tests en verde.
 - Ajuste incremental aplicado: renombre de `model_failure` a `exception_failure`, `IterationDecision` a `IterationOutcomeHandler`, evolucion de `WorkspaceChangeSet` hacia `tracked_changed_files` y `all_changed_files`, politica explicita de untracked como `allowed_and_captured`, y encapsulado de errores git/snapshot en `WorkspaceError` en la capa workspace.
+- Refactor de deuda tecnica aplicado sobre `feat/001/base-logging-refactor`: baseline instructions externalizadas en `agents/instructions.py`, flujo de observabilidad migrado a API semantica `RunTelemetry` (sin construccion de DTOs en `flow`) y toolkit APR dividido en modulos (`context/serialization/paths/text/fs/edit/command/test/git/patch/profiles`) manteniendo API publica `APRToolContext` + `build_apr_tools`.
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md

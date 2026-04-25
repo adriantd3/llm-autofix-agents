@@ -10,8 +10,6 @@ from llm_autofix_agents.flow.errors import ProviderExecutionError
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.observability import APRRunHooks
 
-from .lifecycle import AgentExecutionLifecycle
-
 
 @dataclass(frozen=True)
 class AgentExecutionResult:
@@ -25,8 +23,6 @@ class AgentExecutionResult:
 @dataclass(frozen=True)
 class AgentExecutionRunner:
     """Reusable single-agent execution lifecycle runner."""
-
-    lifecycle: AgentExecutionLifecycle = field(default_factory=AgentExecutionLifecycle)
 
     def run_agent(
         self,
@@ -44,12 +40,12 @@ class AgentExecutionRunner:
         )
 
         started_monotonic = time.perf_counter()
-        started_at = self.lifecycle.start(
-            observer=context.observer,
+        started_at = context.telemetry.start_agent_execution(
             agent_execution_id=agent_execution_id,
             run_id=context.run_id,
             iteration_id=context.iteration_id,
             run_agent_id=context.run_agent_id,
+            execution_index=execution_index,
         )
 
         try:
@@ -57,12 +53,12 @@ class AgentExecutionRunner:
         except Exception as exc:  # noqa: BLE001
             raise ProviderExecutionError(f"provider execution failed: {exc}") from exc
 
-        self.lifecycle.finish(
-            observer=context.observer,
+        context.telemetry.finish_agent_execution(
             agent_execution_id=agent_execution_id,
             run_id=context.run_id,
             iteration_id=context.iteration_id,
             run_agent_id=context.run_agent_id,
+            execution_index=execution_index,
             started_at=started_at,
             status=proposal.status,
             reasoning_summary=proposal.reasoning_summary,

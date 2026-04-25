@@ -7,7 +7,8 @@ from llm_autofix_agents.contracts import RunInput
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
 from llm_autofix_agents.observability import RunObserver
-from llm_autofix_agents.tools import APRToolContext
+from llm_autofix_agents.observability.telemetry import RunTelemetry
+from llm_autofix_agents.tools.context import APRToolContext
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class AgentIterationContext:
     agent_context: APRToolContext
     agent_tools: list[object]
     observer: RunObserver
+    telemetry: RunTelemetry
     user_input: str
     max_turns: int
 

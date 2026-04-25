@@ -7,7 +7,7 @@ from pathlib import Path
 
 from llm_autofix_agents.contracts import RunOutput, RunStatus
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
-from llm_autofix_agents.observability import RunFinishedRecord, utc_now_iso, write_summary
+from llm_autofix_agents.observability import write_summary
 
 logger = logging.getLogger(__name__)
 
@@ -80,22 +80,19 @@ class RunFinalizer:
         paths: FinalizedRunPaths,
         duration_seconds: float,
     ) -> None:
-        cfg.observer.on_run_finished(
-            run_finished=RunFinishedRecord(
-                run_id=cfg.run_id,
-                finished_at=utc_now_iso(),
-                final_status=output.status.value,
-                stop_reason=output.stop_reason.value,
-                duration_seconds=duration_seconds,
-                total_iterations=output.identity.iteration,
-                total_input_tokens=state.total_input_tokens,
-                total_output_tokens=state.total_output_tokens,
-                total_tokens=state.total_tokens,
-                files_changed_count=state.max_changed_files_count,
-                resolved=output.status == RunStatus.SUCCESS,
-                live_log_path=paths.live_log_path,
-                summary_path=paths.summary_path.relative_to(cfg.repo_root).as_posix(),
-            )
+        cfg.telemetry.finish_run(
+            run_id=cfg.run_id,
+            final_status=output.status.value,
+            stop_reason=output.stop_reason.value,
+            duration_seconds=duration_seconds,
+            total_iterations=output.identity.iteration,
+            total_input_tokens=state.total_input_tokens,
+            total_output_tokens=state.total_output_tokens,
+            total_tokens=state.total_tokens,
+            files_changed_count=state.max_changed_files_count,
+            resolved=output.status == RunStatus.SUCCESS,
+            live_log_path=paths.live_log_path,
+            summary_path=paths.summary_path.relative_to(cfg.repo_root).as_posix(),
         )
 
     def _attach_observability_artifacts(

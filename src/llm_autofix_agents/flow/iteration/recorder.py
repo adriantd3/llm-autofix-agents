@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from llm_autofix_agents.flow.lifecycle.events import IterationEvents
 from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.policies.iteration import proposal_signature
@@ -28,8 +27,6 @@ class IterationObservation:
 class IterationRecorder:
     """Records observed iteration facts into state and observability."""
 
-    events: IterationEvents
-
     def record(self, *, cfg: RunConfig, state: RunState, observation: IterationObservation) -> None:
         proposal = observation.proposal
         state.total_input_tokens += proposal.input_tokens
@@ -42,24 +39,29 @@ class IterationRecorder:
         state.latest_tests = _to_test_results(observation.test_execution)
         state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
 
-        self.events.file_changes(
-            cfg=cfg,
+        cfg.telemetry.record_file_changes(
+            run_id=cfg.run_id,
             iteration=observation.iteration,
             iteration_id=observation.iteration_id,
             agent_execution_id=observation.agent_execution_id,
             changed_files=observation.changes.all_changed_files,
         )
-        self.events.finished(
-            cfg=cfg,
+        cfg.telemetry.finish_iteration(
+            run_id=cfg.run_id,
             iteration_id=observation.iteration_id,
             iteration_index=observation.iteration,
             started_at=observation.started_at,
-            proposal=proposal,
+            status=proposal.status,
             duration_seconds=max(0.0, time.perf_counter() - observation.started_monotonic),
+            input_tokens=proposal.input_tokens,
+            output_tokens=proposal.output_tokens,
+            total_tokens=proposal.total_tokens,
             tool_calls_count=observation.tool_calls_count,
             changed_files_count=len(observation.changes.all_changed_files),
             repo_changed=observation.changes.repo_changed,
-            test_execution=observation.test_execution,
+            test_exit_code=observation.test_execution.exit_code,
+            test_timed_out=observation.test_execution.timed_out,
+            test_signature=observation.test_execution.signature,
         )
 
     def remember_progress(self, *, state: RunState, proposal: AgentFixIterationRecord, test_signature: str) -> None:

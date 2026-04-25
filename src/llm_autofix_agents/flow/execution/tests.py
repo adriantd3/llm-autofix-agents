@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import re
-import subprocess
 from pathlib import Path
 
 from llm_autofix_agents.contracts import TestResults
+from llm_autofix_agents.flow.execution.commands import CommandExecutor
 from llm_autofix_agents.flow.models import TestExecution
 
 
@@ -24,31 +24,28 @@ def run_test_command(test_command: str | None, *, cwd: Path, timeout_seconds: in
     if test_command is None:
         return TestExecution(exit_code=0, timed_out=False, output="", signature="no-tests")
 
-    try:
-        completed = subprocess.run(
-            test_command,
-            cwd=str(cwd),
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-        output = f"{completed.stdout}\n{completed.stderr}".strip()
-        return TestExecution(
-            exit_code=completed.returncode,
-            timed_out=False,
-            output=output,
-            signature=build_test_signature(exit_code=completed.returncode, timed_out=False, output=output),
-        )
-    except subprocess.TimeoutExpired as exc:
-        output = f"timeout: {exc}"
+    execution = CommandExecutor(max_output_chars=200_000).run(
+        command=test_command,
+        cwd=cwd,
+        timeout_seconds=timeout_seconds,
+    )
+    if execution.error == "timeout":
+        output = execution.stdout or execution.stderr or f"timeout after {timeout_seconds} seconds"
         return TestExecution(
             exit_code=124,
             timed_out=True,
             output=output,
             signature=build_test_signature(exit_code=124, timed_out=True, output=output),
         )
+
+    output = f"{execution.stdout}\n{execution.stderr}".strip()
+    exit_code = execution.exit_code if execution.exit_code is not None else 1
+    return TestExecution(
+        exit_code=exit_code,
+        timed_out=False,
+        output=output,
+        signature=build_test_signature(exit_code=exit_code, timed_out=False, output=output),
+    )
 
 
 def build_test_signature(*, exit_code: int, timed_out: bool, output: str) -> str:

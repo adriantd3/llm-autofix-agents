@@ -6,15 +6,17 @@ from dataclasses import dataclass
 from llm_autofix_agents.contracts import RunInput, build_run_identity
 from llm_autofix_agents.flow.architecture import ArchitectureRunner
 from llm_autofix_agents.flow.lifecycle.observer_factory import build_observer
-from llm_autofix_agents.flow.lifecycle.run_registration import RunRegistration
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
+from llm_autofix_agents.flow.runtime.options import metadata_text
 from llm_autofix_agents.flow.workspace.state import load_ignore_rules, resolve_repo_root
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
 from llm_autofix_agents.observability import (
     resolve_observability_config,
 )
-from llm_autofix_agents.tools import APRToolContext, build_apr_tools
+from llm_autofix_agents.observability.telemetry import RunTelemetry
+from llm_autofix_agents.tools.context import APRToolContext
+from llm_autofix_agents.tools.profiles import build_apr_tools
 
 
 @dataclass(frozen=True)
@@ -47,24 +49,33 @@ class RunInitializer:
             run_id=identity.run_id,
             architecture_name=self.architecture.architecture_name,
         )
-
-        registration = RunRegistration(
-            architecture_name=self.architecture.architecture_name,
+        telemetry = RunTelemetry(observer=observer)
+        telemetry.start_run(
+            run_id=identity.run_id,
+            architecture=self.architecture.architecture_name,
+            target_repo=run_input.target_repo,
+            target_branch=metadata_text(run_input.metadata, "runtime_branch"),
+            run_fingerprint=identity.run_fingerprint,
+            prompt=run_input.prompt,
+            benchmark_name=metadata_text(run_input.metadata, "benchmark_name"),
+            problem_id=metadata_text(run_input.metadata, "problem_id"),
+        )
+        run_agent_id = telemetry.register_agent(
+            run_id=identity.run_id,
             agent_name=self.architecture.agent_name,
             agent_role=self.architecture.agent_role,
-            instructions=self.architecture.instructions,
-        )
-        registration.start_run(observer=observer, identity=identity, run_input=run_input)
-        run_agent_id = registration.register_primary_agent(
-            observer=observer,
-            run_id=identity.run_id,
-            settings=settings,
+            provider=settings.provider.value,
+            model=settings.model,
+            max_turns=settings.max_turns,
             tool_profile=tool_profile,
+            instructions=self.architecture.instructions,
+            base_url=settings.base_url,
+            tracing_disabled=settings.tracing_disabled,
         )
 
         cfg = RunConfig(
             run_id=identity.run_id,
-            run_agent_id=run_agent_id or f"{identity.run_id}-agent-{self.architecture.agent_name}",
+            run_agent_id=run_agent_id,
             architecture_name=self.architecture.architecture_name,
             instructions=self.architecture.instructions,
             settings=settings,
@@ -78,6 +89,7 @@ class RunInitializer:
             test_command=run_input.test_command,
             ignore_rules=load_ignore_rules(repo_root),
             observer=observer,
+            telemetry=telemetry,
             sqlite_store=sqlite_store,
             live_observer=live_observer,
             run_input_metadata=run_input.metadata,
