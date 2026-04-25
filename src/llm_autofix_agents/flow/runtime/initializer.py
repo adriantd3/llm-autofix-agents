@@ -88,7 +88,6 @@ class RunInitializer:
             repo_root=repo_root,
             test_command=run_input.test_command,
             ignore_rules=load_ignore_rules(repo_root),
-            observer=observer,
             telemetry=telemetry,
             sqlite_store=sqlite_store,
             live_observer=live_observer,

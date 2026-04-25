@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 
+from llm_autofix_agents.observability import APRRunHooks, RunObserver
 from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
@@ -16,7 +17,6 @@ from llm_autofix_agents.observability.models import (
     make_test_execution_id,
     utc_now_iso,
 )
-from llm_autofix_agents.observability.observer import RunObserver
 
 
 @dataclass(frozen=True)
@@ -84,6 +84,20 @@ class RunTelemetry:
             instructions_hash=sha256(instructions.encode("utf-8")).hexdigest()[:16],
         )
         return run_agent_id or f"{run_id}-agent-{agent_name}"
+
+    def create_agent_hooks(
+        self,
+        *,
+        run_id: str,
+        iteration_id: str,
+        agent_execution_id: str,
+    ) -> APRRunHooks:
+        return APRRunHooks(
+            observer=self.observer,
+            run_id=run_id,
+            iteration_id=iteration_id,
+            agent_execution_id=agent_execution_id,
+        )
 
     def start_iteration(self, *, run_id: str, iteration_id: str, iteration_index: int) -> None:
         self.observer.on_iteration_started(

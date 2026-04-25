@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from llm_autofix_agents.flow import AgentIterationContext, AgentIterationResult
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
+from llm_autofix_agents.flow.architecture import AgentIterationContext, AgentIterationResult
 
 
 @dataclass(frozen=True)

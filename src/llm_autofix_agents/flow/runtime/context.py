@@ -9,7 +9,7 @@ from llm_autofix_agents.flow.models import TestExecution
 from llm_autofix_agents.flow.workspace.git import TempBranchContext
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
-from llm_autofix_agents.observability import MarkdownLiveObserver, RunObserver, SQLiteObservabilityStore
+from llm_autofix_agents.observability import MarkdownLiveObserver, SQLiteObservabilityStore
 from llm_autofix_agents.observability.telemetry import RunTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
 
@@ -49,7 +49,6 @@ class RunConfig:
     repo_root: Path
     test_command: str | None
     ignore_rules: list[str]
-    observer: RunObserver
     telemetry: RunTelemetry
     sqlite_store: SQLiteObservabilityStore | None
     live_observer: MarkdownLiveObserver | None

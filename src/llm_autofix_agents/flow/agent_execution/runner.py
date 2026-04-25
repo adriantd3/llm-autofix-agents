@@ -32,8 +32,7 @@ class AgentExecutionRunner:
         provider_call: Callable[[APRRunHooks], Coroutine[object, object, AgentFixIterationRecord]],
     ) -> AgentExecutionResult:
         agent_execution_id = f"{context.run_id}-it{context.iteration_index:02d}-agent{execution_index:02d}"
-        hooks = APRRunHooks(
-            observer=context.observer,
+        hooks = context.telemetry.create_agent_hooks(
             run_id=context.run_id,
             iteration_id=context.iteration_id,
             agent_execution_id=agent_execution_id,

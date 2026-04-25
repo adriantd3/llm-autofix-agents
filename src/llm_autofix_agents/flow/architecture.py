@@ -6,7 +6,6 @@ from typing import Protocol
 from llm_autofix_agents.contracts import RunInput
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
-from llm_autofix_agents.observability import RunObserver
 from llm_autofix_agents.observability.telemetry import RunTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
 
@@ -24,7 +23,6 @@ class AgentIterationContext:
     provider: LLMProvider
     agent_context: APRToolContext
     agent_tools: list[object]
-    observer: RunObserver
     telemetry: RunTelemetry
     user_input: str
     max_turns: int
