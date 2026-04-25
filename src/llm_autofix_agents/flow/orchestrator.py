@@ -106,13 +106,12 @@ class RunOrchestrator:
             timeout_seconds=cfg.test_timeout_seconds,
         )
         cfg.telemetry.record_test_execution(
-            run_id=cfg.run_id,
-            iteration=0,
             phase="baseline",
             command=run_input.test_command,
             exit_code=execution.exit_code,
             timed_out=execution.timed_out,
             signature=execution.signature,
+            iteration=0,
         )
         state.accumulated_logs.extend(
             [

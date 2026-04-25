@@ -8,6 +8,7 @@ from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.policies.iteration import proposal_signature
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.observability.telemetry import IterationTelemetry
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,13 @@ class IterationObservation:
 class IterationRecorder:
     """Records observed iteration facts into state and observability."""
 
-    def record(self, *, cfg: RunConfig, state: RunState, observation: IterationObservation) -> None:
+    def record(
+        self,
+        *,
+        iteration_telemetry: IterationTelemetry,
+        state: RunState,
+        observation: IterationObservation,
+    ) -> None:
         proposal = observation.proposal
         state.total_input_tokens += proposal.input_tokens
         state.total_output_tokens += proposal.output_tokens
@@ -39,17 +46,14 @@ class IterationRecorder:
         state.latest_tests = _to_test_results(observation.test_execution)
         state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
 
-        cfg.telemetry.record_file_changes(
-            run_id=cfg.run_id,
-            iteration=observation.iteration,
-            iteration_id=observation.iteration_id,
+        iteration_telemetry.record_file_changes(
             agent_execution_id=observation.agent_execution_id,
-            changed_files=observation.changes.all_changed_files,
+            modified_files=observation.changes.modified_files,
+            added_files=observation.changes.added_files,
+            deleted_files=observation.changes.deleted_files,
+            untracked_files=observation.changes.untracked_files,
         )
-        cfg.telemetry.finish_iteration(
-            run_id=cfg.run_id,
-            iteration_id=observation.iteration_id,
-            iteration_index=observation.iteration,
+        iteration_telemetry.finish_iteration(
             started_at=observation.started_at,
             status=proposal.status,
             duration_seconds=max(0.0, time.perf_counter() - observation.started_monotonic),

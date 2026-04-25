@@ -11,17 +11,15 @@ class FakeObserver:
 
 def test_run_telemetry_records_test_execution() -> None:
     observer = FakeObserver()
-    telemetry = RunTelemetry(observer=observer)
+    telemetry = RunTelemetry(observer=observer, run_id="run-1")
 
     telemetry.record_test_execution(
-        run_id="run-1",
-        iteration=1,
         phase="iteration_validation",
         command="pytest",
         exit_code=0,
         timed_out=False,
         signature="abc123",
-        iteration_id="it-1",
+        iteration=1,
         agent_execution_id="agent-1",
     )
 

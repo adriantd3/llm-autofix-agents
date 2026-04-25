@@ -26,6 +26,10 @@ class IterationContextBuilder:
             iteration=iteration,
             run_id=cfg.run_id,
         )
+        iteration_telemetry = cfg.telemetry.start_iteration(
+            iteration_id=identity.iteration_id,
+            iteration_index=iteration,
+        )
         return AgentIterationContext(
             run_id=cfg.run_id,
             iteration_id=identity.iteration_id,
@@ -36,7 +40,7 @@ class IterationContextBuilder:
             provider=cfg.provider,
             agent_context=cfg.agent_context,
             agent_tools=cfg.agent_tools,
-            telemetry=cfg.telemetry,
+            iteration_telemetry=iteration_telemetry,
             user_input=build_iteration_input(
                 prompt=run_input.prompt,
                 iteration=iteration,

@@ -54,8 +54,7 @@ class IterationRunner:
             stop_policy=self.stop_policy,
         )
 
-        cfg.telemetry.start_iteration(
-            run_id=cfg.run_id,
+        iteration_telemetry = cfg.telemetry.start_iteration(
             iteration_id=identity.iteration_id,
             iteration_index=iteration,
         )
@@ -82,15 +81,12 @@ class IterationRunner:
             timeout_seconds=cfg.test_timeout_seconds,
         )
 
-        cfg.telemetry.record_test_execution(
-            run_id=cfg.run_id,
-            iteration=iteration,
+        iteration_telemetry.record_test_execution(
             phase="iteration_validation",
             command=run_input.test_command,
             exit_code=test_execution.exit_code,
             timed_out=test_execution.timed_out,
             signature=test_execution.signature,
-            iteration_id=identity.iteration_id,
             agent_execution_id=agent_result.agent_execution_id,
         )
 
@@ -105,7 +101,11 @@ class IterationRunner:
             changes=changes,
             test_execution=test_execution,
         )
-        recorder.record(cfg=cfg, state=state, observation=observation)
+        recorder.record(
+            iteration_telemetry=iteration_telemetry,
+            state=state,
+            observation=observation,
+        )
 
         validation = validate_iteration(
             proposal=agent_result.proposal,

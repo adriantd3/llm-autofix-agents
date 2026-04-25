@@ -74,7 +74,7 @@ class IterationRecord:
     test_signature: str | None = None
 
     @classmethod
-    def started(cls, run_id: str, iteration_id: str, iteration_index: int) -> "IterationRecord":
+    def started(cls, run_id: str, iteration_id: str, iteration_index: int) -> IterationRecord:
         return cls(
             run_id=run_id,
             iteration_id=iteration_id,
@@ -102,7 +102,7 @@ class IterationRecord:
         test_exit_code: int | None = None,
         test_timed_out: bool | None = None,
         test_signature: str | None = None,
-    ) -> "IterationRecord":
+    ) -> IterationRecord:
         return cls(
             run_id=run_id,
             iteration_id=iteration_id,
@@ -153,7 +153,7 @@ class AgentExecutionRecord:
         iteration_id: str,
         run_agent_id: str,
         execution_index: int = 1,
-    ) -> "AgentExecutionRecord":
+    ) -> AgentExecutionRecord:
         return cls(
             agent_execution_id=agent_execution_id,
             run_id=run_id,
@@ -183,7 +183,7 @@ class AgentExecutionRecord:
         tool_calls_count: int = 0,
         error_type: str | None = None,
         error_message_short: str | None = None,
-    ) -> "AgentExecutionRecord":
+    ) -> AgentExecutionRecord:
         return cls(
             agent_execution_id=agent_execution_id,
             run_id=run_id,
@@ -247,7 +247,7 @@ class TestExecutionRecord:
         signature: str | None = None,
         iteration_id: str | None = None,
         agent_execution_id: str | None = None,
-    ) -> "TestExecutionRecord":
+    ) -> TestExecutionRecord:
         return cls(
             test_execution_id=test_execution_id,
             run_id=run_id,
@@ -284,7 +284,7 @@ class FileChangeRecord:
         detected_by: str | None = None,
         iteration_id: str | None = None,
         agent_execution_id: str | None = None,
-    ) -> "FileChangeRecord":
+    ) -> FileChangeRecord:
         return cls(
             file_change_id=file_change_id,
             run_id=run_id,

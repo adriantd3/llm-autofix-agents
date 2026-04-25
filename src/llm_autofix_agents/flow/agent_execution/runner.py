@@ -3,12 +3,11 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from llm_autofix_agents.flow.architecture import AgentIterationContext
 from llm_autofix_agents.flow.errors import ProviderExecutionError
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
-from llm_autofix_agents.observability import APRRunHooks
 
 
 @dataclass(frozen=True)
@@ -29,49 +28,26 @@ class AgentExecutionRunner:
         *,
         context: AgentIterationContext,
         execution_index: int,
-        provider_call: Callable[[APRRunHooks], Coroutine[object, object, AgentFixIterationRecord]],
+        provider_call: Callable[[object], Coroutine[object, object, AgentFixIterationRecord]],
     ) -> AgentExecutionResult:
-        agent_execution_id = f"{context.run_id}-it{context.iteration_index:02d}-agent{execution_index:02d}"
-        hooks = context.telemetry.create_agent_hooks(
-            run_id=context.run_id,
-            iteration_id=context.iteration_id,
-            agent_execution_id=agent_execution_id,
-        )
-
-        started_monotonic = time.perf_counter()
-        started_at = context.telemetry.start_agent_execution(
-            agent_execution_id=agent_execution_id,
-            run_id=context.run_id,
-            iteration_id=context.iteration_id,
+        agent_telemetry = context.iteration_telemetry.start_agent_execution(
             run_agent_id=context.run_agent_id,
             execution_index=execution_index,
         )
+        hooks = agent_telemetry.create_hooks()
+
+        started_monotonic = time.perf_counter()
 
         try:
             proposal = _run_sync(provider_call(hooks))
         except Exception as exc:  # noqa: BLE001
             raise ProviderExecutionError(f"provider execution failed: {exc}") from exc
 
-        context.telemetry.finish_agent_execution(
-            agent_execution_id=agent_execution_id,
-            run_id=context.run_id,
-            iteration_id=context.iteration_id,
-            run_agent_id=context.run_agent_id,
-            execution_index=execution_index,
-            started_at=started_at,
-            status=proposal.status,
-            reasoning_summary=proposal.reasoning_summary,
-            confidence=proposal.confidence,
-            notes=proposal.notes,
-            input_tokens=proposal.input_tokens,
-            output_tokens=proposal.output_tokens,
-            total_tokens=proposal.total_tokens,
-            tool_calls_count=hooks.tool_call_count,
-        )
+        agent_telemetry.finish(proposal=proposal, tool_calls_count=hooks.tool_call_count)
         return AgentExecutionResult(
             proposal=proposal,
-            agent_execution_id=agent_execution_id,
-            started_at=started_at,
+            agent_execution_id=agent_telemetry.agent_execution_id,
+            started_at=agent_telemetry.started_at,
             duration_seconds=max(0.0, time.perf_counter() - started_monotonic),
             tool_calls_count=hooks.tool_call_count,
         )

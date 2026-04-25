@@ -39,3 +39,17 @@ class WorkspaceChangeSet:
     @property
     def repo_changed(self) -> bool:
         return bool(self.all_changed_files)
+
+
+@dataclass(frozen=True)
+class FileChangeTelemetrySet:
+    """Telemetry set for file changes with categorized paths."""
+
+    modified_files: list[str]
+    added_files: list[str]
+    deleted_files: list[str]
+    untracked_files: list[str]
+
+    @property
+    def all_files(self) -> list[str]:
+        return sorted({*self.modified_files, *self.added_files, *self.deleted_files, *self.untracked_files})

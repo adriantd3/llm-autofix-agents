@@ -49,9 +49,8 @@ class RunInitializer:
             run_id=identity.run_id,
             architecture_name=self.architecture.architecture_name,
         )
-        telemetry = RunTelemetry(observer=observer)
+        telemetry = RunTelemetry(observer=observer, run_id=identity.run_id)
         telemetry.start_run(
-            run_id=identity.run_id,
             architecture=self.architecture.architecture_name,
             target_repo=run_input.target_repo,
             target_branch=metadata_text(run_input.metadata, "runtime_branch"),
@@ -61,7 +60,6 @@ class RunInitializer:
             problem_id=metadata_text(run_input.metadata, "problem_id"),
         )
         run_agent_id = telemetry.register_agent(
-            run_id=identity.run_id,
             agent_name=self.architecture.agent_name,
             agent_role=self.architecture.agent_role,
             provider=settings.provider.value,

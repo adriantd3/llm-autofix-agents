@@ -81,7 +81,6 @@ class RunFinalizer:
         duration_seconds: float,
     ) -> None:
         cfg.telemetry.finish_run(
-            run_id=cfg.run_id,
             final_status=output.status.value,
             stop_reason=output.stop_reason.value,
             duration_seconds=duration_seconds,
