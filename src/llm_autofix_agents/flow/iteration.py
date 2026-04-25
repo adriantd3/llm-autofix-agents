@@ -25,6 +25,10 @@ def is_no_progress(
     *,
     previous_message: str | None,
     current_message: str,
+    previous_status: str | None,
+    current_status: str,
+    previous_confidence: float | None,
+    current_confidence: float,
     previous_test_signature: str | None,
     current_test_signature: str,
     changed_files: list[str],
@@ -37,7 +41,26 @@ def is_no_progress(
     same_message = previous_normalized == current_normalized
     same_test_signature = previous_test_signature == current_test_signature
     no_file_changes = len(changed_files) == 0
-    return same_message and same_test_signature and no_file_changes
+
+    normalized_status = current_status.strip().lower()
+    normalized_previous_status = previous_status.strip().lower() if previous_status is not None else None
+
+    if no_file_changes and same_test_signature and normalized_status == "stuck":
+        return True
+    if (
+        no_file_changes
+        and same_test_signature
+        and normalized_previous_status == "stuck"
+        and normalized_status == "stuck"
+    ):
+        return True
+
+    if previous_confidence is None:
+        return same_message and same_test_signature and no_file_changes
+
+    confidence_not_improving = current_confidence <= previous_confidence + 1e-9
+    same_or_worse_state = no_file_changes and same_test_signature and confidence_not_improving
+    return same_message and same_or_worse_state
 
 
 def can_complete_early(*, run_input: RunInput, test_execution: TestExecution) -> bool:

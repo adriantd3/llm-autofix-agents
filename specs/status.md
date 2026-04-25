@@ -49,6 +49,7 @@
 - Hardening provider aplicado: extraccion de tool calls alineada al contrato oficial de openai-agents (`RunResult.new_items` / `tool_call_item`) para evitar dependencia fragil de tracing.
 - Simplificacion aplicada: `tool_calls` del provider se reduce a lista de nombres de tools para observabilidad minima (sin metadatos extra).
 - Ajuste final aplicado: se conserva `status` por tool call y `ToolCallTrace` queda reducido a `iteration`, `name`, `status`.
+- Flujo baseline adaptado a schema status-driven del agente (`status`/`reasoning_summary`) y no-progreso endurecido para corte temprano por estancamiento real.
 - Cobertura SH5 agregada: tests de contratos, provider, observabilidad y flujo baseline en verde (unittest).
 - SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
 - SH6-T01 preparacion aplicada: `agent-smoke` ahora consume contrato `RUN_*`, resuelve/clona repositorio objetivo (path/URL/slug GitHub) y ejecuta validacion con `RUN_TEST_COMMAND`.

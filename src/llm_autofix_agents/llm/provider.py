@@ -94,6 +94,7 @@ class OpenAIAgentsSDKProvider:
         proposal.output_tokens = usage["output_tokens"]
         proposal.total_tokens = usage["total_tokens"]
         proposal.tool_calls = _extract_tool_calls(result)
+        # TODO: extract changed files from logging. Study if tool hooks are viable
 
         return proposal
 

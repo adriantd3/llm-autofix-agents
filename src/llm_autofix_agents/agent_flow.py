@@ -96,7 +96,7 @@ _BASELINE_INSTRUCTIONS = (
     "run commands through the local command tool when validation is needed, "
     "apply and validate changes directly in the target repository via local tools, "
     "and then return a structured iteration report with: "
-    "action, rationale, confidence, changed_files, notes."
+    "status, reasoning_summary, confidence, changed_files, notes."
 )
 
 _TestExecution = TestExecution
@@ -115,6 +115,8 @@ def run_agent_baseline(
 
     run_id: str | None = None
     previous_proposal_signature: str | None = None
+    previous_proposal_status: str | None = None
+    previous_proposal_confidence: float | None = None
     previous_test_signature: str | None = None
     accumulated_logs: list[str] = []
     accumulated_tool_calls: list[ToolCallTrace] = []
@@ -398,6 +400,10 @@ def run_agent_baseline(
             if _is_no_progress(
                 previous_message=previous_proposal_signature,
                 current_message=_proposal_signature(proposal),
+                previous_status=previous_proposal_status,
+                current_status=proposal.status,
+                previous_confidence=previous_proposal_confidence,
+                current_confidence=proposal.confidence,
                 previous_test_signature=previous_test_signature,
                 current_test_signature=test_execution.signature,
                 changed_files=changed_files,
@@ -430,9 +436,14 @@ def run_agent_baseline(
                 )
 
             previous_proposal_signature = _proposal_signature(proposal)
+            previous_proposal_status = proposal.status
+            previous_proposal_confidence = proposal.confidence
             previous_test_signature = test_execution.signature
 
-            if proposal.action == "finish" and _can_complete_early(run_input=run_input, test_execution=test_execution):
+            if proposal.status == "done" and _can_complete_early(
+                run_input=run_input,
+                test_execution=test_execution,
+            ):
                 if temp_branch_context is not None:
                     try:
                         _restore_original_branch(repo_root, original_branch=temp_branch_context.original_branch)
@@ -491,6 +502,43 @@ def run_agent_baseline(
                     identity=identity,
                     status=RunStatus.SUCCESS,
                     stop_reason=StopReason.COMPLETED,
+                    diff=latest_diff,
+                    logs=accumulated_logs,
+                    tests=latest_tests,
+                    artifacts=latest_artifacts,
+                    final_message=final_message,
+                )
+                return _finalize_run_output(
+                    run_output=output,
+                    run_input=run_input,
+                    repo_root=repo_root,
+                    run_started_monotonic=run_started_monotonic,
+                    iterations=identity.iteration,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=accumulated_tool_calls,
+                )
+
+            if proposal.status == "stuck" and not _can_complete_early(
+                run_input=run_input,
+                test_execution=test_execution,
+            ):
+                branch_cleanup_error = _restore_temp_branch_for_debug(
+                    repo_root=repo_root,
+                    temp_branch_context=temp_branch_context,
+                    accumulated_logs=accumulated_logs,
+                )
+                accumulated_logs.extend(
+                    [
+                        "stage=iteration",
+                        "iteration_result=agent_reported_stuck",
+                    ]
+                )
+                output = RunOutput(
+                    identity=identity,
+                    status=RunStatus.PARTIAL,
+                    stop_reason=StopReason.NO_PROGRESS,
                     diff=latest_diff,
                     logs=accumulated_logs,
                     tests=latest_tests,
@@ -792,18 +840,18 @@ def _restore_temp_branch_for_debug(
 
 
 def _proposal_signature(proposal: AgentFixIterationRecord) -> str:
-    action = proposal.action.strip().lower()
-    rationale = " ".join(proposal.rationale.split()).strip().lower()
+    status = proposal.status.strip().lower()
+    reasoning_summary = " ".join(proposal.reasoning_summary.split()).strip().lower()
     changed = "|".join(proposal.changed_files)
     notes = " ".join((proposal.notes or "").split()).strip().lower()
-    return f"action={action}|rationale={rationale}|changed={changed}|notes={notes}"
+    return f"status={status}|reasoning_summary={reasoning_summary}|changed={changed}|notes={notes}"
 
 
 def _render_final_message(proposal: AgentFixIterationRecord) -> str:
     changed_files = ", ".join(proposal.changed_files) if proposal.changed_files else "(unspecified)"
     lines = [
-        f"action: {proposal.action}",
-        f"rationale: {proposal.rationale}",
+        f"status: {proposal.status}",
+        f"reasoning_summary: {proposal.reasoning_summary}",
         f"confidence: {proposal.confidence:.3f}",
         f"changed_files: {changed_files}",
     ]

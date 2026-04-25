@@ -43,7 +43,7 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.stop()
 
     def test_run_agent_baseline_success(self) -> None:
-        provider = _CapturingProvider(_proposal(rationale="suggested fix"))
+        provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
         with patch(
             "llm_autofix_agents.agent_flow._collect_repo_diff",
             return_value="",
@@ -56,8 +56,8 @@ class AgentFlowTests(unittest.TestCase):
 
         self.assertEqual(output.status, RunStatus.SUCCESS)
         self.assertEqual(output.stop_reason, StopReason.COMPLETED)
-        self.assertIn("action: finish", output.final_message or "")
-        self.assertIn("rationale: suggested fix", output.final_message or "")
+        self.assertIn("status: done", output.final_message or "")
+        self.assertIn("reasoning_summary: suggested fix", output.final_message or "")
         self.assertEqual(output.identity.iteration, 1)
         self.assertIn("stage=agent", output.logs)
         self.assertIn("stage=observability", output.logs)
@@ -77,7 +77,7 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(provider.last_context.root_dir, str(Path(".").resolve()))
 
     def test_run_agent_baseline_stops_on_no_progress(self) -> None:
-        provider = _SequencedProvider([_proposal(rationale="same fix"), _proposal(rationale="same fix")])
+        provider = _SequencedProvider([_proposal(reasoning_summary="same fix"), _proposal(reasoning_summary="same fix")])
         with patch(
             "llm_autofix_agents.agent_flow._run_test_command",
             side_effect=[
@@ -108,9 +108,9 @@ class AgentFlowTests(unittest.TestCase):
     def test_run_agent_baseline_stops_on_max_iterations(self) -> None:
         provider = _SequencedProvider(
             [
-                _proposal(rationale="attempt one"),
-                _proposal(rationale="attempt two"),
-                _proposal(rationale="attempt three"),
+                _proposal(reasoning_summary="attempt one"),
+                _proposal(reasoning_summary="attempt two"),
+                _proposal(reasoning_summary="attempt three"),
             ]
         )
         with patch(
@@ -152,7 +152,7 @@ class AgentFlowTests(unittest.TestCase):
         provider = _SequencedProvider(
             [
                 _proposal(
-                    rationale="attempt one",
+                    reasoning_summary="attempt one",
                     changed_files=["src/other.py"],
                 )
             ]
@@ -188,7 +188,7 @@ class AgentFlowTests(unittest.TestCase):
         self.assertIn("proposal_changed_files", output.errors[0].details)
 
     def test_run_agent_baseline_persists_artifacts_in_results(self) -> None:
-        provider = _SequencedProvider([_proposal(rationale="fix tests", changed_files=["src/a.py"])])
+        provider = _SequencedProvider([_proposal(reasoning_summary="fix tests", changed_files=["src/a.py"])])
         self._persist_patcher.stop()
 
         try:
@@ -256,7 +256,7 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(output.errors[0].category, ErrorCategory.MODEL)
 
     def test_run_agent_baseline_stops_on_regression_detected(self) -> None:
-        provider = _SequencedProvider([_proposal(rationale="introduce breaking change")])
+        provider = _SequencedProvider([_proposal(reasoning_summary="introduce breaking change")])
         with patch(
             "llm_autofix_agents.agent_flow._run_test_command",
             side_effect=[
@@ -289,7 +289,7 @@ class AgentFlowTests(unittest.TestCase):
         self.assertIn("validation_result=regression_detected", output.logs)
 
     def test_run_agent_baseline_no_regression_when_baseline_failing(self) -> None:
-        provider = _SequencedProvider([_proposal(rationale="fix tests")])
+        provider = _SequencedProvider([_proposal(reasoning_summary="fix tests")])
         with patch(
             "llm_autofix_agents.agent_flow._run_test_command",
             side_effect=[
@@ -324,7 +324,7 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(output.stop_reason, StopReason.COMPLETED)
 
     def test_run_agent_baseline_creates_and_deletes_temp_branch_on_success(self) -> None:
-        provider = _CapturingProvider(_proposal(rationale="suggested fix"))
+        provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
         self._git_repo_patcher.stop()
         with patch(
             "llm_autofix_agents.agent_flow._is_git_repository",
@@ -359,7 +359,7 @@ class AgentFlowTests(unittest.TestCase):
         provider = _SequencedProvider(
             [
                 _proposal(
-                    rationale="attempt one",
+                    reasoning_summary="attempt one",
                     changed_files=["src/other.py"],
                 )
             ]
@@ -409,7 +409,7 @@ class AgentFlowTests(unittest.TestCase):
         delete_branch.assert_not_called()
 
     def test_run_agent_baseline_fails_when_success_cleanup_fails(self) -> None:
-        provider = _CapturingProvider(_proposal(rationale="suggested fix"))
+        provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
         self._git_repo_patcher.stop()
         with patch(
             "llm_autofix_agents.agent_flow._is_git_repository",
@@ -502,10 +502,51 @@ class _SequencedProvider:
         return response
 
 
+class AgentFlowStatusTests(unittest.TestCase):
+    @patch("llm_autofix_agents.agent_flow._is_git_repository", return_value=False)
+    @patch("llm_autofix_agents.agent_flow._persist_observability_record", return_value={"backend": "jsonl"})
+    @patch("llm_autofix_agents.agent_flow._persist_iteration_artifacts", return_value={})
+    def test_run_agent_baseline_stops_when_agent_reports_stuck(
+        self,
+        _persist_iter: object,
+        _persist_obs: object,
+        _is_git_repo: object,
+    ) -> None:
+        provider = _SequencedProvider([_proposal(reasoning_summary="cannot progress", status="stuck")])
+        with patch(
+            "llm_autofix_agents.agent_flow._run_test_command",
+            side_effect=[
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"),
+                SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._snapshot_repo_state",
+            side_effect=[
+                {"src/a.py": "v1"},
+                {"src/a.py": "v2"},
+            ],
+        ), patch(
+            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            return_value="diff --git a/src/a.py b/src/a.py",
+        ):
+            output = run_agent_baseline(
+                RunInput(
+                    prompt="Fix parser failure",
+                    test_command="uv run python -m unittest",
+                ),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self.assertEqual(output.status, RunStatus.PARTIAL)
+        self.assertEqual(output.stop_reason, StopReason.NO_PROGRESS)
+        self.assertIn("iteration_result=agent_reported_stuck", output.logs)
+
+
 def _proposal(
     *,
-    rationale: str,
-    action: str = "finish",
+    reasoning_summary: str,
+    status: str = "done",
     confidence: float = 0.8,
     changed_files: list[str] | None = None,
     input_tokens: int = 0,
@@ -514,8 +555,8 @@ def _proposal(
     tool_calls: list[dict[str, str]] | None = None,
 ) -> AgentFixIterationRecord:
     return AgentFixIterationRecord(
-        action=action,
-        rationale=rationale,
+        status=status,
+        reasoning_summary=reasoning_summary,
         confidence=confidence,
         changed_files=changed_files if changed_files is not None else ["src/a.py"],
         input_tokens=input_tokens,
