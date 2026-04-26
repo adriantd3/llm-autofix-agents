@@ -96,6 +96,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override results directory path.",
     )
+    agent_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print startup diagnostics and re-raise execution errors.",
+    )
 
     subcommands.add_parser(
         "runtime-contract-smoke",
@@ -158,23 +163,38 @@ def _run_contracts_smoke(args: argparse.Namespace) -> int:
 def _run_agent_smoke(args: argparse.Namespace) -> int:
     prepared_repo: PreparedRepository | None = None
     prompt = args.prompt
-    metadata: dict[str, str] = {"source": "agent-smoke"}
+    metadata: dict[str, object] = {"source": "agent-smoke"}
     interactive = bool(getattr(args, "interactive", False))
+    debug = bool(getattr(args, "debug", False) or _env_flag("AUTOFIX_DEBUG"))
     observability_db = getattr(args, "observability_db", None)
     results_dir = getattr(args, "results_dir", None)
     if interactive:
         metadata["interactive"] = "true"
+    if debug:
+        metadata["debug"] = "true"
     if observability_db:
         metadata["observability_db"] = str(observability_db)
     if results_dir:
         metadata["results_dir"] = str(results_dir)
     target_repo = "."
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
+    max_iterations = _resolve_optional_int(os.environ.get("AUTOFIX_MAX_ITERATIONS"))
+
+    if max_iterations is not None:
+        metadata["max_iterations"] = max_iterations
+
+    _debug_print(
+        "[agent-smoke] start prompt=%r interactive=%s debug=%s test_command=%r results_dir=%r observability_db=%r"
+        % (prompt, interactive, debug, test_command, results_dir, observability_db),
+        debug=debug,
+    )
 
     try:
         instantiation = load_container_instantiation_from_env()
     except ValueError:
         instantiation = None
+
+    _debug_print(f"[agent-smoke] runtime_instantiation={instantiation is not None}", debug=debug)
 
     if instantiation is not None:
         if prompt == _DEFAULT_AGENT_PROMPT:
@@ -187,14 +207,22 @@ def _run_agent_smoke(args: argparse.Namespace) -> int:
             }
         )
         try:
+            _debug_print(
+                "[agent-smoke] preparing repository repo=%r branch=%r"
+                % (instantiation.repository, instantiation.branch),
+                debug=debug,
+            )
             prepared_repo = prepare_target_repository(
                 repository=instantiation.repository,
                 branch=instantiation.branch,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
+            if debug:
+                raise
             return 2
         target_repo = str(prepared_repo.path)
+        _debug_print(f"[agent-smoke] prepared_repo={target_repo}", debug=debug)
 
     run_input = RunInput(
         prompt=prompt,
@@ -202,8 +230,18 @@ def _run_agent_smoke(args: argparse.Namespace) -> int:
         target_repo=target_repo,
         test_command=test_command,
     )
+    _debug_print(
+        "[agent-smoke] running baseline target_repo=%r metadata=%s"
+        % (run_input.target_repo, json.dumps(run_input.metadata, sort_keys=True)),
+        debug=debug,
+    )
     try:
         run_output = run_agent_baseline(run_input)
+        _debug_print(
+            "[agent-smoke] run completed status=%s stop_reason=%s"
+            % (run_output.status.value, run_output.stop_reason.value),
+            debug=debug,
+        )
     finally:
         if prepared_repo is not None:
             prepared_repo.cleanup()
@@ -214,6 +252,11 @@ def _run_agent_smoke(args: argparse.Namespace) -> int:
     }
     print(json.dumps(payload, indent=2, ensure_ascii=True))
     return 0 if run_output.status == RunStatus.SUCCESS else 1
+
+
+def _debug_print(message: str, *, debug: bool) -> None:
+    if debug:
+        print(message, file=sys.stderr, flush=True)
 
 
 def _run_runtime_contract_smoke(args: argparse.Namespace) -> int:
@@ -233,6 +276,22 @@ def _resolve_optional_text(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _env_flag(name: str) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_optional_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return int(normalized)
 
 
 if __name__ == "__main__":

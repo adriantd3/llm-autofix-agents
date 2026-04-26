@@ -37,6 +37,8 @@ Follow this workflow:
 
 5. Tool guidance
 - Use file/list/search/read tools before editing unknown code.
+- You must execute tools to inspect, reproduce, edit, and validate; do not claim code changes or test outcomes without tool evidence.
+- If your previous attempt had zero tool calls, start the next attempt by using tools immediately (e.g., list/search/read, then test/command, then edit).
 - Use edit/patch tools for precise changes.
 - Use command/test tools for reproduction and validation.
 - Use git status/diff tools to verify what changed.

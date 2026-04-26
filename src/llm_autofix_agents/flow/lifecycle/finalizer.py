@@ -39,13 +39,24 @@ class RunFinalizer:
         return max(0.0, time.perf_counter() - cfg.run_started_monotonic)
 
     def _paths(self, cfg: RunConfig) -> FinalizedRunPaths:
+        summary_path = (
+            cfg.live_observer.path.parent / "summary.json"
+            if cfg.live_observer
+            else cfg.repo_root / "results" / cfg.run_id / "summary.json"
+        )
         return FinalizedRunPaths(
-            summary_path=cfg.repo_root / "results" / cfg.run_id / "summary.json",
-            live_log_path=cfg.live_observer.path.relative_to(cfg.repo_root).as_posix() if cfg.live_observer else None,
-            observability_db_path=cfg.sqlite_store.db_path.relative_to(cfg.repo_root).as_posix()
+            summary_path=summary_path,
+            live_log_path=self._display_path(cfg.live_observer.path, cfg.repo_root) if cfg.live_observer else None,
+            observability_db_path=self._display_path(cfg.sqlite_store.db_path, cfg.repo_root)
             if cfg.sqlite_store
             else "disabled",
         )
+
+    def _display_path(self, path: Path, repo_root: Path) -> str:
+        try:
+            return path.relative_to(repo_root).as_posix()
+        except ValueError:
+            return path.as_posix()
 
     def _write_summary(
         self,
@@ -91,7 +102,7 @@ class RunFinalizer:
             files_changed_count=state.max_changed_files_count,
             resolved=output.status == RunStatus.SUCCESS,
             live_log_path=paths.live_log_path,
-            summary_path=paths.summary_path.relative_to(cfg.repo_root).as_posix(),
+            summary_path=self._display_path(paths.summary_path, cfg.repo_root),
         )
 
     def _attach_observability_artifacts(

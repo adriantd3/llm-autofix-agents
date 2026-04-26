@@ -148,6 +148,60 @@ class LLMProviderTests(unittest.TestCase):
                 )
             )
 
+    @patch("llm_autofix_agents.llm.provider.asyncio.sleep", new_callable=AsyncMock)
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_retries_transient_provider_error_then_succeeds(
+        self,
+        runner_run: AsyncMock,
+        sleep_mock: AsyncMock,
+    ) -> None:
+        runner_run.side_effect = [
+            _TransientProviderError("internal error", status_code=500),
+            SimpleNamespace(
+                final_output={
+                    "status": "done",
+                    "reasoning_summary": "Fixed after transient failure",
+                    "confidence": 0.77,
+                    "changed_files": ["src/a.py"],
+                }
+            ),
+        ]
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(
+            provider.run_prompt(
+                instructions="repair",
+                user_input="failing test output",
+                max_turns=2,
+            )
+        )
+
+        self.assertEqual(result.status, "done")
+        self.assertEqual(runner_run.await_count, 2)
+        self.assertEqual(sleep_mock.await_count, 1)
+
+    @patch("llm_autofix_agents.llm.provider.asyncio.sleep", new_callable=AsyncMock)
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_does_not_retry_non_retryable_error(
+        self,
+        runner_run: AsyncMock,
+        sleep_mock: AsyncMock,
+    ) -> None:
+        runner_run.side_effect = RuntimeError("invalid tool call schema")
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        with self.assertRaisesRegex(RuntimeError, "provider call failed after 1 attempt"):
+            asyncio.run(
+                provider.run_prompt(
+                    instructions="repair",
+                    user_input="failing test output",
+                    max_turns=2,
+                )
+            )
+
+        self.assertEqual(runner_run.await_count, 1)
+        self.assertEqual(sleep_mock.await_count, 0)
+
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_accepts_execution_report_without_patch(self, runner_run: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
@@ -229,6 +283,12 @@ def _gemini_settings() -> LLMSettings:
         max_turns=3,
         tracing_disabled=True,
     )
+
+
+class _TransientProviderError(RuntimeError):
+    def __init__(self, message: str, *, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 if __name__ == "__main__":

@@ -107,8 +107,8 @@ Separar la observabilidad interactiva de la analitica, eliminar MongoDB del MVP 
 Validar baseline con un caso reproducible inicial y ampliar a 5 casos en fase posterior.
 
 ### Tasks
-- [ ] SH6-T00 Seleccionar 1 caso QuixBugs reproducible como gate MVP.
-- [ ] SH6-T01 Ejecutar 1 run controlado end-to-end sobre el caso MVP.
+- [x] SH6-T00 Seleccionar 1 caso QuixBugs reproducible como gate MVP.
+- [x] SH6-T01 Ejecutar 1 run controlado end-to-end sobre el caso MVP.
 - [ ] SH6-T02 Registrar resultado y, si falla, documentar causa raiz en lessons.
 - [ ] SH6-T03 Seleccionar 5 casos QuixBugs reproducibles para la fase de expansion.
 - [ ] SH6-T04 Ejecutar runs con configuracion controlada en 5 casos.

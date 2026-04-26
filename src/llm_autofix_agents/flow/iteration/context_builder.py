@@ -40,6 +40,8 @@ class IterationContextBuilder:
                 iteration=iteration,
                 max_iterations=cfg.max_iterations,
                 previous_message=state.final_message,
+                baseline_test_execution=cfg.baseline_test_execution,
+                test_command=run_input.test_command,
             ),
             max_turns=cfg.settings.max_turns,
         )

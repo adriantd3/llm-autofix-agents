@@ -14,7 +14,11 @@ services:
       RUN_AGENT_MODELS: '${RUN_AGENT_MODELS:-{"main":"llama3.1:8b"}}'
       RUN_BOOTSTRAP_PROMPT: "${RUN_BOOTSTRAP_PROMPT:-Fix failing tests with minimal changes.}"
       RUN_TEST_COMMAND: "${RUN_TEST_COMMAND:-uv run --with pytest pytest python_testcases/test_gcd.py}"
-      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://localhost:11500/v1}"
+      AUTOFIX_RESULTS_DIR: "${AUTOFIX_RESULTS_DIR:-/results}"
+      AUTOFIX_OBSERVABILITY_DB: "${AUTOFIX_OBSERVABILITY_DB:-/results/observability.db}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11500/v1}"
     volumes:
       - ./results:/results
       - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

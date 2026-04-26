@@ -1,4 +1,4 @@
-.PHONY: format test run compose-up compose-down compose-smoke
+.PHONY: format test run compose-up compose-down compose-smoke quixbugs-gcd-run
 
 COMPOSE_FILE ?= docker-compose.yml
 
@@ -18,4 +18,7 @@ compose-down:
 	docker compose -f $(COMPOSE_FILE) down
 
 compose-smoke:
-	docker compose -f $(COMPOSE_FILE) run --rm runner uv run autofix agent-smoke
+	timeout $${AUTOFIX_RUN_TIMEOUT_SECONDS:-180s} docker compose -f $(COMPOSE_FILE) exec -T runner sh -lc 'echo "[runner] entered container"; exec uv run autofix agent-smoke --debug'
+
+quixbugs-gcd-run:
+	timeout $${AUTOFIX_RUN_TIMEOUT_SECONDS:-180s} docker compose -f $(COMPOSE_FILE) exec -T runner sh -lc 'echo "[runner] entered container"; exec uv run autofix agent-smoke --debug --interactive'

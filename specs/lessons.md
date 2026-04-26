@@ -105,3 +105,11 @@
 - Por que estuvo mal: añade superficie de despliegue, mas puntos de fallo y ruido conceptual en una fase donde la prioridad es ejecutar y validar cambios locales.
 - Alternativa recomendada: exponer un toolkit APR local con perfiles claros y dejar MCP fuera del MVP.
 - Regla preventiva para futuras specs: si una capability ya existe en el SDK de tools o puede implementarse localmente, preferirla antes que introducir un servidor adicional.
+
+## 2026-04-26 (errores transitorios del proveedor)
+- Contexto: ejecuciones QuixBugs intermitentemente abortadas por 500 del backend del modelo durante el parsing de tool calls.
+- Anti-patron detectado: tratar un fallo transitorio del provider como error terminal del run.
+- Que no hay que hacer: convertir un 500 puntual o un timeout de red en `infra_failure` definitivo sin reintento.
+- Por que estuvo mal: los runs se cortan aunque el backend se recupere en el siguiente intento, degradando la tasa de exito sin aportar señal util.
+- Alternativa recomendada: retry exponencial con backoff y clasificacion explicita de errores transitorios antes de propagar fallo terminal.
+- Regla preventiva para futuras specs: si el fallo es del proveedor y es razonablemente recuperable, preferir retry acotado antes que abortar el run.

@@ -51,6 +51,11 @@
 - Validacion del refactor ejecutada: smoke de imports del flujo en verde y nueva suite unitaria focalizada (`tests/test_flow_refactor.py`) con 3 tests en verde.
 - Ajuste incremental aplicado: renombre de `model_failure` a `exception_failure`, `IterationDecision` a `IterationOutcomeHandler`, evolucion de `WorkspaceChangeSet` hacia `tracked_changed_files` y `all_changed_files`, politica explicita de untracked como `allowed_and_captured`, y encapsulado de errores git/snapshot en `WorkspaceError` en la capa workspace.
 - Refactor de deuda tecnica aplicado sobre `feat/001/base-logging-refactor`: baseline instructions externalizadas en `agents/instructions.py`, flujo de observabilidad migrado a API semantica `RunTelemetry` (sin construccion de DTOs en `flow`) y toolkit APR dividido en modulos (`context/serialization/paths/text/fs/edit/command/test/git/patch/profiles`) manteniendo API publica `APRToolContext` + `build_apr_tools`.
+- SH6 avance aplicado: prueba real minima end-to-end documentada para QuixBugs `gcd` (sin batch), con defaults de persistencia en `/results` para Compose, bloque dedicado en `.env.example`, target Makefile `quixbugs-gcd-run` con timeout y checklist de artefactos/resultados para analisis posterior.
+- SH6 ajuste aplicado: input de iteracion para mono-agente ahora prioriza contexto failure-driven (intro fija + salida de test baseline fallido + comando de test) en la primera iteracion, dejando el prompt de entorno como fallback solo si no hay baseline fallido.
+- Hardening LLM aplicado: el provider ahora reintenta errores transitorios del backend (5xx/timeouts/conexion) con backoff configurables para evitar que fallos puntuales del modelo terminen el run como `infra_failure`.
+- Validacion del hardening ejecutada con `unittest` sobre `tests/test_llm_provider.py`, `tests/test_iteration_input.py` y `tests/test_flow_refactor.py` en verde.
+- Validacion real QuixBugs `gcd` completada con exito en Docker Compose: run `run-20260426T084255Z-2eaa022d73` finalizado en `success`, 1 iteracion, 1 archivo modificado y test final en verde.
 
 ## En curso
 - Spec activa: specs/001-mono-agente-entorno/spec.md

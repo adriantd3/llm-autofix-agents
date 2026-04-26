@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
@@ -53,9 +54,28 @@ class AgentExecutionRunner:
         )
 
 
+_PERSISTENT_LOOP = asyncio.new_event_loop()
+
+
+def _close_persistent_loop() -> None:
+    if _PERSISTENT_LOOP.is_closed():
+        return
+    pending = [task for task in asyncio.all_tasks(_PERSISTENT_LOOP) if not task.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        _PERSISTENT_LOOP.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    _PERSISTENT_LOOP.run_until_complete(_PERSISTENT_LOOP.shutdown_asyncgens())
+    _PERSISTENT_LOOP.run_until_complete(_PERSISTENT_LOOP.shutdown_default_executor())
+    _PERSISTENT_LOOP.close()
+
+
+atexit.register(_close_persistent_loop)
+
+
 def _run_sync(awaitable: Coroutine[object, object, AgentFixIterationRecord]) -> AgentFixIterationRecord:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(awaitable)
+        return _PERSISTENT_LOOP.run_until_complete(awaitable)
     raise RuntimeError("Cannot be called from an active event loop")

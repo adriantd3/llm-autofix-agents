@@ -27,7 +27,10 @@ class LLMSettings(BaseModel):
     model: str = Field(min_length=1)
     api_key: SecretStr | None = None
     base_url: str | None = None
-    max_turns: int = Field(default=3, ge=1, le=10)
+    max_turns: int = Field(default=3, ge=1, le=20)
+    api_max_retries: int = Field(default=2, ge=0, le=10)
+    api_retry_base_seconds: float = Field(default=1.0, ge=0.1, le=30.0)
+    api_retry_max_seconds: float = Field(default=8.0, ge=0.1, le=120.0)
     tracing_disabled: bool = True
 
     @field_validator("model")
@@ -45,6 +48,14 @@ class LLMSettings(BaseModel):
             return None
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("api_retry_max_seconds")
+    @classmethod
+    def _validate_retry_window(cls, value: float, info) -> float:
+        base_seconds = info.data.get("api_retry_base_seconds")
+        if isinstance(base_seconds, (int, float)) and value < float(base_seconds):
+            raise ValueError("api_retry_max_seconds must be >= api_retry_base_seconds")
+        return value
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> LLMSettings:
@@ -66,6 +77,9 @@ class LLMSettings(BaseModel):
                 model = DEFAULT_OPENAI_MODEL
 
         max_turns = _parse_int(values.get("LLM_MAX_TURNS"), default=3)
+        api_max_retries = _parse_int(values.get("LLM_API_MAX_RETRIES"), default=2)
+        api_retry_base_seconds = _parse_float(values.get("LLM_API_RETRY_BASE_SECONDS"), default=1.0)
+        api_retry_max_seconds = _parse_float(values.get("LLM_API_RETRY_MAX_SECONDS"), default=8.0)
         tracing_disabled = _parse_bool(values.get("LLM_TRACING_DISABLED"), default=True)
 
         api_key: str | None
@@ -91,6 +105,9 @@ class LLMSettings(BaseModel):
                 api_key=SecretStr(api_key) if api_key is not None else None,
                 base_url=base_url,
                 max_turns=max_turns,
+                api_max_retries=api_max_retries,
+                api_retry_base_seconds=api_retry_base_seconds,
+                api_retry_max_seconds=api_retry_max_seconds,
                 tracing_disabled=tracing_disabled,
             )
         except ValidationError as exc:
@@ -102,6 +119,9 @@ class LLMSettings(BaseModel):
             "model": self.model,
             "base_url": self.base_url,
             "max_turns": self.max_turns,
+            "api_max_retries": self.api_max_retries,
+            "api_retry_base_seconds": self.api_retry_base_seconds,
+            "api_retry_max_seconds": self.api_retry_max_seconds,
             "tracing_disabled": self.tracing_disabled,
         }
 
@@ -121,6 +141,15 @@ def _parse_int(value: str | None, *, default: int) -> int:
     if not normalized:
         return default
     return int(normalized)
+
+
+def _parse_float(value: str | None, *, default: float) -> float:
+    if value is None:
+        return default
+    normalized = value.strip()
+    if not normalized:
+        return default
+    return float(normalized)
 
 
 def _parse_bool(value: str | None, *, default: bool) -> bool:

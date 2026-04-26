@@ -7,8 +7,8 @@ def resolve_max_iterations(metadata: dict[str, Any]) -> int:
     value = metadata.get("max_iterations")
     if value is None:
         return 3
-    if not isinstance(value, int) or value < 1 or value > 3:
-        raise ValueError("metadata.max_iterations must be 1-3")
+    if not isinstance(value, int) or value < 1 or value > 6:
+        raise ValueError("metadata.max_iterations must be 1-6")
     return value
 
 

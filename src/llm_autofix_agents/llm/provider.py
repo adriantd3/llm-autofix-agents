@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, cast
@@ -68,17 +70,36 @@ class OpenAIAgentsSDKProvider:
         set_tracing_disabled(self.settings.tracing_disabled)
 
         resolved_tools = cast(list[Tool], list(tools) if tools is not None else [])
-        result = await Runner.run(
-            self._build_agent(
-                instructions=instructions,
-                tools=resolved_tools,
-            ),
-            user_input,
-            context=context,
-            max_turns=max_turns,
-            hooks=hooks,
-            run_config=RunConfig(tracing_disabled=self.settings.tracing_disabled),
-        )
+        result: RunResult | None = None
+        total_attempts = self.settings.api_max_retries + 1
+
+        for attempt in range(1, total_attempts + 1):
+            try:
+                result = await Runner.run(
+                    self._build_agent(
+                        instructions=instructions,
+                        tools=resolved_tools,
+                    ),
+                    user_input,
+                    context=context,
+                    max_turns=max_turns,
+                    hooks=hooks,
+                    run_config=RunConfig(tracing_disabled=self.settings.tracing_disabled),
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                if not _is_retryable_provider_error(exc) or attempt >= total_attempts:
+                    raise RuntimeError(f"provider call failed after {attempt} attempt(s): {exc}") from exc
+                await asyncio.sleep(
+                    _compute_retry_delay_seconds(
+                        attempt=attempt,
+                        base_seconds=self.settings.api_retry_base_seconds,
+                        max_seconds=self.settings.api_retry_max_seconds,
+                    )
+                )
+
+        if result is None:
+            raise RuntimeError("provider call failed without a result")
 
         output = result.final_output
 
@@ -143,9 +164,9 @@ def _extract_token_usage(result: RunResult) -> dict[str, int]:
     if not usage:
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    input_tokens = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-    total_tokens = usage.get("total_tokens", 0)
+    input_tokens = _usage_field(usage, "input_tokens")
+    output_tokens = _usage_field(usage, "output_tokens")
+    total_tokens = _usage_field(usage, "total_tokens")
 
     if total_tokens == 0:
         total_tokens = input_tokens + output_tokens
@@ -155,6 +176,18 @@ def _extract_token_usage(result: RunResult) -> dict[str, int]:
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
     }
+
+
+def _usage_field(usage: Any, field_name: str) -> int:
+    if isinstance(usage, dict):
+        raw_value = usage.get(field_name, 0)
+    else:
+        raw_value = getattr(usage, field_name, 0)
+
+    try:
+        return int(raw_value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _extract_tool_calls(result: RunResult) -> list[dict[str, str | None]]:
@@ -242,3 +275,50 @@ def _to_plain_dict(value: Any) -> dict[str, Any] | None:
     if isinstance(vars_payload, dict):
         return vars_payload
     return None
+
+
+def _is_retryable_provider_error(exc: Exception) -> bool:
+    status_code = _extract_http_status_code(exc)
+    if status_code in {408, 409, 425, 429, 500, 502, 503, 504}:
+        return True
+
+    class_name = exc.__class__.__name__
+    if class_name in {
+        "APIConnectionError",
+        "APITimeoutError",
+        "RateLimitError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+    }:
+        return True
+
+    message = str(exc).lower()
+    transient_markers = (
+        "timeout",
+        "timed out",
+        "connection reset",
+        "connection aborted",
+        "temporarily unavailable",
+        "try again",
+    )
+    return any(marker in message for marker in transient_markers)
+
+
+def _extract_http_status_code(exc: Exception) -> int | None:
+    raw_status = getattr(exc, "status_code", None)
+    if isinstance(raw_status, int):
+        return raw_status
+
+    response = getattr(exc, "response", None)
+    response_status = getattr(response, "status_code", None)
+    if isinstance(response_status, int):
+        return response_status
+
+    return None
+
+
+def _compute_retry_delay_seconds(*, attempt: int, base_seconds: float, max_seconds: float) -> float:
+    exponential_delay = base_seconds * (2 ** (attempt - 1))
+    bounded_delay = min(max_seconds, exponential_delay)
+    jitter = random.uniform(0.0, base_seconds)
+    return min(max_seconds, bounded_delay + jitter)

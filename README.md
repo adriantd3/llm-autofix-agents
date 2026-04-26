@@ -10,9 +10,9 @@ Comandos imprescindibles para esta fase:
 
 - `make format`
 - `make test`
-- `make run`
 - `make compose-up`
 - `make compose-smoke`
+- `make quixbugs-gcd-run`
 - `make compose-down`
 
 ## Bootstrap rapido
@@ -25,22 +25,18 @@ Regla de gestion de dependencias del proyecto:
 
 	uv sync
 
-2. Run baseline in local host mode:
-
-	make run
-
-3. Run baseline in Compose runtime mode:
+2. Run baseline in Compose runtime mode:
 
 	make compose-up
 	make compose-smoke
 	make compose-down
 
-Baseline recomendado para MVP (gratis/local):
+Baseline recomendado para MVP en Docker Compose:
 
 Configura estas variables en un archivo `.env` (puedes partir de `.env.example`):
 
 - `LLM_PROVIDER=ollama`
-- `OLLAMA_BASE_URL=http://localhost:11500/v1`
+- `OLLAMA_BASE_URL=http://host.docker.internal:11500/v1`
 - `LLM_MODEL=llama3.1:8b`
 
 Compatibilidad opcional:
@@ -48,9 +44,9 @@ Compatibilidad opcional:
 - OpenAI: `LLM_PROVIDER=openai` + `OPENAI_API_KEY`
 - Gemini: `LLM_PROVIDER=gemini` + `GEMINI_API_KEY`
 
-## Runtime Completo Contenedizado (Compose Local)
+## Runtime Completo Contenedizado (Docker Compose)
 
-Para ejecutar el runtime completo dentro de un contenedor local:
+Para ejecutar el runtime completo con Docker Compose:
 
 1. Levantar el runner:
 
@@ -104,33 +100,45 @@ The active profile is resolved by the runtime and can be overridden through run 
 	make format
 	make test
 
-## QuixBugs: run MVP listo
+## QuixBugs: prueba real minima gcd
 
-Configuracion recomendada para un primer gate reproducible (caso unico):
+Esta seccion describe una ejecucion real minima end-to-end sobre QuixBugs `gcd`.
+No es un benchmark runner completo ni una ejecucion batch multi-caso.
+
+Configuracion recomendada para esta prueba real minima en Docker Compose:
 
 - `RUN_REPOSITORY=https://github.com/jkoppel/QuixBugs.git`
 - `RUN_BRANCH=master`
 - `RUN_TEST_COMMAND=uv run --with pytest pytest python_testcases/test_gcd.py`
 
-Comando con Compose:
+Ejecucion real con Compose:
 
 ```bash
 make compose-up
-make compose-smoke
+make quixbugs-gcd-run
 make compose-down
 ```
 
-Comando local equivalente (sin Compose):
+Secuencia alternativa equivalente:
 
 ```bash
-RUN_REPOSITORY=https://github.com/jkoppel/QuixBugs.git \
-RUN_BRANCH=master \
-RUN_ARCHITECTURE=mono-agent \
-RUN_AGENT_MODELS='{"main":"llama3.1:8b"}' \
-RUN_BOOTSTRAP_PROMPT='Fix failing tests with minimal changes.' \
-RUN_TEST_COMMAND='uv run --with pytest pytest python_testcases/test_gcd.py' \
-uv run autofix agent-smoke
+make compose-up
+timeout 180s make compose-smoke
+make compose-down
 ```
+
+Se usa `timeout 180s` al inicio para detectar bloqueos tempranos.
+Si el flujo arranca bien pero el LLM necesita mas tiempo, subir a `timeout 600s` o mas.
+
+Al terminar, revisar:
+
+- `results/<run_id>/summary.json`
+- `results/<run_id>/live.md`
+- `results/observability.db`
+- status final del run
+- diff aplicado
+- test final
+- errores/tool calls si falla
 
 ## Observabilidad local
 
