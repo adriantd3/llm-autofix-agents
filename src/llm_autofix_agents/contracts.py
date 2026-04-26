@@ -123,6 +123,9 @@ class RunMetrics(BaseModel):
 
 
 class RunObservabilityRecord(BaseModel):
+    """Structured record for observability and tracking of a run iteration,
+    including identifiers, status, metrics, and artifacts."""
+
     model_config = ConfigDict(extra="forbid")
 
     run_id: str = Field(min_length=1)
@@ -145,6 +148,8 @@ class RunObservabilityRecord(BaseModel):
 
 
 class RunIdentity(BaseModel):
+    """Unique identifiers for a particular run and iteration, used for tracking and correlation across systems."""
+
     model_config = ConfigDict(extra="forbid")
 
     run_id: str = Field(min_length=1)
@@ -154,6 +159,8 @@ class RunIdentity(BaseModel):
 
 
 class ContainerInstantiation(BaseModel):
+    """Details about the container instantiation, derived from environment variables."""
+
     model_config = ConfigDict(extra="forbid")
 
     repository: str = Field(min_length=1)
@@ -184,6 +191,33 @@ class ContainerInstantiation(BaseModel):
             raise ValueError("agent_models cannot be empty")
         return normalized
 
+    @classmethod
+    def from_env(cls, env: Mapping[str, str] | None = None) -> ContainerInstantiation:
+        """Load container instantiation details from environment variables."""
+
+        source_env = os_environ if env is None else env
+        raw_agent_models = source_env.get("RUN_AGENT_MODELS", "")
+        try:
+            parsed_agent_models = json.loads(raw_agent_models)
+        except json.JSONDecodeError as exc:
+            raise ValueError("RUN_AGENT_MODELS must be valid JSON") from exc
+        if not isinstance(parsed_agent_models, dict):
+            raise ValueError("RUN_AGENT_MODELS must be a JSON object")
+
+        normalized_agent_models: dict[str, str] = {}
+        for role, model in parsed_agent_models.items():
+            if not isinstance(role, str) or not isinstance(model, str):
+                raise ValueError("RUN_AGENT_MODELS values must map string roles to string model names")
+            normalized_agent_models[role] = model
+
+        return cls(
+            repository=source_env.get("RUN_REPOSITORY", ""),
+            branch=source_env.get("RUN_BRANCH", ""),
+            architecture=source_env.get("RUN_ARCHITECTURE", ""),
+            agent_models=normalized_agent_models,
+            bootstrap_prompt=source_env.get("RUN_BOOTSTRAP_PROMPT", ""),
+        )
+
 
 class RunOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -197,33 +231,6 @@ class RunOutput(BaseModel):
     errors: list[RunError] = Field(default_factory=list)
     artifacts: dict[str, Any] = Field(default_factory=dict)
     final_message: str | None = None
-
-
-def load_container_instantiation_from_env(
-    env: Mapping[str, str] | None = None,
-) -> ContainerInstantiation:
-    source_env = os_environ if env is None else env
-    raw_agent_models = source_env.get("RUN_AGENT_MODELS", "")
-    try:
-        parsed_agent_models = json.loads(raw_agent_models)
-    except json.JSONDecodeError as exc:
-        raise ValueError("RUN_AGENT_MODELS must be valid JSON") from exc
-    if not isinstance(parsed_agent_models, dict):
-        raise ValueError("RUN_AGENT_MODELS must be a JSON object")
-
-    normalized_agent_models: dict[str, str] = {}
-    for role, model in parsed_agent_models.items():
-        if not isinstance(role, str) or not isinstance(model, str):
-            raise ValueError("RUN_AGENT_MODELS values must map string roles to string model names")
-        normalized_agent_models[role] = model
-
-    return ContainerInstantiation(
-        repository=source_env.get("RUN_REPOSITORY", ""),
-        branch=source_env.get("RUN_BRANCH", ""),
-        architecture=source_env.get("RUN_ARCHITECTURE", ""),
-        agent_models=normalized_agent_models,
-        bootstrap_prompt=source_env.get("RUN_BOOTSTRAP_PROMPT", ""),
-    )
 
 
 def new_run_id(now: datetime | None = None) -> str:

@@ -5,6 +5,7 @@ import unittest
 from pydantic import ValidationError
 
 from llm_autofix_agents.contracts import (
+    ContainerInstantiation,
     RunInput,
     RunMetrics,
     RunObservabilityRecord,
@@ -14,7 +15,6 @@ from llm_autofix_agents.contracts import (
     ToolCallTrace,
     build_run_identity,
     compute_run_fingerprint,
-    load_container_instantiation_from_env,
 )
 
 
@@ -46,7 +46,7 @@ class ContractsTests(unittest.TestCase):
         self.assertEqual(identity.iteration_id, "run-fixed-id-it02")
 
     def test_container_instantiation_from_env_is_loaded(self) -> None:
-        instantiation = load_container_instantiation_from_env(
+        instantiation = ContainerInstantiation.from_env(
             {
                 "RUN_REPOSITORY": "quixbugs",
                 "RUN_BRANCH": "main",
@@ -62,7 +62,7 @@ class ContractsTests(unittest.TestCase):
 
     def test_container_instantiation_rejects_invalid_models_json(self) -> None:
         with self.assertRaisesRegex(ValueError, "RUN_AGENT_MODELS must be valid JSON"):
-            load_container_instantiation_from_env(
+            ContainerInstantiation.from_env(
                 {
                     "RUN_REPOSITORY": "quixbugs",
                     "RUN_BRANCH": "main",

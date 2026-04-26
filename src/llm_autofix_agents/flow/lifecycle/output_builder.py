@@ -86,8 +86,16 @@ class RunOutputBuilder:
         return self.build(
             identity=identity,
             status=RunStatus.FAILED,
-            stop_reason=StopReason.INFRA_FAILURE,
+            stop_reason=_stop_reason_for_category(category),
             state=state,
             cfg=cfg,
             errors=[RunError(category=category, message=message, retryable=False)],
         )
+
+
+def _stop_reason_for_category(category: ErrorCategory) -> StopReason:
+    if category == ErrorCategory.VALIDATION:
+        return StopReason.VALIDATION_FAILURE
+    if category in {ErrorCategory.MODEL, ErrorCategory.TOOL}:
+        return StopReason.TOOL_FAILURE
+    return StopReason.INFRA_FAILURE

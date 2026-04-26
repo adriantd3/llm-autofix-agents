@@ -62,7 +62,8 @@
 - Tasks activas: specs/001-mono-agente-entorno/tasks.md
 - Subhito activo: SH6 - Benchmark QuixBugs inicial
 - Task activa: validar baseline mono-agente tool-driven con caso QuixBugs MVP.
+- Refactor CLI Docker-only iniciado: `autofix run`, carga de `RUN_*` en `ContainerInstantiation`, logs de consola por `logging` y runner async simplificado.
 
 ## Siguiente
 - Validar observability.db con una ejecucion QuixBugs MVP y preparar queries basicas para analisis experimental.
-- Ejecutar run baseline mono-agente end-to-end sobre caso gcd QuixBugs.
+- Ejecutar run baseline mono-agente end-to-end sobre caso gcd QuixBugs con `autofix run`.

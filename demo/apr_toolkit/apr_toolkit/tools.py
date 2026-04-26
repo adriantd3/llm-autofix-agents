@@ -6,9 +6,10 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from agents import RunContextWrapper, function_tool
 

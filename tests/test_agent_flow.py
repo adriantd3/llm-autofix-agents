@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 import unittest
 from collections.abc import Sequence
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -215,7 +213,7 @@ class AgentFlowTests(unittest.TestCase):
         )
 
         self.assertEqual(output.status, RunStatus.FAILED)
-        self.assertEqual(output.stop_reason, StopReason.INFRA_FAILURE)
+        self.assertEqual(output.stop_reason, StopReason.TOOL_FAILURE)
         self.assertEqual(len(output.errors), 1)
         self.assertEqual(output.errors[0].category, ErrorCategory.MODEL)
 

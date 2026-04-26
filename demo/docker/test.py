@@ -1,7 +1,8 @@
 import os
-from openai import AsyncOpenAI
+
 from agents import Agent, Runner, set_tracing_disabled
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
+from openai import AsyncOpenAI
 
 set_tracing_disabled(True)
 

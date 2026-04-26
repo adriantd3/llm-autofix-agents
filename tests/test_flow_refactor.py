@@ -67,6 +67,27 @@ class FlowRefactorTests(unittest.TestCase):
         self.assertEqual(error_category_from_exception(WorkspaceError("x")), ErrorCategory.INFRA)
         self.assertEqual(error_category_from_exception(RuntimeError("x")), ErrorCategory.UNKNOWN)
 
+    def test_exception_failure_maps_model_to_tool_failure(self) -> None:
+        builder = RunOutputBuilder()
+        state = RunState()
+        identity = build_run_identity(
+            run_input=RunInput(prompt="Fix it"),
+            agent_config={"arch": "mono"},
+            iteration=1,
+            run_id="run-123",
+        )
+
+        output = builder.exception_failure(
+            identity=identity,
+            state=state,
+            cfg=object(),
+            message="provider execution failed",
+            category=ErrorCategory.MODEL,
+        )
+
+        self.assertEqual(output.stop_reason, StopReason.TOOL_FAILURE)
+        self.assertEqual(output.errors[0].category, ErrorCategory.MODEL)
+
 
 if __name__ == "__main__":
     unittest.main()

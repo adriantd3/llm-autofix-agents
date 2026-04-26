@@ -46,8 +46,6 @@ def test_file_change_telemetry_set_registers_correct_types() -> None:
 
 
 def test_iteration_telemetry_records_file_changes_with_correct_types() -> None:
-    from llm_autofix_agents.observability.telemetry_models import FileChangeTelemetrySet
-
     observer = FakeObserver()
     run_telemetry = RunTelemetry(observer=observer, run_id="run-1")
     iteration_telemetry = run_telemetry.start_iteration(iteration_id="it-1", iteration_index=1)
@@ -84,6 +82,27 @@ def test_agent_execution_telemetry_create_hooks() -> None:
     assert hooks._run_id == "run-1"
     assert hooks._iteration_id == "it-1"
     assert hooks._agent_execution_id == agent_telemetry.agent_execution_id
+
+
+def test_agent_execution_telemetry_finish_failed_records_error_details() -> None:
+    observer = FakeObserver()
+    run_telemetry = RunTelemetry(observer=observer, run_id="run-1")
+    iteration_telemetry = run_telemetry.start_iteration(iteration_id="it-1", iteration_index=1)
+    agent_telemetry = iteration_telemetry.start_agent_execution(
+        run_agent_id="ra-1",
+        execution_index=1,
+    )
+
+    agent_telemetry.finish_failed(
+        error=RuntimeError("Connection error."),
+        tool_calls_count=0,
+    )
+
+    assert len(observer.agent_execution_finished) == 1
+    finished = observer.agent_execution_finished[0]
+    assert finished.status == "failed"
+    assert finished.error_type == "RuntimeError"
+    assert finished.error_message_short == "Connection error."
 
 
 def test_run_telemetry_no_run_id_parameter() -> None:

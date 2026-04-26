@@ -320,3 +320,31 @@ class AgentExecutionTelemetry:
                 tool_calls_count=tool_calls_count,
             )
         )
+
+    def finish_failed(
+        self,
+        *,
+        error: Exception,
+        tool_calls_count: int,
+    ) -> None:
+        message = str(error).strip() or error.__class__.__name__
+        self.observer.on_agent_execution_finished(
+            record=AgentExecutionRecord.finished(
+                agent_execution_id=self.agent_execution_id,
+                run_id=self.run_id,
+                iteration_id=self.iteration_id,
+                run_agent_id=self.run_agent_id,
+                execution_index=self.execution_index,
+                started_at=self.started_at,
+                status="failed",
+                reasoning_summary="",
+                confidence=0.0,
+                notes=None,
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                tool_calls_count=tool_calls_count,
+                error_type=error.__class__.__name__,
+                error_message_short=message[:500],
+            )
+        )

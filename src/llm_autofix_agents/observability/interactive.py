@@ -130,33 +130,33 @@ class MarkdownLiveObserver:
 
 class ConsoleObserver:
     def on_run_started(self, *, run: RunDescriptor, started_at: str) -> None:
-        print(f"[run] started {run.run_id} at {started_at}")
+        logger.info("[run] started %s at %s", run.run_id, started_at)
 
     def on_run_finished(self, *, run_finished: RunFinishedRecord) -> None:
-        print(f"[run] finished status={run_finished.final_status} stop_reason={run_finished.stop_reason}")
+        logger.info("[run] finished status=%s stop_reason=%s", run_finished.final_status, run_finished.stop_reason)
 
     def on_run_agent_registered(self, *, run_id: str, agent: AgentDescriptor, instructions_hash: str | None) -> str:
         del run_id, instructions_hash
-        print(f"[agent] registered {agent.agent_name}/{agent.agent_role}")
+        logger.info("[agent] registered %s/%s", agent.agent_name, agent.agent_role)
         return ""
 
     def on_iteration_started(self, *, record: IterationRecord) -> None:
-        print(f"[it {record.iteration_index}] started")
+        logger.info("[it %s] started", record.iteration_index)
 
     def on_iteration_finished(self, *, record: IterationRecord) -> None:
-        print(f"[it {record.iteration_index}] finished status={record.status} tokens={record.total_tokens}")
+        logger.info("[it %s] finished status=%s tokens=%s", record.iteration_index, record.status, record.total_tokens)
 
     def on_agent_execution_started(self, *, record: AgentExecutionRecord) -> None:
-        print(f"[agent_exec] {record.agent_execution_id} started")
+        logger.info("[agent_exec] %s started", record.agent_execution_id)
 
     def on_agent_execution_finished(self, *, record: AgentExecutionRecord) -> None:
-        print(f"[agent_exec] {record.agent_execution_id} finished status={record.status}")
+        logger.info("[agent_exec] %s finished status=%s", record.agent_execution_id, record.status)
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None:
-        print(f"[tool] {record.tool_name} -> {record.status or 'unknown'}")
+        logger.info("[tool] %s -> %s", record.tool_name, record.status or "unknown")
 
     def on_test_execution(self, *, record: TestExecutionRecord) -> None:
-        print(f"[test:{record.phase}] exit_code={record.exit_code} timed_out={record.timed_out}")
+        logger.info("[test:%s] exit_code=%s timed_out=%s", record.phase, record.exit_code, record.timed_out)
 
     def on_file_change(self, *, record: FileChangeRecord) -> None:
-        print(f"[file] {record.path} {record.change_type or 'modified'}")
+        logger.info("[file] %s %s", record.path, record.change_type or "modified")
