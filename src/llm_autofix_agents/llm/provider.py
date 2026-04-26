@@ -88,6 +88,7 @@ class OpenAIAgentsSDKProvider:
                 )
                 break
             except Exception as exc:  # noqa: BLE001
+                # TODO: Add observability for such cases
                 if not _is_retryable_provider_error(exc) or attempt >= total_attempts:
                     raise RuntimeError(f"provider call failed after {attempt} attempt(s): {exc}") from exc
                 await asyncio.sleep(

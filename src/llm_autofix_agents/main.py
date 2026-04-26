@@ -14,13 +14,22 @@ _DEFAULT_AGENT_PROMPT = "Analyze a failing test and suggest a minimal fix strate
 
 logger = logging.getLogger(__name__)
 
+_RUNTIME_CONTRACT_KEYS = (
+    "RUN_REPOSITORY",
+    "RUN_BRANCH",
+    "RUN_ARCHITECTURE",
+    "RUN_AGENT_MODELS",
+    "RUN_BOOTSTRAP_PROMPT",
+)
+
 
 def app() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
     if args.command_name == "run":
-        raise SystemExit(_run_run(args))
+        exit_code = _run_run(args)
+        _hard_exit(exit_code)
 
     parser.print_help()
 
@@ -41,10 +50,13 @@ def _run_run(args: argparse.Namespace) -> int:
     prompt = os.environ.get("RUN_BOOTSTRAP_PROMPT", _DEFAULT_AGENT_PROMPT).strip() or _DEFAULT_AGENT_PROMPT
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
 
-    try:
-        instantiation = ContainerInstantiation.from_env()
-    except ValueError:
-        instantiation = None
+    instantiation: ContainerInstantiation | None = None
+    if _has_runtime_contract_env():
+        try:
+            instantiation = ContainerInstantiation.from_env()
+        except ValueError as exc:
+            logger.error("Invalid RUN_* runtime configuration: %s", exc)
+            return 2
 
     if instantiation is not None:
         prompt = instantiation.bootstrap_prompt or prompt
@@ -73,6 +85,12 @@ def _run_run(args: argparse.Namespace) -> int:
     )
     try:
         run_output = run_agent_baseline(run_input)
+    except ValueError as exc:
+        logger.error("Invalid runtime configuration: %s", exc)
+        return 2
+    except Exception as exc:
+        logger.exception("Run execution failed: %s", exc)
+        return 1
     finally:
         if prepared_repo is not None:
             prepared_repo.cleanup()
@@ -96,6 +114,16 @@ def _resolve_optional_text(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _has_runtime_contract_env() -> bool:
+    return any(_resolve_optional_text(os.environ.get(key)) is not None for key in _RUNTIME_CONTRACT_KEYS)
+
+
+def _hard_exit(exit_code: int) -> None:
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(exit_code)
 
 
 if __name__ == "__main__":

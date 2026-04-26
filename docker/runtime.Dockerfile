@@ -21,4 +21,4 @@ COPY docker /workspace/docker
 
 RUN uv sync
 
-CMD ["sh", "-lc", "sleep infinity"]
+CMD ["uv", "run", "autofix", "run"]

@@ -1,6 +1,28 @@
-.PHONY: format test run compose-up compose-down compose-smoke quixbugs-gcd-run
+.PHONY: format test run docker-run docker-debug-shell quixbugs-gcd-run
 
 COMPOSE_FILE ?= docker-compose.yml
+AUTOFIX_RUN_TIMEOUT_SECONDS ?= 120s
+
+RUN_REPOSITORY ?=
+RUN_BRANCH ?=
+RUN_ARCHITECTURE ?=
+RUN_AGENT_MODELS ?=
+RUN_BOOTSTRAP_PROMPT ?=
+RUN_TEST_COMMAND ?=
+
+LLM_PROVIDER ?=
+LLM_MODEL ?=
+OLLAMA_BASE_URL ?=
+OLLAMA_API_KEY ?=
+OPENAI_API_KEY ?=
+OPENAI_BASE_URL ?=
+GEMINI_API_KEY ?=
+GEMINI_BASE_URL ?=
+
+AUTOFIX_LOG_LEVEL ?=
+AUTOFIX_RESULTS_DIR ?=
+AUTOFIX_OBSERVABILITY_DB ?=
+AUTOFIX_INTERACTIVE ?=
 
 format:
 	uv run ruff format .
@@ -11,14 +33,11 @@ test:
 run:
 	uv run autofix run
 
-compose-up:
-	docker compose -f $(COMPOSE_FILE) up -d --build runner
+docker-run:
+	RUN_REPOSITORY="$(RUN_REPOSITORY)" RUN_BRANCH="$(RUN_BRANCH)" RUN_ARCHITECTURE="$(RUN_ARCHITECTURE)" RUN_AGENT_MODELS='$(RUN_AGENT_MODELS)' RUN_BOOTSTRAP_PROMPT="$(RUN_BOOTSTRAP_PROMPT)" RUN_TEST_COMMAND="$(RUN_TEST_COMMAND)" LLM_PROVIDER="$(LLM_PROVIDER)" LLM_MODEL="$(LLM_MODEL)" OLLAMA_BASE_URL="$(OLLAMA_BASE_URL)" OLLAMA_API_KEY="$(OLLAMA_API_KEY)" OPENAI_API_KEY="$(OPENAI_API_KEY)" OPENAI_BASE_URL="$(OPENAI_BASE_URL)" GEMINI_API_KEY="$(GEMINI_API_KEY)" GEMINI_BASE_URL="$(GEMINI_BASE_URL)" AUTOFIX_LOG_LEVEL="$(AUTOFIX_LOG_LEVEL)" AUTOFIX_RESULTS_DIR="$(AUTOFIX_RESULTS_DIR)" AUTOFIX_OBSERVABILITY_DB="$(AUTOFIX_OBSERVABILITY_DB)" AUTOFIX_INTERACTIVE="$(AUTOFIX_INTERACTIVE)" timeout --foreground $${AUTOFIX_RUN_TIMEOUT_SECONDS:-$(AUTOFIX_RUN_TIMEOUT_SECONDS)} docker compose -f $(COMPOSE_FILE) run --rm -T --build runner
 
-compose-down:
-	docker compose -f $(COMPOSE_FILE) down
-
-compose-smoke:
-	timeout $${AUTOFIX_RUN_TIMEOUT_SECONDS:-180s} docker compose -f $(COMPOSE_FILE) exec -T runner sh -lc 'echo "[runner] entered container"; exec uv run autofix run'
+docker-debug-shell:
+	docker compose -f $(COMPOSE_FILE) run --rm --build --entrypoint /bin/sh runner
 
 quixbugs-gcd-run:
-	timeout $${AUTOFIX_RUN_TIMEOUT_SECONDS:-180s} docker compose -f $(COMPOSE_FILE) exec -T runner sh -lc 'echo "[runner] entered container"; exec uv run autofix run'
+	$(MAKE) docker-run RUN_REPOSITORY="https://github.com/jkoppel/QuixBugs.git" RUN_BRANCH="master" RUN_TEST_COMMAND="uv run --with pytest pytest python_testcases/test_gcd.py"

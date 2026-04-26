@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -24,6 +25,17 @@ class MainCliTests(unittest.TestCase):
                 stop_reason=StopReason.COMPLETED,
             )
             with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "RUN_REPOSITORY": tmp_dir,
+                        "RUN_BRANCH": "master",
+                        "RUN_ARCHITECTURE": "mono-agent",
+                        "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
+                        "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+                    },
+                    clear=False,
+                ),
                 patch(
                     "llm_autofix_agents.main.ContainerInstantiation.from_env",
                     return_value=ContainerInstantiation(
@@ -52,6 +64,69 @@ class MainCliTests(unittest.TestCase):
             run_input = mocked_run_agent.call_args[0][0]
             self.assertEqual(run_input.target_repo, str(Path(tmp_dir).resolve()))
             self.assertEqual(run_input.test_command, "uv run --with pytest pytest python_testcases/test_gcd.py")
+
+    def test_run_fails_fast_when_runtime_contract_is_invalid(self) -> None:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
+                    "RUN_BRANCH": "master",
+                    "RUN_ARCHITECTURE": "mono-agent",
+                    "RUN_AGENT_MODELS": "not-json",
+                    "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+                },
+                clear=False,
+            ),
+            patch("llm_autofix_agents.main.run_agent_baseline") as mocked_run_agent,
+        ):
+            exit_code = _run_run(argparse.Namespace())
+
+        self.assertEqual(exit_code, 2)
+        mocked_run_agent.assert_not_called()
+
+    def test_run_always_cleans_up_prepared_repository(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            cleanup_probe = SimpleNamespace(cleaned=False)
+
+            def _cleanup() -> None:
+                cleanup_probe.cleaned = True
+
+            with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
+                        "RUN_BRANCH": "master",
+                        "RUN_ARCHITECTURE": "mono-agent",
+                        "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
+                        "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+                    },
+                    clear=False,
+                ),
+                patch(
+                    "llm_autofix_agents.main.ContainerInstantiation.from_env",
+                    return_value=ContainerInstantiation(
+                        repository="https://github.com/jkoppel/QuixBugs.git",
+                        branch="master",
+                        architecture="mono-agent",
+                        agent_models={"main": "llama3.1:8b"},
+                        bootstrap_prompt="Fix failing tests with minimal changes.",
+                    ),
+                ),
+                patch(
+                    "llm_autofix_agents.main.prepare_target_repository",
+                    return_value=SimpleNamespace(path=Path(tmp_dir), cleanup=_cleanup),
+                ),
+                patch(
+                    "llm_autofix_agents.main.run_agent_baseline",
+                    side_effect=RuntimeError("boom"),
+                ),
+            ):
+                exit_code = _run_run(argparse.Namespace())
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(cleanup_probe.cleaned)
 
 
 if __name__ == "__main__":

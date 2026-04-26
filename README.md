@@ -10,10 +10,9 @@ Comandos imprescindibles para esta fase:
 
 - `make format`
 - `make test`
-- `make compose-up`
-- `make compose-smoke`
+- `make docker-run`
 - `make quixbugs-gcd-run`
-- `make compose-down`
+- `make docker-debug-shell` (solo debug)
 
 ## Bootstrap rapido
 
@@ -25,11 +24,9 @@ Regla de gestion de dependencias del proyecto:
 
 	uv sync
 
-2. Run baseline in Compose runtime mode:
+2. Run baseline in Compose runtime mode (efimero):
 
-	make compose-up
-	make compose-smoke
-	make compose-down
+	make docker-run
 
 Baseline recomendado para MVP en Docker Compose:
 
@@ -48,17 +45,13 @@ Compatibilidad opcional:
 
 Para ejecutar el runtime completo con Docker Compose:
 
-1. Levantar el runner:
+1. Ejecutar un run efimero (crea contenedor, ejecuta `autofix run`, termina y elimina contenedor):
 
-	make compose-up
+	make docker-run
 
-2. Ejecutar smoke:
+2. Debug opcional en shell interactiva:
 
-	make compose-smoke
-
-3. Apagar el entorno:
-
-	make compose-down
+	make docker-debug-shell
 
 Contrato minimo de instanciacion por contenedor (SH3-T02C):
 
@@ -111,20 +104,16 @@ Configuracion recomendada para esta prueba real minima en Docker Compose:
 - `RUN_BRANCH=master`
 - `RUN_TEST_COMMAND=uv run --with pytest pytest python_testcases/test_gcd.py`
 
-Ejecucion real con Compose:
+Ejecucion real con Compose (efimera):
 
 ```bash
-make compose-up
-make quixbugs-gcd-run
-make compose-down
+make docker-run
 ```
 
-Secuencia alternativa equivalente:
+Atajo para `gcd`:
 
 ```bash
-make compose-up
-timeout 180s make compose-smoke
-make compose-down
+make quixbugs-gcd-run
 ```
 
 Se usa `timeout 180s` al inicio para detectar bloqueos tempranos.

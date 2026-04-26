@@ -1,5 +1,6 @@
 services:
   runner:
+    init: true
     build:
       context: .
       dockerfile: docker/runtime.Dockerfile
@@ -17,13 +18,15 @@ services:
       LLM_API_MAX_RETRIES: "${LLM_API_MAX_RETRIES:-5}"
       LLM_API_RETRY_BASE_SECONDS: "${LLM_API_RETRY_BASE_SECONDS:-1.0}"
       LLM_API_RETRY_MAX_SECONDS: "${LLM_API_RETRY_MAX_SECONDS:-12.0}"
-      AUTOFIX_INTERACTIVE: "${AUTOFIX_INTERACTIVE:-true}"
+      AUTOFIX_INTERACTIVE: "${AUTOFIX_INTERACTIVE:-false}"
       AUTOFIX_LOG_LEVEL: "${AUTOFIX_LOG_LEVEL:-INFO}"
       AUTOFIX_RESULTS_DIR: "${AUTOFIX_RESULTS_DIR:-/results}"
       AUTOFIX_OBSERVABILITY_DB: "${AUTOFIX_OBSERVABILITY_DB:-/results/observability.db}"
       OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11500/v1}"
     volumes:
       - ./results:/results
-      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      # Required only for nested Docker operations used by runtime tools.
+      # Override DOCKER_SOCKET_PATH when the host socket path differs.
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
