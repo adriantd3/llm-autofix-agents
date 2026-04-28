@@ -3,9 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from llm_autofix_agents.contracts import RunInput
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
-from llm_autofix_agents.llm.settings import LLMSettings
 from llm_autofix_agents.observability.telemetry import IterationTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
 
@@ -18,8 +16,6 @@ class AgentIterationContext:
     iteration_id: str
     iteration_index: int
     run_agent_id: str
-    run_input: RunInput
-    settings: LLMSettings
     provider: LLMProvider
     agent_context: APRToolContext
     agent_tools: list[object]

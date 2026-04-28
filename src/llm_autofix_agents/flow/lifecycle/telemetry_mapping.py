@@ -10,7 +10,7 @@ from llm_autofix_agents.observability.telemetry_models import (
 )
 
 if TYPE_CHECKING:
-    from llm_autofix_agents.flow.iteration.recorder import IterationObservation
+    from llm_autofix_agents.flow.iteration.runner import IterationObservation
 
 
 def to_file_change_telemetry_set(changes: WorkspaceChangeSet) -> FileChangeTelemetrySet:

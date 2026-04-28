@@ -60,8 +60,10 @@
 - Validacion real QuixBugs `gcd` completada con exito en Docker Compose: run `run-20260426T084255Z-2eaa022d73` finalizado en `success`, 1 iteracion, 1 archivo modificado y test final en verde.
 
 ## En curso
-- Spec activa: specs/001-mono-agente-entorno/spec.md
-- Tasks activas: specs/001-mono-agente-entorno/tasks.md
+- Spec activa: specs/002-arquitecture-simplification/spec.md
+- Tasks activas: specs/002-arquitecture-simplification/tasks.md
+- Spec previa activa: specs/001-mono-agente-entorno/spec.md
+- Tasks previas activas: specs/001-mono-agente-entorno/tasks.md
 - Subhito activo: SH6 - Benchmark QuixBugs inicial
 - Task activa: validar baseline mono-agente tool-driven con caso QuixBugs MVP.
 - Refactor CLI Docker-only iniciado: `autofix run`, carga de `RUN_*` en `ContainerInstantiation`, logs de consola por `logging` y runner async simplificado.

@@ -42,3 +42,9 @@ Aplicar siempre, con cambios minimos y bien justificados:
 3. Considerar patrones de diseno cuando simplifiquen extension, testabilidad y mantenimiento.
 4. Revisar cada cambio con criterio de staff engineer: claridad, robustez, trazabilidad y facilidad de evolucion.
 5. SIEMPRE cumplir con las convenciones codigo para planear, desarrollar y refactorizar expuestos en `specs/conventions.md`.
+
+## Notas de tests
+
+- Los tests deben validar la funcionalidad general.
+- Ubicar tests en una ruta similar a la clase objetivo (ejemplo: `tests/unit/llm_autofix_agents/flow/iteration/test_runner.py`).
+- Buscar buena cobertura sin obsesionarse.

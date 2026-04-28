@@ -3,18 +3,22 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
-from llm_autofix_agents.flow.architecture import ArchitectureRunner
-from llm_autofix_agents.flow.execution.tests import run_test_command
-from llm_autofix_agents.flow.iteration.context_builder import IterationContextBuilder
-from llm_autofix_agents.flow.iteration.decision import IterationOutcomeHandler
-from llm_autofix_agents.flow.iteration.recorder import IterationObservation, IterationRecorder
-from llm_autofix_agents.flow.lifecycle.logs import record_validation_logs
+from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
+from llm_autofix_agents.flow.architecture import AgentIterationContext, ArchitectureRunner
+from llm_autofix_agents.flow.execution.tests import run_test_command, to_test_results
+from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs, record_validation_logs
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
+from llm_autofix_agents.flow.lifecycle.telemetry_mapping import (
+    to_file_change_telemetry_set,
+    to_iteration_telemetry_result,
+)
+from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
+from llm_autofix_agents.flow.policies.iteration import build_iteration_input, proposal_signature
 from llm_autofix_agents.flow.policies.stop import StopPolicy
-from llm_autofix_agents.flow.policies.validation import validate_iteration
+from llm_autofix_agents.flow.policies.validation import IterationValidationResult, validate_iteration
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.observability import utc_now_iso
 
 
@@ -26,9 +30,6 @@ class IterationRunner:
     workspace: WorkspaceManager
     output_builder: RunOutputBuilder
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
-    context_builder: IterationContextBuilder = field(default_factory=IterationContextBuilder)
-    recorder: IterationRecorder | None = None
-    outcome_handler: IterationOutcomeHandler | None = None
 
     def run(
         self,
@@ -47,13 +48,6 @@ class IterationRunner:
         started_at = utc_now_iso()
         started_monotonic = time.perf_counter()
 
-        recorder = self.recorder or IterationRecorder()
-        outcome_handler = self.outcome_handler or IterationOutcomeHandler(
-            workspace=self.workspace,
-            output_builder=self.output_builder,
-            stop_policy=self.stop_policy,
-        )
-
         iteration_telemetry = cfg.telemetry.start_iteration(
             iteration_id=identity.iteration_id,
             iteration_index=iteration,
@@ -68,7 +62,7 @@ class IterationRunner:
 
         # Run the iteration and get the proposed fix from the agent
         agent_result = self.architecture.run_iteration(
-            self.context_builder.build(
+            self._build_context(
                 run_input=run_input,
                 cfg=cfg,
                 state=state,
@@ -105,7 +99,7 @@ class IterationRunner:
             changes=changes,
             test_execution=test_execution,
         )
-        recorder.record(
+        self._record_observation(
             iteration_telemetry=iteration_telemetry,
             state=state,
             observation=observation,
@@ -120,7 +114,7 @@ class IterationRunner:
         state.latest_artifacts["validation"] = validation.details
         record_validation_logs(state=state, validation=validation)
 
-        output = outcome_handler.evaluate(
+        output = self._evaluate_outcome(
             identity=identity,
             run_input=run_input,
             cfg=cfg,
@@ -131,12 +125,12 @@ class IterationRunner:
         if output is not None:
             return output
 
-        recorder.remember_progress(
+        self._remember_progress(
             state=state,
             proposal=agent_result.proposal,
             test_signature=test_execution.signature,
         )
-        recorder.append_iteration_logs(
+        self._append_iteration_logs(
             cfg=cfg,
             state=state,
             iteration=iteration,
@@ -145,3 +139,188 @@ class IterationRunner:
             confidence=agent_result.proposal.confidence,
         )
         return None
+
+    def _build_context(
+        self,
+        *,
+        run_input: RunInput,
+        cfg: RunConfig,
+        state: RunState,
+        iteration: int,
+        identity,
+        iteration_telemetry,
+    ) -> AgentIterationContext:
+        return AgentIterationContext(
+            run_id=cfg.run_id,
+            iteration_id=identity.iteration_id,
+            iteration_index=iteration,
+            run_agent_id=cfg.run_agent_id,
+            provider=cfg.provider,
+            agent_context=cfg.agent_context,
+            agent_tools=cfg.agent_tools,
+            iteration_telemetry=iteration_telemetry,
+            user_input=build_iteration_input(
+                prompt=run_input.prompt,
+                iteration=iteration,
+                max_iterations=cfg.max_iterations,
+                previous_message=state.final_message,
+                baseline_test_execution=cfg.baseline_test_execution,
+                test_command=run_input.test_command,
+            ),
+            max_turns=cfg.settings.max_turns,
+        )
+
+    def _record_observation(
+        self,
+        *,
+        iteration_telemetry,
+        state: RunState,
+        observation: "IterationObservation",
+    ) -> None:
+        self._record_state(state=state, observation=observation)
+
+        iteration_telemetry.record_file_changes(
+            agent_execution_id=observation.agent_execution_id,
+            changes=to_file_change_telemetry_set(observation.changes),
+        )
+
+        iteration_telemetry.finish_iteration(
+            result=to_iteration_telemetry_result(observation),
+        )
+
+    def _record_state(self, *, state: RunState, observation: "IterationObservation") -> None:
+        proposal = observation.proposal
+        state.total_input_tokens += proposal.input_tokens
+        state.total_output_tokens += proposal.output_tokens
+        state.total_tokens += proposal.total_tokens
+        state.final_message = render_final_message(proposal)
+        state.latest_diff = observation.changes.diff
+        state.latest_changed_files = list(observation.changes.all_changed_files)
+        state.latest_proposal_changed_files = list(proposal.changed_files)
+        state.latest_tests = to_test_results(observation.test_execution)
+        state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
+
+    def _evaluate_outcome(
+        self,
+        *,
+        identity,
+        run_input: RunInput,
+        cfg: RunConfig,
+        state: RunState,
+        observation: "IterationObservation",
+        validation: IterationValidationResult,
+    ) -> RunOutput | None:
+        proposal = observation.proposal
+        test_execution = observation.test_execution
+        changed_files = observation.changes.tracked_changed_files
+
+        if not validation.ok:
+            self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            state.accumulated_logs.append(f"validation_result={validation.failure_type}")
+            return self.output_builder.validation_failure(
+                identity=identity,
+                validation=validation,
+                state=state,
+                cfg=cfg,
+            )
+
+        if self.stop_policy.no_progress(
+            state=state,
+            proposal=proposal,
+            test_execution=test_execution,
+            changed_files=changed_files,
+        ):
+            self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            return self.output_builder.build(
+                identity=identity,
+                status=RunStatus.PARTIAL,
+                stop_reason=StopReason.NO_PROGRESS,
+                state=state,
+                cfg=cfg,
+            )
+
+        if self.stop_policy.success(
+            run_input=run_input,
+            proposal=proposal,
+            test_execution=test_execution,
+        ):
+            cleanup_error = self.workspace.cleanup_temp_branch_after_success(cfg)
+            if cleanup_error:
+                return self.output_builder.branch_cleanup_failed(
+                    identity=identity,
+                    state=state,
+                    cfg=cfg,
+                    cleanup_error=cleanup_error,
+                )
+            return self.output_builder.build(
+                identity=identity,
+                status=RunStatus.SUCCESS,
+                stop_reason=StopReason.COMPLETED,
+                state=state,
+                cfg=cfg,
+            )
+
+        if self.stop_policy.agent_reported_stuck(proposal):
+            self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            state.accumulated_logs.append("iteration_result=agent_reported_stuck")
+            return self.output_builder.build(
+                identity=identity,
+                status=RunStatus.PARTIAL,
+                stop_reason=StopReason.NO_PROGRESS,
+                state=state,
+                cfg=cfg,
+            )
+
+        return None
+
+    def _remember_progress(self, *, state: RunState, proposal: AgentFixIterationRecord, test_signature: str) -> None:
+        state.previous_proposal_signature = proposal_signature(proposal)
+        state.previous_proposal_status = proposal.status
+        state.previous_proposal_confidence = proposal.confidence
+        state.previous_test_signature = test_signature
+
+    def _append_iteration_logs(
+        self,
+        *,
+        cfg: RunConfig,
+        state: RunState,
+        iteration: int,
+        changes: WorkspaceChangeSet,
+        test_execution: TestExecution,
+        confidence: float,
+    ) -> None:
+        state.accumulated_logs.extend(
+            build_iteration_logs(
+                cfg=cfg,
+                iteration=iteration,
+                changed_files=changes.all_changed_files,
+                test_execution=test_execution,
+                confidence=confidence,
+            )
+        )
+
+
+@dataclass(frozen=True)
+class IterationObservation:
+    iteration: int
+    iteration_id: str
+    started_at: str
+    started_monotonic: float
+    proposal: AgentFixIterationRecord
+    agent_execution_id: str
+    tool_calls_count: int
+    changes: WorkspaceChangeSet
+    test_execution: TestExecution
+
+
+def render_final_message(proposal: AgentFixIterationRecord) -> str:
+    files = ", ".join(proposal.changed_files) if proposal.changed_files else "(unspecified)"
+    lines = [
+        f"status: {proposal.status}",
+        f"reasoning_summary: {proposal.reasoning_summary}",
+        f"confidence: {proposal.confidence:.3f}",
+        f"changed_files: {files}",
+    ]
+    if proposal.notes:
+        lines.append(f"notes: {proposal.notes}")
+    return "\n".join(lines)
