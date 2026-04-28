@@ -10,6 +10,7 @@ from llm_autofix_agents.observability.models import (
     AgentExecutionRecord,
     IterationRecord,
     ModelConfigDescriptor,
+    ProviderCallRecord,
     RunDescriptor,
     RunFinishedRecord,
     ToolCallRecord,
@@ -129,6 +130,25 @@ class ObservabilityTests(unittest.TestCase):
                 )
             )
 
+            store.insert_provider_call_event(
+                ProviderCallRecord(
+                    provider_call_id=f"{agent_execution_id}-retryable-failure",
+                    run_id=run_id,
+                    iteration_id=iteration_id,
+                    agent_execution_id=agent_execution_id,
+                    event_type="retryable_failure",
+                    attempt=1,
+                    total_attempts=3,
+                    status_code=500,
+                    error_type="RuntimeError",
+                    error_message_short="internal error",
+                    tool_calls_count=1,
+                    retry_delay_seconds=1.25,
+                    rerun_full_runner=True,
+                    occurred_at="2026-01-01T00:00:05+00:00",
+                )
+            )
+
             store.update_run_finished(
                 RunFinishedRecord(
                     run_id=run_id,
@@ -153,11 +173,13 @@ class ObservabilityTests(unittest.TestCase):
                 iteration_count = conn.execute("SELECT COUNT(*) FROM iterations").fetchone()[0]
                 execution_count = conn.execute("SELECT COUNT(*) FROM agent_executions").fetchone()[0]
                 tool_count = conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0]
+                provider_event_count = conn.execute("SELECT COUNT(*) FROM provider_call_events").fetchone()[0]
 
             self.assertEqual(run_count, 1)
             self.assertEqual(iteration_count, 1)
             self.assertEqual(execution_count, 1)
             self.assertEqual(tool_count, 1)
+            self.assertEqual(provider_event_count, 1)
 
 
 if __name__ == "__main__":

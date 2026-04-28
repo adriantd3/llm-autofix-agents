@@ -11,8 +11,10 @@ from pydantic import SecretStr
 from llm_autofix_agents.llm.provider import (
     AgentFixIterationRecord,
     OpenAIAgentsSDKProvider,
+    ProviderCallError,
     create_provider,
 )
+from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
 
@@ -155,6 +157,7 @@ class LLMProviderTests(unittest.TestCase):
         runner_run: AsyncMock,
         sleep_mock: AsyncMock,
     ) -> None:
+        events: list[ProviderCallEvent] = []
         runner_run.side_effect = [
             _TransientProviderError("internal error", status_code=500),
             SimpleNamespace(
@@ -173,12 +176,22 @@ class LLMProviderTests(unittest.TestCase):
                 instructions="repair",
                 user_input="failing test output",
                 max_turns=2,
+                event_callback=events.append,
             )
         )
 
         self.assertEqual(result.status, "done")
         self.assertEqual(runner_run.await_count, 2)
         self.assertEqual(sleep_mock.await_count, 1)
+        self.assertEqual(
+            [event.event_type for event in events],
+            ["retryable_failure", "retry_scheduled", "retry_succeeded"],
+        )
+        self.assertEqual(events[0].attempt, 1)
+        self.assertEqual(events[0].total_attempts, 6)
+        self.assertEqual(events[0].status_code, 500)
+        self.assertEqual(events[1].retry_delay_seconds, sleep_mock.await_args.args[0])
+        self.assertEqual(events[2].attempt, 2)
 
     @patch("llm_autofix_agents.llm.provider.asyncio.sleep", new_callable=AsyncMock)
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
@@ -187,20 +200,57 @@ class LLMProviderTests(unittest.TestCase):
         runner_run: AsyncMock,
         sleep_mock: AsyncMock,
     ) -> None:
+        events: list[ProviderCallEvent] = []
         runner_run.side_effect = RuntimeError("invalid tool call schema")
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        with self.assertRaisesRegex(RuntimeError, "provider call failed after 1 attempt"):
+        with self.assertRaisesRegex(ProviderCallError, "provider call failed after 1 attempt"):
             asyncio.run(
                 provider.run_prompt(
                     instructions="repair",
                     user_input="failing test output",
                     max_turns=2,
+                    event_callback=events.append,
                 )
             )
 
         self.assertEqual(runner_run.await_count, 1)
         self.assertEqual(sleep_mock.await_count, 0)
+        self.assertEqual([event.event_type for event in events], ["non_retryable_failure"])
+
+    @patch("llm_autofix_agents.llm.provider.asyncio.sleep", new_callable=AsyncMock)
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_logs_and_raises_when_retries_are_exhausted(
+        self,
+        runner_run: AsyncMock,
+        sleep_mock: AsyncMock,
+    ) -> None:
+        events: list[ProviderCallEvent] = []
+        runner_run.side_effect = [
+            _TransientProviderError("internal error", status_code=500),
+            _TransientProviderError("still down", status_code=500),
+        ]
+        settings = _gemini_settings().model_copy(update={"api_max_retries": 1})
+        provider = OpenAIAgentsSDKProvider(settings=settings)
+
+        with self.assertRaisesRegex(ProviderCallError, "provider call failed after 2 attempt"):
+            asyncio.run(
+                provider.run_prompt(
+                    instructions="repair",
+                    user_input="failing test output",
+                    max_turns=2,
+                    event_callback=events.append,
+                )
+            )
+
+        self.assertEqual(runner_run.await_count, 2)
+        self.assertEqual(sleep_mock.await_count, 1)
+        self.assertEqual(
+            [event.event_type for event in events],
+            ["retryable_failure", "retry_scheduled", "retries_exhausted"],
+        )
+        self.assertEqual(events[-1].attempt, 2)
+        self.assertEqual(events[-1].status_code, 500)
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_accepts_execution_report_without_patch(self, runner_run: AsyncMock) -> None:

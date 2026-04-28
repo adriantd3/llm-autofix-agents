@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -122,6 +122,26 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   FOREIGN KEY (agent_execution_id) REFERENCES agent_executions(agent_execution_id)
 );
 
+CREATE TABLE IF NOT EXISTS provider_call_events (
+  provider_call_id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  iteration_id TEXT NOT NULL,
+  agent_execution_id TEXT,
+  event_type TEXT NOT NULL,
+  attempt INTEGER NOT NULL,
+  total_attempts INTEGER NOT NULL,
+  status_code INTEGER,
+  error_type TEXT,
+  error_message_short TEXT,
+  tool_calls_count INTEGER,
+  retry_delay_seconds REAL,
+  rerun_full_runner INTEGER NOT NULL DEFAULT 1,
+  occurred_at TEXT,
+  FOREIGN KEY (run_id) REFERENCES runs(run_id),
+  FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id),
+  FOREIGN KEY (agent_execution_id) REFERENCES agent_executions(agent_execution_id)
+);
+
 CREATE TABLE IF NOT EXISTS test_executions (
   test_execution_id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL,
@@ -166,6 +186,8 @@ CREATE INDEX IF NOT EXISTS idx_iterations_run ON iterations(run_id);
 CREATE INDEX IF NOT EXISTS idx_agent_executions_run_agent ON agent_executions(run_agent_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_run ON tool_calls(run_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_name ON tool_calls(tool_name);
+CREATE INDEX IF NOT EXISTS idx_provider_call_events_run ON provider_call_events(run_id);
+CREATE INDEX IF NOT EXISTS idx_provider_call_events_agent_execution ON provider_call_events(agent_execution_id);
 """
 
 

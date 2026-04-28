@@ -21,6 +21,10 @@ from agents import (
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
+from llm_autofix_agents.llm.provider_events import (
+    ProviderCallEventCallback,
+    ProviderRetryEventEmitter,
+)
 from llm_autofix_agents.llm.settings import LLMSettings
 
 
@@ -49,8 +53,33 @@ class LLMProvider(Protocol):
         tools: Sequence[object] | None = None,
         context: Any | None = None,
         hooks: RunHooks[Any] | None = None,
+        event_callback: ProviderCallEventCallback | None = None,
     ) -> AgentFixIterationRecord:
         """Run a single prompt turn and return a structured APR proposal."""
+
+
+class ProviderCallError(RuntimeError):
+    """Provider-level execution failure with retry context for diagnostics."""
+
+    def __init__(
+        self,
+        *,
+        attempt: int,
+        total_attempts: int,
+        retryable: bool,
+        status_code: int | None,
+        cause: Exception,
+    ) -> None:
+        self.attempt = attempt
+        self.total_attempts = total_attempts
+        self.retryable = retryable
+        self.status_code = status_code
+        self.cause = cause
+        message = (
+            f"provider call failed after {attempt} attempt(s): "
+            f"retryable={retryable} status_code={status_code} error={cause.__class__.__name__}: {cause}"
+        )
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -66,12 +95,20 @@ class OpenAIAgentsSDKProvider:
         tools: Sequence[object] | None = None,
         context: Any | None = None,
         hooks: RunHooks[Any] | None = None,
+        event_callback: ProviderCallEventCallback | None = None,
     ) -> AgentFixIterationRecord:
         set_tracing_disabled(self.settings.tracing_disabled)
 
         resolved_tools = cast(list[Tool], list(tools) if tools is not None else [])
         result: RunResult | None = None
         total_attempts = self.settings.api_max_retries + 1
+        agent_execution_id = _extract_agent_execution_id(hooks)
+        event_emitter = ProviderRetryEventEmitter(
+            callback=event_callback,
+            agent_execution_id=agent_execution_id,
+            total_attempts=total_attempts,
+            tool_calls_count_getter=lambda: _extract_tool_call_count(hooks),
+        )
 
         for attempt in range(1, total_attempts + 1):
             try:
@@ -86,21 +123,67 @@ class OpenAIAgentsSDKProvider:
                     hooks=hooks,
                     run_config=RunConfig(tracing_disabled=self.settings.tracing_disabled),
                 )
+                if attempt > 1:
+                    event_emitter.retry_succeeded(attempt=attempt)
                 break
             except Exception as exc:  # noqa: BLE001
-                # TODO: Add observability for such cases
-                if not _is_retryable_provider_error(exc) or attempt >= total_attempts:
-                    raise RuntimeError(f"provider call failed after {attempt} attempt(s): {exc}") from exc
-                await asyncio.sleep(
-                    _compute_retry_delay_seconds(
+                retryable = _is_retryable_provider_error(exc)
+                status_code = _extract_http_status_code(exc)
+                if not retryable:
+                    event_emitter.non_retryable_failure(
                         attempt=attempt,
-                        base_seconds=self.settings.api_retry_base_seconds,
-                        max_seconds=self.settings.api_retry_max_seconds,
+                        status_code=status_code,
+                        error=exc,
                     )
+                    raise ProviderCallError(
+                        attempt=attempt,
+                        total_attempts=total_attempts,
+                        retryable=False,
+                        status_code=status_code,
+                        cause=exc,
+                    ) from exc
+
+                if attempt >= total_attempts:
+                    event_emitter.retries_exhausted(
+                        attempt=attempt,
+                        status_code=status_code,
+                        error=exc,
+                    )
+                    raise ProviderCallError(
+                        attempt=attempt,
+                        total_attempts=total_attempts,
+                        retryable=True,
+                        status_code=status_code,
+                        cause=exc,
+                    ) from exc
+
+                delay_seconds = _compute_retry_delay_seconds(
+                    attempt=attempt,
+                    base_seconds=self.settings.api_retry_base_seconds,
+                    max_seconds=self.settings.api_retry_max_seconds,
                 )
+                event_emitter.retryable_failure(
+                    attempt=attempt,
+                    status_code=status_code,
+                    error=exc,
+                )
+                event_emitter.retry_scheduled(
+                    attempt=attempt,
+                    status_code=status_code,
+                    error=exc,
+                    retry_delay_seconds=delay_seconds,
+                )
+                await asyncio.sleep(delay_seconds)
 
         if result is None:
-            raise RuntimeError("provider call failed without a result")
+            unknown_cause = RuntimeError("provider call failed without a result")
+            raise ProviderCallError(
+                attempt=total_attempts,
+                total_attempts=total_attempts,
+                retryable=False,
+                status_code=None,
+                cause=unknown_cause,
+            ) from unknown_cause
 
         output = result.final_output
 
@@ -316,6 +399,33 @@ def _extract_http_status_code(exc: Exception) -> int | None:
         return response_status
 
     return None
+
+
+def _extract_agent_execution_id(hooks: RunHooks[Any] | None) -> str | None:
+    if hooks is None:
+        return None
+
+    candidate = getattr(hooks, "agent_execution_id", None)
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate
+
+    fallback = getattr(hooks, "_agent_execution_id", None)
+    if isinstance(fallback, str) and fallback.strip():
+        return fallback
+    return None
+
+
+def _extract_tool_call_count(hooks: RunHooks[Any] | None) -> int | None:
+    if hooks is None:
+        return None
+
+    raw_value = getattr(hooks, "tool_call_count", None)
+    try:
+        if raw_value is None:
+            return None
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _compute_retry_delay_seconds(*, attempt: int, base_seconds: float, max_seconds: float) -> float:

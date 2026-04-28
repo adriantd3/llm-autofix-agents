@@ -8,6 +8,7 @@ from llm_autofix_agents.observability.interactive import MarkdownLiveObserver
 from llm_autofix_agents.observability.models import (
     AgentExecutionRecord,
     IterationRecord,
+    ProviderCallRecord,
     RunDescriptor,
     RunFinishedRecord,
     ToolCallRecord,
@@ -54,6 +55,24 @@ class InteractiveObserverTests(unittest.TestCase):
                     success=True,
                 )
             )
+            observer.on_provider_call_event(
+                record=ProviderCallRecord(
+                    provider_call_id="run-1-it01-agent01-retryable-failure",
+                    run_id="run-1",
+                    iteration_id="run-1-it01",
+                    agent_execution_id="run-1-it01-agent01",
+                    event_type="retryable_failure",
+                    attempt=1,
+                    total_attempts=3,
+                    status_code=500,
+                    error_type="InternalServerError",
+                    error_message_short="HTTP 500",
+                    tool_calls_count=1,
+                    retry_delay_seconds=1.2,
+                    rerun_full_runner=True,
+                    occurred_at="2026-01-01T00:00:02+00:00",
+                )
+            )
             observer.on_agent_execution_finished(
                 record=AgentExecutionRecord(
                     agent_execution_id="run-1-it01-agent01",
@@ -90,6 +109,7 @@ class InteractiveObserverTests(unittest.TestCase):
             self.assertIn("# Run run-1", content)
             self.assertIn("## Iteration 1", content)
             self.assertIn("tool 001: read_file -> success", content)
+            self.assertIn("provider retryable failure attempt=1/3 status_code=500", content)
             self.assertIn("## Run finished", content)
 
 

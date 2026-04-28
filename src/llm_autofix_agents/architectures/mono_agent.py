@@ -20,13 +20,14 @@ class MonoAgentArchitecture:
         execution = self.agent_runner.run_agent(
             context=context,
             execution_index=1,
-            provider_call=lambda hooks: context.provider.run_prompt(
+            provider_call=lambda hooks, event_callback: context.provider.run_prompt(
                 instructions=self.instructions,
                 user_input=context.user_input,
                 max_turns=context.max_turns,
                 tools=context.agent_tools,
                 context=context.agent_context,
                 hooks=hooks,
+                event_callback=event_callback,
             ),
         )
 

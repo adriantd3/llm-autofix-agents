@@ -10,6 +10,7 @@ from llm_autofix_agents.observability.models import (
     FileChangeRecord,
     IterationRecord,
     ModelConfigDescriptor,
+    ProviderCallRecord,
     RunDescriptor,
     RunFinishedRecord,
     TestExecutionRecord,
@@ -130,6 +131,42 @@ class RunTelemetry:
                 resolved=resolved,
                 live_log_path=live_log_path,
                 summary_path=summary_path,
+            )
+        )
+
+    def record_provider_call_event(
+        self,
+        *,
+        run_id: str,
+        iteration_id: str,
+        agent_execution_id: str | None,
+        event_type: str,
+        attempt: int,
+        total_attempts: int,
+        status_code: int | None = None,
+        error_type: str | None = None,
+        error_message_short: str | None = None,
+        tool_calls_count: int | None = None,
+        retry_delay_seconds: float | None = None,
+        rerun_full_runner: bool = True,
+    ) -> None:
+        provider_call_id = f"{run_id}-{iteration_id}-{attempt:02d}-{event_type}"
+        self.observer.on_provider_call_event(
+            record=ProviderCallRecord(
+                provider_call_id=provider_call_id,
+                run_id=run_id,
+                iteration_id=iteration_id,
+                agent_execution_id=agent_execution_id,
+                event_type=event_type,
+                attempt=attempt,
+                total_attempts=total_attempts,
+                status_code=status_code,
+                error_type=error_type,
+                error_message_short=error_message_short,
+                tool_calls_count=tool_calls_count,
+                retry_delay_seconds=retry_delay_seconds,
+                rerun_full_runner=rerun_full_runner,
+                occurred_at=utc_now_iso(),
             )
         )
 
@@ -291,6 +328,31 @@ class AgentExecutionTelemetry:
             run_id=self.run_id,
             iteration_id=self.iteration_id,
             agent_execution_id=self.agent_execution_id,
+        )
+
+    def handle_provider_call_event(self, event: object) -> None:
+        from llm_autofix_agents.llm.provider_events import ProviderCallEvent
+
+        if not isinstance(event, ProviderCallEvent):
+            return
+
+        self.observer.on_provider_call_event(
+            record=ProviderCallRecord(
+                provider_call_id=f"{self.agent_execution_id}-{event.event_type}-{event.attempt:02d}",
+                run_id=self.run_id,
+                iteration_id=self.iteration_id,
+                agent_execution_id=self.agent_execution_id,
+                event_type=event.event_type,
+                attempt=event.attempt,
+                total_attempts=event.total_attempts,
+                status_code=event.status_code,
+                error_type=event.error_type,
+                error_message_short=event.error_message_short,
+                tool_calls_count=event.tool_calls_count,
+                retry_delay_seconds=event.retry_delay_seconds,
+                rerun_full_runner=event.rerun_full_runner,
+                occurred_at=utc_now_iso(),
+            )
         )
 
     def finish(

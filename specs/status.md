@@ -54,6 +54,8 @@
 - SH6 avance aplicado: prueba real minima end-to-end documentada para QuixBugs `gcd` (sin batch), con defaults de persistencia en `/results` para Compose, bloque dedicado en `.env.example`, target Makefile `quixbugs-gcd-run` con timeout y checklist de artefactos/resultados para analisis posterior.
 - SH6 ajuste aplicado: input de iteracion para mono-agente ahora prioriza contexto failure-driven (intro fija + salida de test baseline fallido + comando de test) en la primera iteracion, dejando el prompt de entorno como fallback solo si no hay baseline fallido.
 - Hardening LLM aplicado: el provider ahora reintenta errores transitorios del backend (5xx/timeouts/conexion) con backoff configurables para evitar que fallos puntuales del modelo terminen el run como `infra_failure`.
+- Observabilidad de retries reforzada: logging explicito por attempt de `Runner.run(...)` (inicio/fallo retryable/reintento/exito tras retry/agotamiento), con `agent_execution_id`, conteo de attempt y `tool_calls` acumuladas cuando estan disponibles, mas error de dominio `ProviderCallError` para agotamiento/no-retryable.
+- Refactor SRP aplicado sobre retries del provider: DTO/emision de eventos movidos a modulo dedicado `llm/provider_events.py`, reduciendo ruido y responsabilidades en `provider.py` sin perder trazabilidad en observabilidad.
 - Validacion del hardening ejecutada con `unittest` sobre `tests/test_llm_provider.py`, `tests/test_iteration_input.py` y `tests/test_flow_refactor.py` en verde.
 - Validacion real QuixBugs `gcd` completada con exito en Docker Compose: run `run-20260426T084255Z-2eaa022d73` finalizado en `success`, 1 iteracion, 1 archivo modificado y test final en verde.
 

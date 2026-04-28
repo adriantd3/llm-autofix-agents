@@ -24,6 +24,13 @@ class ObservabilityError(FlowError):
 
 
 def error_category_from_exception(exc: Exception) -> ErrorCategory:
+    try:
+        from llm_autofix_agents.llm.provider import ProviderCallError
+    except Exception:  # pragma: no cover - defensive import guard
+        ProviderCallError = None  # type: ignore[assignment]
+
+    if ProviderCallError is not None and isinstance(exc, ProviderCallError):
+        return ErrorCategory.MODEL
     if isinstance(exc, ProviderExecutionError):
         return ErrorCategory.MODEL
     if isinstance(exc, ValidationError):

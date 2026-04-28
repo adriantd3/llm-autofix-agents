@@ -1,5 +1,6 @@
 from llm_autofix_agents.flow.lifecycle.telemetry_mapping import to_file_change_telemetry_set
 from llm_autofix_agents.flow.models import WorkspaceChangeSet
+from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 from llm_autofix_agents.observability.telemetry import RunTelemetry
 from llm_autofix_agents.observability.telemetry_models import FileChangeTelemetrySet
 
@@ -11,6 +12,7 @@ class FakeObserver:
         self.agent_execution_started = []
         self.agent_execution_finished = []
         self.iteration_started = []
+        self.provider_call_records = []
 
     def on_test_execution(self, *, record):
         self.test_records.append(record)
@@ -26,6 +28,9 @@ class FakeObserver:
 
     def on_iteration_started(self, *, record):
         self.iteration_started.append(record)
+
+    def on_provider_call_event(self, *, record):
+        self.provider_call_records.append(record)
 
 
 def test_file_change_telemetry_set_registers_correct_types() -> None:
@@ -119,3 +124,33 @@ def test_run_telemetry_no_run_id_parameter() -> None:
     )
 
     assert observer.test_records[0].run_id == "run-123"
+
+
+def test_agent_execution_telemetry_forwards_provider_retry_event() -> None:
+    observer = FakeObserver()
+    run_telemetry = RunTelemetry(observer=observer, run_id="run-1")
+    iteration_telemetry = run_telemetry.start_iteration(iteration_id="it-1", iteration_index=1)
+    agent_telemetry = iteration_telemetry.start_agent_execution(
+        run_agent_id="ra-1",
+        execution_index=1,
+    )
+
+    agent_telemetry.handle_provider_call_event(
+        ProviderCallEvent(
+            event_type="retryable_failure",
+            agent_execution_id=agent_telemetry.agent_execution_id,
+            attempt=1,
+            total_attempts=3,
+            status_code=500,
+            error_type="RuntimeError",
+            error_message_short="boom",
+            tool_calls_count=2,
+        )
+    )
+
+    assert len(observer.provider_call_records) == 1
+    record = observer.provider_call_records[0]
+    assert record.event_type == "retryable_failure"
+    assert record.attempt == 1
+    assert record.total_attempts == 3
+    assert record.status_code == 500

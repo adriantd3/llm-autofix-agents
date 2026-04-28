@@ -65,6 +65,8 @@ class IterationRunner:
         )
 
         before_snapshot = self.workspace.snapshot(cfg)
+
+        # Run the iteration and get the proposed fix from the agent
         agent_result = self.architecture.run_iteration(
             self.context_builder.build(
                 run_input=run_input,

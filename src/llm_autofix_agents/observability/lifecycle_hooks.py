@@ -45,6 +45,10 @@ class APRRunHooks(RunHooks[Any]):
     def tool_call_count(self) -> int:
         return self._seq
 
+    @property
+    def agent_execution_id(self) -> str:
+        return self._agent_execution_id
+
     async def on_tool_start(
         self,
         context: RunContextWrapper[Any],

@@ -9,6 +9,7 @@ from llm_autofix_agents.observability.models import (
     AgentExecutionRecord,
     FileChangeRecord,
     IterationRecord,
+    ProviderCallRecord,
     RunDescriptor,
     RunFinishedRecord,
     TestExecutionRecord,
@@ -35,6 +36,8 @@ class RunObserver(Protocol):
     def on_agent_execution_finished(self, *, record: AgentExecutionRecord) -> None: ...
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None: ...
+
+    def on_provider_call_event(self, *, record: ProviderCallRecord) -> None: ...
 
     def on_test_execution(self, *, record: TestExecutionRecord) -> None: ...
 
@@ -65,6 +68,9 @@ class NullObserver:
         del record
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None:
+        del record
+
+    def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
         del record
 
     def on_test_execution(self, *, record: TestExecutionRecord) -> None:
@@ -113,6 +119,9 @@ class CompositeObserver:
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None:
         self._dispatch("on_tool_call", record=record)
+
+    def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
+        self._dispatch("on_provider_call_event", record=record)
 
     def on_test_execution(self, *, record: TestExecutionRecord) -> None:
         self._dispatch("on_test_execution", record=record)
@@ -167,6 +176,9 @@ class SQLiteObserver:
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None:
         self._store.insert_tool_call(record)
+
+    def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
+        self._store.insert_provider_call_event(record)
 
     def on_test_execution(self, *, record: TestExecutionRecord) -> None:
         self._store.insert_test_execution(record)

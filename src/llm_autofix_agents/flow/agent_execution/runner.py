@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from llm_autofix_agents.flow.architecture import AgentIterationContext
 from llm_autofix_agents.flow.errors import ProviderExecutionError
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 
 
 @dataclass(frozen=True)
@@ -28,7 +29,10 @@ class AgentExecutionRunner:
         *,
         context: AgentIterationContext,
         execution_index: int,
-        provider_call: Callable[[object], Coroutine[object, object, AgentFixIterationRecord]],
+        provider_call: Callable[
+            [object, Callable[[ProviderCallEvent], None] | None],
+            Coroutine[object, object, AgentFixIterationRecord],
+        ],
     ) -> AgentExecutionResult:
         agent_telemetry = context.iteration_telemetry.start_agent_execution(
             run_agent_id=context.run_agent_id,
@@ -39,7 +43,7 @@ class AgentExecutionRunner:
         started_monotonic = time.perf_counter()
 
         try:
-            proposal = _run_sync(provider_call(hooks))
+            proposal = _run_sync(provider_call(hooks, agent_telemetry.handle_provider_call_event))
         except Exception as exc:  # noqa: BLE001
             agent_telemetry.finish_failed(error=exc, tool_calls_count=hooks.tool_call_count)
             raise ProviderExecutionError(f"provider execution failed: {exc}") from exc

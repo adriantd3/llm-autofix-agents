@@ -11,6 +11,7 @@ from llm_autofix_agents.observability.models import (
     FileChangeRecord,
     IterationRecord,
     ModelConfigDescriptor,
+    ProviderCallRecord,
     RunDescriptor,
     RunFinishedRecord,
     TestExecutionRecord,
@@ -326,6 +327,45 @@ class SQLiteObservabilityStore:
                     record.tool_name,
                     record.status,
                     None if record.success is None else (1 if record.success else 0),
+                ),
+            )
+
+    def insert_provider_call_event(self, record: ProviderCallRecord) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO provider_call_events (
+                    provider_call_id,
+                    run_id,
+                    iteration_id,
+                    agent_execution_id,
+                    event_type,
+                    attempt,
+                    total_attempts,
+                    status_code,
+                    error_type,
+                    error_message_short,
+                    tool_calls_count,
+                    retry_delay_seconds,
+                    rerun_full_runner,
+                    occurred_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.provider_call_id,
+                    record.run_id,
+                    record.iteration_id,
+                    record.agent_execution_id,
+                    record.event_type,
+                    record.attempt,
+                    record.total_attempts,
+                    record.status_code,
+                    record.error_type,
+                    record.error_message_short,
+                    record.tool_calls_count,
+                    record.retry_delay_seconds,
+                    1 if record.rerun_full_runner else 0,
+                    record.occurred_at,
                 ),
             )
 

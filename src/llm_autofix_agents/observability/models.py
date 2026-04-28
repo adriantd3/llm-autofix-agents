@@ -218,6 +218,24 @@ class ToolCallRecord:
 
 
 @dataclass(frozen=True)
+class ProviderCallRecord:
+    provider_call_id: str
+    run_id: str
+    iteration_id: str
+    agent_execution_id: str | None
+    event_type: str
+    attempt: int
+    total_attempts: int
+    status_code: int | None = None
+    error_type: str | None = None
+    error_message_short: str | None = None
+    tool_calls_count: int | None = None
+    retry_delay_seconds: float | None = None
+    rerun_full_runner: bool = True
+    occurred_at: str | None = None
+
+
+@dataclass(frozen=True)
 class TestExecutionRecord:
     test_execution_id: str
     run_id: str
