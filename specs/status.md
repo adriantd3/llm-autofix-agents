@@ -58,6 +58,8 @@
 - Refactor SRP aplicado sobre retries del provider: DTO/emision de eventos movidos a modulo dedicado `llm/provider_events.py`, reduciendo ruido y responsabilidades en `provider.py` sin perder trazabilidad en observabilidad.
 - Validacion del hardening ejecutada con `unittest` sobre `tests/test_llm_provider.py`, `tests/test_iteration_input.py` y `tests/test_flow_refactor.py` en verde.
 - Validacion real QuixBugs `gcd` completada con exito en Docker Compose: run `run-20260426T084255Z-2eaa022d73` finalizado en `success`, 1 iteracion, 1 archivo modificado y test final en verde.
+- Spec 002 Phase 2 aplicado: configuracion explicita de agente/tools, factory de arquitectura mono-agente, inicializacion runtime basada en config y provider ejecutando agentes preconfigurados.
+- Spec 002 ajuste aplicado: arquitecturas ahora construyen el facade agent; el flujo ejecuta el agente directo sin DTOs de arquitectura ni runner dedicado.
 
 ## En curso
 - Spec activa: specs/002-arquitecture-simplification/spec.md

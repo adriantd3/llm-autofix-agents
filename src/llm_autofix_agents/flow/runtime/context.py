@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from llm_autofix_agents.contracts import TestResults
 from llm_autofix_agents.flow.models import TestExecution
@@ -41,9 +41,10 @@ class RunConfig:
     instructions: str
     settings: LLMSettings
     provider: LLMProvider
+    facade_agent_builder: Callable[[], object]
     agent_context: APRToolContext
-    agent_tools: list[object]
     tool_profile: str
+    tool_count: int
     max_iterations: int
     test_timeout_seconds: int
     repo_root: Path

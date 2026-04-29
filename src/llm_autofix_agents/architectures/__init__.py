@@ -1,5 +1,9 @@
-from llm_autofix_agents.architectures.mono_agent import MonoAgentArchitecture
+from llm_autofix_agents.architectures.config import BuiltArchitecture
+from llm_autofix_agents.architectures.factory import build_architecture
+from llm_autofix_agents.architectures.mono_agent import build_mono_agent_architecture
 
 __all__ = [
-    "MonoAgentArchitecture",
+    "BuiltArchitecture",
+    "build_architecture",
+    "build_mono_agent_architecture",
 ]

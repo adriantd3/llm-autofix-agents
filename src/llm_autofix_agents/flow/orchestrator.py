@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
-from llm_autofix_agents.flow.architecture import ArchitectureRunner
+from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.errors import error_category_from_exception
 from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds, run_test_command
 from llm_autofix_agents.flow.iteration_runner import IterationRunner
@@ -10,7 +11,7 @@ from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.policies.stop import StopPolicy
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.runtime.initializer import RunInitializer
-from llm_autofix_agents.flow.runtime.options import resolve_max_iterations, resolve_tool_profile
+from llm_autofix_agents.flow.runtime.options import resolve_max_iterations
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
@@ -32,7 +33,7 @@ class RunOrchestrator:
     def __init__(
         self,
         *,
-        architecture: ArchitectureRunner,
+        architecture: BuiltArchitecture,
         initializer: RunInitializer | None = None,
         iteration_runner: IterationRunner | None = None,
         output_builder: RunOutputBuilder | None = None,
@@ -46,7 +47,7 @@ class RunOrchestrator:
         self._output_builder = output_builder or RunOutputBuilder()
         self._finalizer = finalizer or RunFinalizer()
         self._iteration_runner = iteration_runner or IterationRunner(
-            architecture=architecture,
+            agent_runner=AgentExecutionRunner(),
             workspace=self._workspace,
             output_builder=self._output_builder,
             stop_policy=stop_policy or StopPolicy(),
@@ -91,7 +92,6 @@ class RunOrchestrator:
             run_input=run_input,
             settings=settings,
             provider=provider,
-            tool_profile=resolve_tool_profile(run_input.metadata),
             max_iterations=resolve_max_iterations(run_input.metadata),
             test_timeout_seconds=resolve_test_timeout_seconds(run_input.metadata),
         )

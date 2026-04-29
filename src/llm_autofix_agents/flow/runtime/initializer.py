@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.contracts import RunInput, build_run_identity
-from llm_autofix_agents.flow.architecture import ArchitectureRunner
 from llm_autofix_agents.flow.lifecycle.observer_factory import build_observer
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.runtime.options import metadata_text
@@ -16,14 +16,13 @@ from llm_autofix_agents.observability import (
 )
 from llm_autofix_agents.observability.telemetry import RunTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
-from llm_autofix_agents.tools.profiles import build_apr_tools
 
 
 @dataclass(frozen=True)
 class RunInitializer:
     """Builds initial runtime state and emits run-start lifecycle events."""
 
-    architecture: ArchitectureRunner
+    architecture: BuiltArchitecture
 
     def initialize(
         self,
@@ -31,7 +30,6 @@ class RunInitializer:
         run_input: RunInput,
         settings: LLMSettings,
         provider: LLMProvider,
-        tool_profile: str,
         max_iterations: int,
         test_timeout_seconds: int,
     ) -> tuple[RunConfig, RunState]:
@@ -39,7 +37,10 @@ class RunInitializer:
         agent_config = {
             **settings.fingerprint_payload(),
             "architecture": self.architecture.architecture_name,
-            "tool_profile": tool_profile,
+            "agent_name": self.architecture.agent_name,
+            "agent_role": self.architecture.agent_role,
+            "tool_profile": self.architecture.tool_profile,
+            "tool_count": self.architecture.tool_count,
         }
         identity = build_run_identity(run_input=run_input, agent_config=agent_config, iteration=1)
 
@@ -65,7 +66,7 @@ class RunInitializer:
             provider=settings.provider.value,
             model=settings.model,
             max_turns=settings.max_turns,
-            tool_profile=tool_profile,
+            tool_profile=self.architecture.tool_profile,
             instructions=self.architecture.instructions,
             base_url=settings.base_url,
             tracing_disabled=settings.tracing_disabled,
@@ -78,9 +79,10 @@ class RunInitializer:
             instructions=self.architecture.instructions,
             settings=settings,
             provider=provider,
+            facade_agent_builder=self.architecture.facade_agent_builder,
             agent_context=APRToolContext(root_dir=str(repo_root)),
-            agent_tools=build_apr_tools(tool_profile),
-            tool_profile=tool_profile,
+            tool_profile=self.architecture.tool_profile,
+            tool_count=self.architecture.tool_count,
             max_iterations=max_iterations,
             test_timeout_seconds=test_timeout_seconds,
             repo_root=repo_root,

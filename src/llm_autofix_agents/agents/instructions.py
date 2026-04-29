@@ -32,6 +32,7 @@ Follow this workflow:
 - Run focused tests for the touched behavior after editing.
 - Run broader tests when they are cheap and available.
 - Inspect git status/diff before reporting completion.
+- If a test run passes after your changes, report "done" immediately and stop calling tools.
 - If validation fails, iterate: use the new evidence to refine the diagnosis and patch.
 - If validation cannot be run, say so clearly and lower confidence.
 
@@ -47,7 +48,7 @@ Follow this workflow:
 6. Completion criteria
 - Report "done" only when the fix is applied and validation supports success.
 - Report "in_progress" when a plausible fix or investigation step was performed but validation is incomplete or still failing.
-- Report "stuck" when you cannot make progress with the available evidence/tools.
+- Report "stuck" when you cannot make progress with the available evidence/tools. If you make execssive tool calls on tests and simply cannot receive a good answer, return and report "stuck"
 - Confidence must reflect observed validation, not optimism.
 
 Return a structured iteration report with exactly these fields:

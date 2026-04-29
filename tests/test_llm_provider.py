@@ -14,6 +14,7 @@ from llm_autofix_agents.llm.provider import (
     ProviderCallError,
     create_provider,
 )
+from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
@@ -33,11 +34,7 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
-            provider.run_prompt(
-                instructions="repair",
-                user_input="failing test output",
-                max_turns=2,
-            )
+            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
         )
 
         self.assertIsInstance(result, AgentFixIterationRecord)
@@ -45,12 +42,10 @@ class LLMProviderTests(unittest.TestCase):
         set_tracing_disabled.assert_called_once_with(True)
         self.assertTrue(runner_run.await_count == 1)
 
-    @patch("llm_autofix_agents.llm.provider.Agent")
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
-    def test_provider_forwards_tools_and_context_to_agent(
+    def test_provider_forwards_agent_and_context(
         self,
         runner_run: AsyncMock,
-        agent_ctor: AsyncMock,
     ) -> None:
         runner_run.return_value = SimpleNamespace(
             final_output=AgentFixIterationRecord(
@@ -61,22 +56,14 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
-        configured_tool = object()
+        agent = _stub_agent()
         context = object()
 
         asyncio.run(
-            provider.run_prompt(
-                instructions="repair",
-                user_input="failing test output",
-                max_turns=2,
-                tools=[configured_tool],
-                context=context,
-            )
+            provider.run_agent(agent=agent, user_input="failing test output", max_turns=2, context=context)
         )
 
-        self.assertTrue(agent_ctor.called)
-        self.assertEqual(agent_ctor.call_args.kwargs["tools"], [configured_tool])
-        self.assertNotIn("mcp_servers", agent_ctor.call_args.kwargs)
+        self.assertEqual(runner_run.await_args.args[0], agent)
         self.assertEqual(runner_run.await_args.kwargs["context"], context)
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
@@ -92,11 +79,7 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
-            provider.run_prompt(
-                instructions="repair",
-                user_input="failing test output",
-                max_turns=2,
-            )
+            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
         )
 
         self.assertEqual(result.changed_files, ["a.py"])
@@ -123,11 +106,7 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
-            provider.run_prompt(
-                instructions="repair",
-                user_input="failing test output",
-                max_turns=2,
-            )
+            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
         )
 
         self.assertEqual(result.input_tokens, 11)
@@ -143,11 +122,7 @@ class LLMProviderTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "invalid structured output"):
             asyncio.run(
-                provider.run_prompt(
-                    instructions="repair",
-                    user_input="failing test output",
-                    max_turns=2,
-                )
+                provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
             )
 
     @patch("llm_autofix_agents.llm.provider.asyncio.sleep", new_callable=AsyncMock)
@@ -172,8 +147,8 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
-            provider.run_prompt(
-                instructions="repair",
+            provider.run_agent(
+                agent=_stub_agent(),
                 user_input="failing test output",
                 max_turns=2,
                 event_callback=events.append,
@@ -206,8 +181,8 @@ class LLMProviderTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ProviderCallError, "provider call failed after 1 attempt"):
             asyncio.run(
-                provider.run_prompt(
-                    instructions="repair",
+                provider.run_agent(
+                    agent=_stub_agent(),
                     user_input="failing test output",
                     max_turns=2,
                     event_callback=events.append,
@@ -235,8 +210,8 @@ class LLMProviderTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ProviderCallError, "provider call failed after 2 attempt"):
             asyncio.run(
-                provider.run_prompt(
-                    instructions="repair",
+                provider.run_agent(
+                    agent=_stub_agent(),
                     user_input="failing test output",
                     max_turns=2,
                     event_callback=events.append,
@@ -265,28 +240,11 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         result = asyncio.run(
-            provider.run_prompt(
-                instructions="repair",
-                user_input="failing test output",
-                max_turns=2,
-            )
+            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
         )
 
         self.assertEqual(result.status, "done")
         self.assertEqual(result.changed_files, ["src/a.py"])
-
-    @patch("llm_autofix_agents.llm.provider.Agent")
-    def test_provider_sets_structured_output_type(self, agent_ctor: AsyncMock) -> None:
-        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
-
-        provider._build_agent(instructions="repair", tools=[])
-
-        self.assertTrue(agent_ctor.called)
-        output_type = agent_ctor.call_args.kwargs["output_type"]
-        self.assertIsInstance(output_type, AgentOutputSchema)
-        self.assertIs(output_type.output_type, AgentFixIterationRecord)
-        self.assertFalse(output_type.is_strict_json_schema())
-        self.assertNotIn("mcp_servers", agent_ctor.call_args.kwargs)
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_rejects_unparseable_output(self, runner_run: AsyncMock) -> None:
@@ -295,16 +253,39 @@ class LLMProviderTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "invalid structured output"):
             asyncio.run(
-                provider.run_prompt(
-                    instructions="repair",
-                    user_input="failing test output",
-                    max_turns=2,
-                )
+                provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
             )
 
-    @patch("llm_autofix_agents.llm.provider.AsyncOpenAI")
-    def test_provider_uses_ollama_fallback_api_key(self, async_openai: AsyncMock) -> None:
-        provider = OpenAIAgentsSDKProvider(
+    def test_create_provider_returns_sdk_adapter(self) -> None:
+        provider = create_provider(_gemini_settings())
+        self.assertIsInstance(provider, OpenAIAgentsSDKProvider)
+
+
+class AgentFactoryTests(unittest.TestCase):
+    @patch("llm_autofix_agents.llm.agent_factory.Agent")
+    def test_build_agent_sets_structured_output_type(self, agent_ctor: AsyncMock) -> None:
+        build_agent(
+            settings=_gemini_settings(),
+            name="test-agent",
+            instructions="repair",
+            tools=[],
+        )
+
+        self.assertTrue(agent_ctor.called)
+        output_type = agent_ctor.call_args.kwargs["output_type"]
+        self.assertIsInstance(output_type, AgentOutputSchema)
+        self.assertIs(output_type.output_type, AgentFixIterationRecord)
+        self.assertFalse(output_type.is_strict_json_schema())
+        self.assertNotIn("mcp_servers", agent_ctor.call_args.kwargs)
+
+    @patch("llm_autofix_agents.llm.agent_factory.OpenAIChatCompletionsModel")
+    @patch("llm_autofix_agents.llm.agent_factory.AsyncOpenAI")
+    def test_build_agent_uses_ollama_fallback_api_key(
+        self,
+        async_openai: AsyncMock,
+        model_ctor: AsyncMock,
+    ) -> None:
+        build_agent(
             settings=LLMSettings(
                 provider=ProviderType.OLLAMA,
                 model="llama3.1:8b",
@@ -312,16 +293,14 @@ class LLMProviderTests(unittest.TestCase):
                 base_url="http://localhost:11500/v1",
                 max_turns=3,
                 tracing_disabled=True,
-            )
+            ),
+            name="test-agent",
+            instructions="repair",
+            tools=[],
         )
 
-        provider._build_model()
-
         async_openai.assert_called_once_with(api_key="ollama", base_url="http://localhost:11500/v1")
-
-    def test_create_provider_returns_sdk_adapter(self) -> None:
-        provider = create_provider(_gemini_settings())
-        self.assertIsInstance(provider, OpenAIAgentsSDKProvider)
+        self.assertTrue(model_ctor.called)
 
 
 def _gemini_settings() -> LLMSettings:
@@ -333,6 +312,10 @@ def _gemini_settings() -> LLMSettings:
         max_turns=3,
         tracing_disabled=True,
     )
+
+
+def _stub_agent() -> object:
+    return object()
 
 
 class _TransientProviderError(RuntimeError):

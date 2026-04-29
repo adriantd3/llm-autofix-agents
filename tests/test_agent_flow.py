@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,7 +9,7 @@ from pydantic import SecretStr
 
 from llm_autofix_agents.agent_flow import run_agent_baseline
 from llm_autofix_agents.contracts import ErrorCategory, RunInput, RunStatus, StopReason
-from llm_autofix_agents.flow.git_ops import TempBranchContext
+from llm_autofix_agents.flow.workspace.git import TempBranchContext
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 from llm_autofix_agents.observability import ObservabilityConfig
@@ -67,9 +66,9 @@ class AgentFlowTests(unittest.TestCase):
         self.assertIsNotNone(provider.last_user_input)
         assert provider.last_user_input is not None
         self.assertEqual(provider.last_user_input, "Fix parser failure")
-        self.assertIsNotNone(provider.last_tools)
-        assert provider.last_tools is not None
-        self.assertEqual(len(provider.last_tools), len(build_apr_tools("full")))
+        self.assertIsNotNone(provider.last_agent)
+        assert provider.last_agent is not None
+        self.assertEqual(len(provider.last_agent.tools), len(build_apr_tools("full")))
         self.assertIsNotNone(provider.last_context)
         assert provider.last_context is not None
         self.assertEqual(provider.last_context.root_dir, str(Path(".").resolve()))
@@ -441,38 +440,38 @@ class _CapturingProvider:
     def __init__(self, response: AgentFixIterationRecord) -> None:
         self._response = response
         self.last_user_input: str | None = None
-        self.last_tools: list[object] | None = None
+        self.last_agent: object | None = None
         self.last_context: object | None = None
 
-    async def run_prompt(
+    async def run_agent(
         self,
         *,
-        instructions: str,
+        agent: object,
         user_input: str,
         max_turns: int,
-        tools: Sequence[object] | None = None,
         context: object | None = None,
         hooks: object | None = None,
+        event_callback: object | None = None,
     ) -> AgentFixIterationRecord:
-        del instructions, max_turns, hooks
+        del max_turns, hooks, event_callback
         self.last_user_input = user_input
-        self.last_tools = list(tools) if tools is not None else None
+        self.last_agent = agent
         self.last_context = context
         return self._response
 
 
 class _FailingProvider:
-    async def run_prompt(
+    async def run_agent(
         self,
         *,
-        instructions: str,
+        agent: object,
         user_input: str,
         max_turns: int,
-        tools: Sequence[object] | None = None,
         context: object | None = None,
         hooks: object | None = None,
+        event_callback: object | None = None,
     ) -> AgentFixIterationRecord:
-        del instructions, user_input, max_turns, tools, context, hooks
+        del agent, user_input, max_turns, context, hooks, event_callback
         raise RuntimeError("provider down")
 
 
@@ -481,17 +480,17 @@ class _SequencedProvider:
         self._responses = responses
         self._calls = 0
 
-    async def run_prompt(
+    async def run_agent(
         self,
         *,
-        instructions: str,
+        agent: object,
         user_input: str,
         max_turns: int,
-        tools: Sequence[object] | None = None,
         context: object | None = None,
         hooks: object | None = None,
+        event_callback: object | None = None,
     ) -> AgentFixIterationRecord:
-        del instructions, user_input, max_turns, tools, context, hooks
+        del agent, user_input, max_turns, context, hooks, event_callback
         if self._calls >= len(self._responses):
             raise RuntimeError("no more responses configured")
         response = self._responses[self._calls]

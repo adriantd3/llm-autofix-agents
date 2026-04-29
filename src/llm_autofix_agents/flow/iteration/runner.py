@@ -4,7 +4,8 @@ import time
 from dataclasses import dataclass, field
 
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
-from llm_autofix_agents.flow.architecture import AgentIterationContext, ArchitectureRunner
+from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
+from llm_autofix_agents.flow.agent_execution.runner import AgentExecutionContext
 from llm_autofix_agents.flow.execution.tests import run_test_command, to_test_results
 from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs, record_validation_logs
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
@@ -26,7 +27,7 @@ from llm_autofix_agents.observability import utc_now_iso
 class IterationRunner:
     """Coordinates one APR iteration with focused collaborators."""
 
-    architecture: ArchitectureRunner
+    agent_runner: AgentExecutionRunner
     workspace: WorkspaceManager
     output_builder: RunOutputBuilder
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
@@ -60,16 +61,28 @@ class IterationRunner:
 
         before_snapshot = self.workspace.snapshot(cfg)
 
-        # Run the iteration and get the proposed fix from the agent
-        agent_result = self.architecture.run_iteration(
-            self._build_context(
-                run_input=run_input,
-                cfg=cfg,
-                state=state,
-                iteration=iteration,
-                identity=identity,
-                iteration_telemetry=iteration_telemetry,
-            )
+        # Run the iteration and get the proposed fix from the facade agent
+        agent = cfg.facade_agent_builder()
+        agent_context = self._build_context(
+            run_input=run_input,
+            cfg=cfg,
+            state=state,
+            iteration=iteration,
+            identity=identity,
+            iteration_telemetry=iteration_telemetry,
+            agent=agent,
+        )
+        agent_result = self.agent_runner.run_agent(
+            context=agent_context,
+            execution_index=1,
+            provider_call=lambda hooks, event_callback: cfg.provider.run_agent(
+                agent=agent,
+                user_input=agent_context.user_input,
+                max_turns=agent_context.max_turns,
+                context=agent_context.agent_context,
+                hooks=hooks,
+                event_callback=event_callback,
+            ),
         )
 
         changes = self.workspace.inspect_changes(cfg=cfg, before_snapshot=before_snapshot)
@@ -149,15 +162,16 @@ class IterationRunner:
         iteration: int,
         identity,
         iteration_telemetry,
-    ) -> AgentIterationContext:
-        return AgentIterationContext(
+        agent,
+    ) -> AgentExecutionContext:
+        return AgentExecutionContext(
             run_id=cfg.run_id,
             iteration_id=identity.iteration_id,
             iteration_index=iteration,
             run_agent_id=cfg.run_agent_id,
             provider=cfg.provider,
+            agent=agent,
             agent_context=cfg.agent_context,
-            agent_tools=cfg.agent_tools,
             iteration_telemetry=iteration_telemetry,
             user_input=build_iteration_input(
                 prompt=run_input.prompt,

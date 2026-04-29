@@ -23,7 +23,7 @@ def build_iteration_logs(
         f"test_signature={test_execution.signature}",
         "toolset=apr-local",
         f"tool_profile={cfg.tool_profile}",
-        f"tool_count={len(cfg.agent_tools)}",
+        f"tool_count={cfg.tool_count}",
         f"provider={cfg.settings.provider.value}",
         f"model={cfg.settings.model}",
     ]

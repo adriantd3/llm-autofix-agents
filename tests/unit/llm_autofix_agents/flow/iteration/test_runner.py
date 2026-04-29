@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import patch
 
 from llm_autofix_agents.contracts import RunInput
-from llm_autofix_agents.flow.architecture import AgentIterationResult
+from llm_autofix_agents.flow.agent_execution import AgentExecutionResult
 from llm_autofix_agents.flow.iteration.runner import IterationRunner
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
@@ -19,7 +19,7 @@ from llm_autofix_agents.tools.context import APRToolContext
 
 class IterationRunnerTests(unittest.TestCase):
     def test_run_records_logs_and_returns_none_when_not_terminal(self) -> None:
-        architecture = _CapturingArchitecture()
+        agent_runner = _CapturingAgentRunner()
         workspace = _StubWorkspaceManager(
             changes=WorkspaceChangeSet(
                 modified_files=[],
@@ -42,7 +42,7 @@ class IterationRunnerTests(unittest.TestCase):
         )
 
         runner = IterationRunner(
-            architecture=architecture,
+            agent_runner=agent_runner,
             workspace=workspace,
             output_builder=_StubOutputBuilder(),
         )
@@ -59,9 +59,9 @@ class IterationRunnerTests(unittest.TestCase):
             )
 
         self.assertIsNone(output)
-        self.assertIsNotNone(architecture.last_context)
-        assert architecture.last_context is not None
-        self.assertEqual(architecture.last_context.user_input, "Fix parser failure")
+        self.assertIsNotNone(agent_runner.last_context)
+        assert agent_runner.last_context is not None
+        self.assertEqual(agent_runner.last_context.user_input, "Fix parser failure")
         self.assertIn("stage=agent", state.accumulated_logs)
         self.assertIn("proposal_matches_observed_files=true", state.accumulated_logs)
         self.assertIsNotNone(state.latest_tests)
@@ -83,16 +83,12 @@ class _StubOutputBuilder:
         raise AssertionError("build should not be called")
 
 
-class _CapturingArchitecture:
-    architecture_name = "mono_agent"
-    agent_name = "baseline"
-    agent_role = "fixer"
-    instructions = "fix bugs"
-
+class _CapturingAgentRunner:
     def __init__(self) -> None:
         self.last_context = None
 
-    def run_iteration(self, context):
+    def run_agent(self, *, context, execution_index, provider_call):
+        del execution_index, provider_call
         self.last_context = context
         proposal = AgentFixIterationRecord(
             status="in_progress",
@@ -100,7 +96,7 @@ class _CapturingArchitecture:
             confidence=0.2,
             changed_files=[],
         )
-        return AgentIterationResult(
+        return AgentExecutionResult(
             proposal=proposal,
             agent_execution_id="agent-1",
             started_at="2026-04-28T00:00:00Z",
@@ -163,9 +159,10 @@ def _build_config(*, telemetry: _StubRunTelemetry) -> RunConfig:
         instructions="fix bugs",
         settings=settings,
         provider=_StubProvider(),
+        facade_agent_builder=lambda: object(),
         agent_context=APRToolContext(root_dir=str(Path(".").resolve())),
-        agent_tools=[],
         tool_profile="full",
+        tool_count=0,
         max_iterations=3,
         test_timeout_seconds=120,
         repo_root=Path("."),
@@ -183,7 +180,7 @@ def _build_config(*, telemetry: _StubRunTelemetry) -> RunConfig:
 
 
 class _StubProvider:
-    async def run_prompt(self, **kwargs: Any):
+    async def run_agent(self, **kwargs: Any):
         raise AssertionError("Provider should not be called in this test")
 
 

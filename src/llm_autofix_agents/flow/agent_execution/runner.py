@@ -5,10 +5,25 @@ import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 
-from llm_autofix_agents.flow.architecture import AgentIterationContext
 from llm_autofix_agents.flow.errors import ProviderExecutionError
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
 from llm_autofix_agents.llm.provider_events import ProviderCallEvent
+from llm_autofix_agents.observability.telemetry import IterationTelemetry
+from llm_autofix_agents.tools.context import APRToolContext
+
+
+@dataclass(frozen=True)
+class AgentExecutionContext:
+    run_id: str
+    iteration_id: str
+    iteration_index: int
+    run_agent_id: str
+    provider: LLMProvider
+    agent: object
+    agent_context: APRToolContext
+    iteration_telemetry: IterationTelemetry
+    user_input: str
+    max_turns: int
 
 
 @dataclass(frozen=True)
@@ -27,7 +42,7 @@ class AgentExecutionRunner:
     def run_agent(
         self,
         *,
-        context: AgentIterationContext,
+        context: AgentExecutionContext,
         execution_index: int,
         provider_call: Callable[
             [object, Callable[[ProviderCallEvent], None] | None],

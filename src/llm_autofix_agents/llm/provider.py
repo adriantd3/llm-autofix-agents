@@ -3,22 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, Protocol
 
-from agents import (
-    Agent,
-    AgentOutputSchema,
-    OpenAIChatCompletionsModel,
-    RunConfig,
-    RunHooks,
-    Runner,
-    RunResult,
-    Tool,
-    set_tracing_disabled,
-)
-from openai import AsyncOpenAI
+from agents import Agent, RunConfig, RunHooks, Runner, RunResult, set_tracing_disabled
 from pydantic import BaseModel, Field
 
 from llm_autofix_agents.llm.provider_events import (
@@ -44,13 +32,12 @@ class AgentFixIterationRecord(AgentFixIterationResult):
 
 
 class LLMProvider(Protocol):
-    async def run_prompt(
+    async def run_agent(
         self,
         *,
-        instructions: str,
+        agent: Agent[Any],
         user_input: str,
         max_turns: int,
-        tools: Sequence[object] | None = None,
         context: Any | None = None,
         hooks: RunHooks[Any] | None = None,
         event_callback: ProviderCallEventCallback | None = None,
@@ -86,20 +73,18 @@ class ProviderCallError(RuntimeError):
 class OpenAIAgentsSDKProvider:
     settings: LLMSettings
 
-    async def run_prompt(
+    async def run_agent(
         self,
         *,
-        instructions: str,
+        agent: Agent[Any],
         user_input: str,
         max_turns: int,
-        tools: Sequence[object] | None = None,
         context: Any | None = None,
         hooks: RunHooks[Any] | None = None,
         event_callback: ProviderCallEventCallback | None = None,
     ) -> AgentFixIterationRecord:
         set_tracing_disabled(self.settings.tracing_disabled)
 
-        resolved_tools = cast(list[Tool], list(tools) if tools is not None else [])
         result: RunResult | None = None
         total_attempts = self.settings.api_max_retries + 1
         agent_execution_id = _extract_agent_execution_id(hooks)
@@ -113,10 +98,7 @@ class OpenAIAgentsSDKProvider:
         for attempt in range(1, total_attempts + 1):
             try:
                 result = await Runner.run(
-                    self._build_agent(
-                        instructions=instructions,
-                        tools=resolved_tools,
-                    ),
+                    agent,
                     user_input,
                     context=context,
                     max_turns=max_turns,
@@ -206,35 +188,6 @@ class OpenAIAgentsSDKProvider:
         # TODO: extract changed files from logging. Study if tool hooks are viable
 
         return proposal
-
-    def _build_agent(
-        self,
-        *,
-        instructions: str,
-        tools: list[Tool],
-    ) -> Agent[Any]:
-        return Agent(
-            name="AutofixBaselineAgent",
-            instructions=instructions,
-            model=self._build_model(),
-            tools=tools,
-            output_type=AgentOutputSchema(AgentFixIterationRecord, strict_json_schema=False),
-        )
-
-    def _build_model(self) -> OpenAIChatCompletionsModel:
-        client = AsyncOpenAI(
-            api_key=self._resolve_api_key(),
-            base_url=self.settings.base_url,
-        )
-        return OpenAIChatCompletionsModel(model=self.settings.model, openai_client=client)
-
-    def _resolve_api_key(self) -> str:
-        if self.settings.api_key is None:
-            return "ollama"
-        resolved = self.settings.api_key.get_secret_value().strip()
-        if not resolved:
-            return "ollama"
-        return resolved
 
 
 def create_provider(settings: LLMSettings) -> LLMProvider:
@@ -373,6 +326,7 @@ def _is_retryable_provider_error(exc: Exception) -> bool:
         "RateLimitError",
         "InternalServerError",
         "ServiceUnavailableError",
+        "ModelBehaviorError",
     }:
         return True
 
