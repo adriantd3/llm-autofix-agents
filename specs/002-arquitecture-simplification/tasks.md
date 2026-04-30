@@ -15,4 +15,4 @@
 - [ ] Ajustar tests de flujo afectados por la simplificacion.
 
 ## Fase 4 - Validacion
-- [ ] Verificar `make quixbugs-gcd` con un par de ejecuciones completas para garantizar el correcto funcionamiento del agente
+- [ ] Verificar `make quixbugs-gcd-run` con un par de ejecuciones completas para garantizar el correcto funcionamiento del agente

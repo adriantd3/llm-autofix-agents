@@ -54,3 +54,4 @@
 
 ## Expansion posterior al MVP
 - Ampliar benchmark de QuixBugs a 5 casos reproducibles para comparativas agregadas.
+- Implementar una arquitectura multi-agente handoff como estrategia adicional y validarla en QuixBugs.

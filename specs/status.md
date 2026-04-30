@@ -66,6 +66,7 @@
 - Tasks activas: specs/002-arquitecture-simplification/tasks.md
 - Spec previa activa: specs/001-mono-agente-entorno/spec.md
 - Tasks previas activas: specs/001-mono-agente-entorno/tasks.md
+- Spec en preparacion: specs/003-multi-agent-handoff/spec.md
 - Subhito activo: SH6 - Benchmark QuixBugs inicial
 - Task activa: validar baseline mono-agente tool-driven con caso QuixBugs MVP.
 - Refactor CLI Docker-only iniciado: `autofix run`, carga de `RUN_*` en `ContainerInstantiation`, logs de consola por `logging` y runner async simplificado.
@@ -73,3 +74,4 @@
 ## Siguiente
 - Validar observability.db con una ejecucion QuixBugs MVP y preparar queries basicas para analisis experimental.
 - Ejecutar run baseline mono-agente end-to-end sobre caso gcd QuixBugs con `autofix run`.
+- Spec propuesta: specs/004-agent-model-overrides/spec.md
