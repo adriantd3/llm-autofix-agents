@@ -4,6 +4,7 @@ from llm_autofix_agents.observability.lifecycle_hooks import APRRunHooks, infer_
 from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
+    AgentHandoffRecord,
     FileChangeRecord,
     IterationRecord,
     ModelConfigDescriptor,
@@ -14,6 +15,7 @@ from llm_autofix_agents.observability.models import (
     ToolCallRecord,
     make_agent_execution_id,
     make_file_change_id,
+    make_handoff_id,
     make_test_execution_id,
     utc_now_iso,
 )
@@ -27,6 +29,7 @@ __all__ = [
     "APRRunHooks",
     "AgentDescriptor",
     "AgentExecutionRecord",
+    "AgentHandoffRecord",
     "CompositeObserver",
     "ConsoleObserver",
     "FileChangeRecord",
@@ -49,6 +52,7 @@ __all__ = [
     "infer_tool_status",
     "make_agent_execution_id",
     "make_file_change_id",
+    "make_handoff_id",
     "make_test_execution_id",
     "resolve_observability_config",
     "stable_id",

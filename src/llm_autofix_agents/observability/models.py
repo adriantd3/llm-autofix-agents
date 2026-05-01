@@ -215,6 +215,7 @@ class ToolCallRecord:
     tool_name: str
     status: str | None
     success: bool | None
+    agent_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -326,3 +327,19 @@ class RunFinishedRecord:
     live_log_path: str | None = None
     summary_path: str | None = None
     diff_path: str | None = None
+
+
+def make_handoff_id(run_id: str, iteration_index: int, handoff_index: int) -> str:
+    return f"{run_id}-it{iteration_index:02d}-handoff{handoff_index:03d}"
+
+
+@dataclass(frozen=True)
+class AgentHandoffRecord:
+    handoff_id: str
+    run_id: str
+    iteration_id: str | None
+    from_agent_name: str
+    to_agent_name: str
+    from_run_agent_id: str | None
+    to_run_agent_id: str | None
+    occurred_at: str

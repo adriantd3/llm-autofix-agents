@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   tool_name TEXT NOT NULL,
   status TEXT,
   success INTEGER,
+  agent_name TEXT,
   FOREIGN KEY (run_id) REFERENCES runs(run_id),
   FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id),
   FOREIGN KEY (agent_execution_id) REFERENCES agent_executions(agent_execution_id)
@@ -184,6 +185,41 @@ CREATE INDEX IF NOT EXISTS idx_tool_calls_run ON tool_calls(run_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_name ON tool_calls(tool_name);
 CREATE INDEX IF NOT EXISTS idx_provider_call_events_run ON provider_call_events(run_id);
 CREATE INDEX IF NOT EXISTS idx_provider_call_events_agent_execution ON provider_call_events(agent_execution_id);
+
+CREATE TABLE IF NOT EXISTS agent_handoffs (
+  handoff_id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  iteration_id TEXT,
+  from_agent_name TEXT NOT NULL,
+  to_agent_name TEXT NOT NULL,
+  from_run_agent_id TEXT,
+  to_run_agent_id TEXT,
+  occurred_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES runs(run_id),
+  FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_handoffs_run ON agent_handoffs(run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_handoffs_iteration ON agent_handoffs(iteration_id);
+"""
+
+
+MIGRATION_V3_TO_V4 = """
+ALTER TABLE tool_calls ADD COLUMN agent_name TEXT;
+CREATE TABLE IF NOT EXISTS agent_handoffs (
+  handoff_id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  iteration_id TEXT,
+  from_agent_name TEXT NOT NULL,
+  to_agent_name TEXT NOT NULL,
+  from_run_agent_id TEXT,
+  to_run_agent_id TEXT,
+  occurred_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES runs(run_id),
+  FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_handoffs_run ON agent_handoffs(run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_handoffs_iteration ON agent_handoffs(iteration_id);
 """
 
 

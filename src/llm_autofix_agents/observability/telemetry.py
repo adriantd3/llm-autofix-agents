@@ -286,12 +286,14 @@ class AgentExecutionTelemetry:
     execution_index: int
     started_at: str
 
-    def create_hooks(self) -> APRRunHooks:
+    def create_hooks(self, *, run_agent_ids: dict[str, str] | None = None) -> APRRunHooks:
         return APRRunHooks(
             observer=self.observer,
             run_id=self.run_id,
             iteration_id=self.iteration_id,
             agent_execution_id=self.agent_execution_id,
+            run_agent_ids=run_agent_ids,
+            iteration_index=self.iteration_index,
         )
 
     def handle_provider_call_event(self, event: object) -> None:

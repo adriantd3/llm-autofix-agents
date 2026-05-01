@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -92,20 +91,34 @@ class MultiAgentHandoffArchitectureTests(unittest.TestCase):
         self.assertEqual(architecture.tool_count, 4)
         self.assertEqual(facade_agent, {"name": "triage"})
 
-        self.assertEqual([call.args for call in build_tools.call_args_list], [
-            ("minimal",),
-            ("core",),
-            ("core",),
-            ("full",),
-        ])
+        self.assertEqual(len(architecture.sub_agents), 3)
+        self.assertEqual(architecture.sub_agents[0].agent_name, "localizer")
+        self.assertEqual(architecture.sub_agents[1].agent_name, "patcher")
+        self.assertEqual(architecture.sub_agents[2].agent_name, "validator")
+        self.assertEqual(architecture.sub_agents[0].agent_role, "localizer")
+        self.assertEqual(architecture.sub_agents[1].agent_role, "patcher")
+        self.assertEqual(architecture.sub_agents[2].agent_role, "validator")
+
+        self.assertEqual(
+            [call.args for call in build_tools.call_args_list],
+            [
+                ("minimal",),
+                ("core",),
+                ("core",),
+                ("full",),
+            ],
+        )
 
         self.assertEqual([call["name"] for call in build_agent_calls], ["validator", "patcher", "localizer", "triage"])
-        self.assertEqual([call["model_override"] for call in build_agent_calls], [
-            "validator-model",
-            "patcher-model",
-            "localizer-model",
-            "triage-model",
-        ])
+        self.assertEqual(
+            [call["model_override"] for call in build_agent_calls],
+            [
+                "validator-model",
+                "patcher-model",
+                "localizer-model",
+                "triage-model",
+            ],
+        )
         self.assertIsNone(build_agent_calls[0].get("handoffs"))
         self.assertEqual(build_agent_calls[1]["handoffs"], ["handoff:validator"])
         self.assertEqual(build_agent_calls[2]["handoffs"], ["handoff:patcher"])

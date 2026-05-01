@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import unittest
-from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from llm_autofix_agents.contracts import ContainerInstantiation, RunIdentity, RunOutput, RunStatus, StopReason

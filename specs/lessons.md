@@ -110,6 +110,14 @@
 - Contexto: ejecuciones QuixBugs intermitentemente abortadas por 500 del backend del modelo durante el parsing de tool calls.
 - Anti-patron detectado: tratar un fallo transitorio del provider como error terminal del run.
 - Que no hay que hacer: convertir un 500 puntual o un timeout de red en `infra_failure` definitivo sin reintento.
-- Por que estuvo mal: los runs se cortan aunque el backend se recupere en el siguiente intento, degradando la tasa de exito sin aportar señal util.
+- Por que estuvo mal: los runs se cortan aunque el backend se recupere en el siguiente intento, degradando la tasa de exito sin aportar senal util.
 - Alternativa recomendada: retry exponencial con backoff y clasificacion explicita de errores transitorios antes de propagar fallo terminal.
 - Regla preventiva para futuras specs: si el fallo es del proveedor y es razonablemente recuperable, preferir retry acotado antes que abortar el run.
+
+## 2026-05-01 (modelos locales y structured output en handoff)
+- Contexto: modelos locales Ollama (qwen2.5-coder:14b, qwen3.5:9b) no siguen handoffs de forma consistente en la arquitectura multi-agente.
+- Anti-patron detectado: asumir que modelos locales seguiran instrucciones de handoff (output_schema=None para intermediarios, output_type estricto para validator) sin validacion previa.
+- Que no hay que hacer: desplegar arquitectura handoff con modelos locales sin verificar capacidad de seguir structured output y handoffs.
+- Por que estuvo mal: el triage agent usa tools pero no entrega al localizer; el validator debe producir AgentFixIterationRecord pero modelos locales generan texto libre.
+- Alternativa recomendada: (1) usar modelos con mejor seguimiento de instrucciones para handoff (GPT-4, Claude, Gemini), (2) simplificar prompts o usar output_schema mas permisivo como fallback, (3) documentar compatibilidad de modelos por arquitectura.
+- Regla preventiva para futuras specs: validar modelo por arquitectura antes de asumir que handoff funciona; ofrecer fallback a mono_agent cuando el modelo no soporta structured output.

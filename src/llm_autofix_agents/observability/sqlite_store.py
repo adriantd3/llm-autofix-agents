@@ -8,6 +8,7 @@ from pathlib import Path
 from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
+    AgentHandoffRecord,
     FileChangeRecord,
     IterationRecord,
     ModelConfigDescriptor,
@@ -17,7 +18,7 @@ from llm_autofix_agents.observability.models import (
     TestExecutionRecord,
     ToolCallRecord,
 )
-from llm_autofix_agents.observability.sqlite_schema import SCHEMA_VERSION, schema_init_sql
+from llm_autofix_agents.observability.sqlite_schema import MIGRATION_V3_TO_V4, SCHEMA_VERSION, schema_init_sql
 
 
 def stable_id(prefix: str, payload: str) -> str:
@@ -36,7 +37,12 @@ class SQLiteObservabilityStore:
     def initialize(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
-            conn.executescript(schema_init_sql())
+            current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if current_version == 0:
+                conn.executescript(schema_init_sql())
+            elif current_version < SCHEMA_VERSION:
+                if current_version < 4:
+                    conn.executescript(MIGRATION_V3_TO_V4)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def upsert_architecture(self, name: str, description: str | None = None) -> str:
@@ -315,8 +321,9 @@ class SQLiteObservabilityStore:
                     seq,
                     tool_name,
                     status,
-                    success
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    success,
+                    agent_name
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.tool_call_id,
@@ -327,6 +334,7 @@ class SQLiteObservabilityStore:
                     record.tool_name,
                     record.status,
                     None if record.success is None else (1 if record.success else 0),
+                    record.agent_name,
                 ),
             )
 
@@ -430,6 +438,33 @@ class SQLiteObservabilityStore:
                     record.additions,
                     record.deletions,
                     record.detected_by,
+                ),
+            )
+
+    def insert_agent_handoff(self, record: AgentHandoffRecord) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO agent_handoffs (
+                    handoff_id,
+                    run_id,
+                    iteration_id,
+                    from_agent_name,
+                    to_agent_name,
+                    from_run_agent_id,
+                    to_run_agent_id,
+                    occurred_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.handoff_id,
+                    record.run_id,
+                    record.iteration_id,
+                    record.from_agent_name,
+                    record.to_agent_name,
+                    record.from_run_agent_id,
+                    record.to_run_agent_id,
+                    record.occurred_at,
                 ),
             )
 

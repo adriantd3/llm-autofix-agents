@@ -6,6 +6,7 @@ from pathlib import Path
 from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
+    AgentHandoffRecord,
     FileChangeRecord,
     IterationRecord,
     ProviderCallRecord,
@@ -129,6 +130,9 @@ class MarkdownLiveObserver:
     def on_file_change(self, *, record: FileChangeRecord) -> None:
         self._append(f"- file_change: {record.path} ({record.change_type or 'modified'})")
 
+    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
+        self._append(f"- handoff: {record.from_agent_name} -> {record.to_agent_name} (at {record.occurred_at})")
+
     def _append(self, text: str) -> None:
         with self._path.open("a", encoding="utf-8") as handler:
             handler.write(f"{text}\n")
@@ -169,6 +173,9 @@ class ConsoleObserver:
 
     def on_file_change(self, *, record: FileChangeRecord) -> None:
         logger.info("[file] %s %s", record.path, record.change_type or "modified")
+
+    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
+        logger.info("[handoff] %s -> %s", record.from_agent_name, record.to_agent_name)
 
 
 def _format_provider_call_record(record: ProviderCallRecord) -> str:

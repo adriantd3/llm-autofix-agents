@@ -6,7 +6,7 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 
 from llm_autofix_agents.flow.errors import ProviderExecutionError
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 from llm_autofix_agents.observability.telemetry import IterationTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
@@ -15,6 +15,7 @@ from llm_autofix_agents.tools.context import APRToolContext
 @dataclass(frozen=True)
 class AgentExecutionContext:
     run_agent_id: str
+    run_agent_ids: dict[str, str]
     agent_context: APRToolContext
     iteration_telemetry: IterationTelemetry
     user_input: str
@@ -46,7 +47,7 @@ class AgentExecutionRunner:
             run_agent_id=context.run_agent_id,
             execution_index=execution_index,
         )
-        hooks = agent_telemetry.create_hooks()
+        hooks = agent_telemetry.create_hooks(run_agent_ids=context.run_agent_ids)
 
         started_monotonic = time.perf_counter()
 

@@ -5,8 +5,8 @@ import hashlib
 import subprocess
 from pathlib import Path
 
-from llm_autofix_agents.flow.errors import WorkspaceError
 from llm_autofix_agents.flow import models as _models
+from llm_autofix_agents.flow.errors import WorkspaceError
 
 _DEFAULT_IGNORE_PATTERNS = [
     ".git/",

@@ -8,7 +8,7 @@ from llm_autofix_agents.agents.instructions import (
     HANDOFF_TRIAGE_INSTRUCTIONS,
     HANDOFF_VALIDATOR_INSTRUCTIONS,
 )
-from llm_autofix_agents.architectures.config import BuiltArchitecture
+from llm_autofix_agents.architectures.config import BuiltArchitecture, SubAgentDescriptor
 from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.agent_models import resolve_agent_model
 from llm_autofix_agents.llm.settings import LLMSettings
@@ -104,4 +104,27 @@ def build_multi_agent_handoff_architecture(
         instructions=HANDOFF_TRIAGE_INSTRUCTIONS,
         tool_profile="mixed",
         tool_count=len(tool_names),
+        sub_agents=(
+            SubAgentDescriptor(
+                agent_name="localizer",
+                agent_role="localizer",
+                model=localizer_model,
+                instructions=HANDOFF_LOCALIZER_INSTRUCTIONS,
+                tool_profile="core",
+            ),
+            SubAgentDescriptor(
+                agent_name="patcher",
+                agent_role="patcher",
+                model=patcher_model,
+                instructions=HANDOFF_PATCHER_INSTRUCTIONS,
+                tool_profile="core",
+            ),
+            SubAgentDescriptor(
+                agent_name="validator",
+                agent_role="validator",
+                model=validator_model,
+                instructions=HANDOFF_VALIDATOR_INSTRUCTIONS,
+                tool_profile="full",
+            ),
+        ),
     )

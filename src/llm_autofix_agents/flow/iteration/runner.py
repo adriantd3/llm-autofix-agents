@@ -167,6 +167,7 @@ class IterationRunner:
     ) -> AgentExecutionContext:
         return AgentExecutionContext(
             run_agent_id=cfg.run_agent_id,
+            run_agent_ids=cfg.run_agent_ids,
             agent_context=cfg.agent_context,
             iteration_telemetry=iteration_telemetry,
             user_input=build_iteration_input(

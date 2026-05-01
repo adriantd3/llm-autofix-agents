@@ -9,7 +9,6 @@ from openai import AsyncOpenAI
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.settings import LLMSettings
 
-
 _DEFAULT_OUTPUT_SCHEMA = object()
 
 

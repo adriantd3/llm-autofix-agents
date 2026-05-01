@@ -83,15 +83,15 @@ Permitir seleccionar la arquitectura handoff por configuracion de entorno.
 Registrar multiples agentes y transiciones de handoff.
 
 ### Tasks
-- [ ] SH5-T01 Registrar todos los agentes del pipeline en RunTelemetry (orden y rol).
+- [x] SH5-T01 Registrar todos los agentes del pipeline en RunTelemetry (orden y rol).
 	Contexto: RunInitializer hoy registra un solo agente. Necesitamos multiples registros para el pipeline.
 	Output: registro de agentes con agent_order y roles consistentes con el pipeline. El mono agente debera aparecer en los registros (live.md) como `main`
-- [ ] SH5-T02 Ajustar tool call tracing para asociar tool calls al agente ejecutor o registrar eventos de handoff.
+- [x] SH5-T02 Ajustar tool call tracing para asociar tool calls al agente ejecutor o registrar eventos de handoff.
 	Contexto: APRRunHooks registra tool calls por agent_execution_id. En handoff, el ejecutor cambia.
-	Output: estrategia clara (por ejemplo: un agent_execution_id por agente o evento de handoff en observabilidad).
-- [ ] SH5-T03 Actualizar SQLite schema/observer si se agregan nuevos eventos o campos.
+	Output: estrategia clara (por ejemplo: un agent_execution_id por agente o evento de handoff en observabilidad). Se implemento: on_agent_start/on_handoff en RunHooks + agent_name en tool_calls + AgentHandoffRecord en tabla agent_handoffs.
+- [x] SH5-T03 Actualizar SQLite schema/observer si se agregan nuevos eventos o campos.
 	Contexto: agregar columnas o tablas solo si es necesario para handoff.
-	Output: migracion y actualizacion del observer si se introduce un nuevo tipo de evento.
+	Output: migracion schema v3→v4 con tabla agent_handoffs y columna agent_name en tool_calls, mas implementacion en observers.
 
 ### Done cuando
 - La observabilidad refleja multiples agentes y sus ejecuciones.
@@ -101,6 +101,7 @@ Registrar multiples agentes y transiciones de handoff.
 Demostrar que la arquitectura handoff es funcional en un caso real.
 
 ### Tasks
+- [ ] SH6-T01 Ejecutar un run con `RUN_ARCHITECTURE=multi_agent_handoff` sobre QuixBugs gcd.
 	Contexto: usar RUN_ARCHITECTURE=multi_agent_handoff y el mismo RUN_TEST_COMMAND de gcd.
 	Output: run reproducible con logs y artefactos completos en results/.
 - [ ] SH6-T02 Guardar evidencia (diff, summary.json, observability.db) y registrar resultados.

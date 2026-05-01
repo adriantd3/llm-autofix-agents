@@ -7,6 +7,7 @@ from typing import Protocol
 from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
+    AgentHandoffRecord,
     FileChangeRecord,
     IterationRecord,
     ProviderCallRecord,
@@ -43,6 +44,8 @@ class RunObserver(Protocol):
 
     def on_file_change(self, *, record: FileChangeRecord) -> None: ...
 
+    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None: ...
+
 
 class NullObserver:
     def on_run_started(self, *, run: RunDescriptor, started_at: str) -> None:
@@ -77,6 +80,9 @@ class NullObserver:
         del record
 
     def on_file_change(self, *, record: FileChangeRecord) -> None:
+        del record
+
+    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         del record
 
 
@@ -128,6 +134,9 @@ class CompositeObserver:
 
     def on_file_change(self, *, record: FileChangeRecord) -> None:
         self._dispatch("on_file_change", record=record)
+
+    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
+        self._dispatch("on_agent_handoff", record=record)
 
     def _dispatch(self, event_name: str, **kwargs: object) -> None:
         for observer in self._observers:
@@ -185,3 +194,6 @@ class SQLiteObserver:
 
     def on_file_change(self, *, record: FileChangeRecord) -> None:
         self._store.insert_file_change(record)
+
+    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
+        self._store.insert_agent_handoff(record)

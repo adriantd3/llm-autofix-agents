@@ -109,7 +109,9 @@ class RepoStateTests(unittest.TestCase):
 
     @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff", return_value="diff")
     @patch("llm_autofix_agents.flow.workspace.state.detect_untracked_files", return_value=[])
-    def test_detect_workspace_change_set_diff_excludes_untracked_false_when_no_untracked(self, _mock_untracked, _mock_diff) -> None:
+    def test_detect_workspace_change_set_diff_excludes_untracked_false_when_no_untracked(
+        self, _mock_untracked, _mock_diff
+    ) -> None:
         repo = Path("/fake/repo")
         before = {"src/a.py": "hash1"}
         after = {"src/a.py": "hash2"}

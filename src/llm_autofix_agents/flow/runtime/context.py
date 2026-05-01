@@ -36,6 +36,7 @@ class RunState:
 class RunConfig:
     run_id: str
     run_agent_id: str
+    run_agent_ids: dict[str, str]
     architecture_name: str
     settings: LLMSettings
     provider: LLMProvider

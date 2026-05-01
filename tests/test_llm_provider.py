@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock, patch
 from agents import AgentOutputSchema
 from pydantic import SecretStr
 
+from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.provider import (
     AgentFixIterationRecord,
     OpenAIAgentsSDKProvider,
     ProviderCallError,
     create_provider,
 )
-from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
@@ -33,9 +33,7 @@ class LLMProviderTests(unittest.TestCase):
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        result = asyncio.run(
-            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
-        )
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
         self.assertIsInstance(result, AgentFixIterationRecord)
         self.assertEqual(result.reasoning_summary, "Fix wrong literal")
@@ -59,9 +57,7 @@ class LLMProviderTests(unittest.TestCase):
         agent = _stub_agent()
         context = object()
 
-        asyncio.run(
-            provider.run_agent(agent=agent, user_input="failing test output", max_turns=2, context=context)
-        )
+        asyncio.run(provider.run_agent(agent=agent, user_input="failing test output", max_turns=2, context=context))
 
         self.assertEqual(runner_run.await_args.args[0], agent)
         self.assertEqual(runner_run.await_args.kwargs["context"], context)
@@ -78,9 +74,7 @@ class LLMProviderTests(unittest.TestCase):
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        result = asyncio.run(
-            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
-        )
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
         self.assertEqual(result.changed_files, ["a.py"])
         self.assertEqual(result.status, "in_progress")
@@ -105,9 +99,7 @@ class LLMProviderTests(unittest.TestCase):
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        result = asyncio.run(
-            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
-        )
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
         self.assertEqual(result.input_tokens, 11)
         self.assertEqual(result.output_tokens, 7)
@@ -119,9 +111,7 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         with self.assertRaisesRegex(RuntimeError, "invalid structured output"):
-            asyncio.run(
-                provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
-            )
+            asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
     @patch("llm_autofix_agents.llm.provider.asyncio.sleep", new_callable=AsyncMock)
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
@@ -237,9 +227,7 @@ class LLMProviderTests(unittest.TestCase):
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
-        result = asyncio.run(
-            provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
-        )
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
         self.assertEqual(result.status, "done")
         self.assertEqual(result.changed_files, ["src/a.py"])
@@ -250,9 +238,7 @@ class LLMProviderTests(unittest.TestCase):
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
         with self.assertRaisesRegex(RuntimeError, "invalid structured output"):
-            asyncio.run(
-                provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2)
-            )
+            asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
     def test_create_provider_returns_sdk_adapter(self) -> None:
         provider = create_provider(_gemini_settings())

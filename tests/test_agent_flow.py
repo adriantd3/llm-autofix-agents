@@ -218,9 +218,7 @@ class AgentFlowTests(unittest.TestCase):
         with (
             _patch_run_test_command(
                 side_effect=[
-                    SimpleNamespace(
-                        exit_code=0, timed_out=False, output="OK", signature="sig-baseline"
-                    ),
+                    SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-baseline"),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-last"),
                 ]
             ),
@@ -359,9 +357,7 @@ class AgentFlowTests(unittest.TestCase):
             ) as delete_branch,
             _patch_run_test_command(
                 side_effect=[
-                    SimpleNamespace(
-                        exit_code=0, timed_out=False, output="OK", signature="sig-baseline"
-                    ),
+                    SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-baseline"),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                 ]
             ),
@@ -598,9 +594,7 @@ def _patch_run_test_command(*, side_effect):
     from contextlib import ExitStack
 
     stack = ExitStack()
-    stack.enter_context(
-        patch("llm_autofix_agents.flow.execution.tests.run_test_command", side_effect=side_effect)
-    )
+    stack.enter_context(patch("llm_autofix_agents.flow.execution.tests.run_test_command", side_effect=side_effect))
     return stack
 
 

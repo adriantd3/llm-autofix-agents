@@ -72,11 +72,30 @@ class RunInitializer:
             instructions=self.architecture.instructions,
             base_url=settings.base_url,
             tracing_disabled=settings.tracing_disabled,
+            agent_order=1,
         )
+        run_agent_ids: dict[str, str] = {self.architecture.agent_name: run_agent_id}
+
+        for order, sub in enumerate(self.architecture.sub_agents, start=2):
+            sub_model = sub.model or resolved_model
+            sub_run_agent_id = telemetry.register_agent(
+                agent_name=sub.agent_name,
+                agent_role=sub.agent_role,
+                provider=settings.provider.value,
+                model=sub_model,
+                max_turns=settings.max_turns,
+                tool_profile=sub.tool_profile,
+                instructions=sub.instructions,
+                base_url=settings.base_url,
+                tracing_disabled=settings.tracing_disabled,
+                agent_order=order,
+            )
+            run_agent_ids[sub.agent_name] = sub_run_agent_id
 
         cfg = RunConfig(
             run_id=identity.run_id,
             run_agent_id=run_agent_id,
+            run_agent_ids=run_agent_ids,
             architecture_name=self.architecture.architecture_name,
             settings=settings,
             provider=provider,
