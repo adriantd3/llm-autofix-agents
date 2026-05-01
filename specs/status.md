@@ -64,17 +64,12 @@
 - Spec 003 SH3/SH4 completados: arquitectura multi-agent handoff y seleccion runtime por enum.
 
 - Spec 003 SH5 completado: observabilidad multi-agente con registro de 4 agentes en run_agents, eventos de handoff en tabla agent_handoffs, atribucion de tool calls por agent_name, migracion schema v3→v4, y hooks on_agent_start/on_handoff en APRRunHooks.
-- Spec 003 SH6 en curso: validacion end-to-end QuixBugs con arquitectura handoff pendiente de ejecucion con LLM disponible.
+- Spec 003 SH6 completado: validacion end-to-end QuixBugs con arquitectura handoff exitosa (run-20260501T140716Z-66fcdfbec8, status=success).
+- Bugs criticos corregidos durante SH6: duration tracking, string/None output crash, MaxTurnsExceeded handling, instrucciones de handoff compatibles con SDK.
 
 ## En curso
-- Spec activa: specs/003-multi-agent-handoff/spec.md
-- Tasks activas: specs/003-multi-agent-handoff/tasks.md
-- Spec previa: specs/002-arquitecture-simplification/spec.md
-- Tasks previas: specs/002-arquitecture-simplification/tasks.md
-- Subhito activo: SH6 - Validacion end-to-end QuixBugs con arquitectura handoff
-- Task activa: ejecutar run end-to-end con RUN_ARCHITECTURE=multi_agent_handoff sobre QuixBugs gcd.
+- Spec activa: specs/003-multi-agent-handoff/spec.md (completada)
+- Spec propuesta: specs/004-agent-model-overrides/spec.md
 
 ## Siguiente
-- Ejecutar run handoff end-to-end sobre QuixBugs gcd con LLM disponible.
-- Verificar observability.db con datos de run handoff (4 agentes, handoffs, agent_name en tool_calls).
-- Spec propuesta: specs/004-agent-model-overrides/spec.md
+- Spec 004: agent-model-overrides (permitir configurar modelos distintos por rol de agente).

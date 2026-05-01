@@ -183,6 +183,7 @@ class AgentExecutionRecord:
         tool_calls_count: int = 0,
         error_type: str | None = None,
         error_message_short: str | None = None,
+        duration_seconds: float | None = None,
     ) -> AgentExecutionRecord:
         return cls(
             agent_execution_id=agent_execution_id,
@@ -192,6 +193,7 @@ class AgentExecutionRecord:
             execution_index=execution_index,
             started_at=started_at,
             finished_at=utc_now_iso(),
+            duration_seconds=duration_seconds,
             status=status,
             reasoning_summary=reasoning_summary,
             confidence=confidence,

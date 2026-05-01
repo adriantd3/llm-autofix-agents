@@ -47,6 +47,10 @@ class MultiAgentHandoffArchitectureTests(unittest.TestCase):
             "minimal": [_tool("read_file"), _tool("search_files")],
             "core": [_tool("read_file"), _tool("execute_command")],
             "full": [_tool("read_file"), _tool("execute_command"), _tool("apply_unified_diff")],
+            "triage": [_tool("read_file"), _tool("search_files")],
+            "localizer": [_tool("read_file"), _tool("execute_command")],
+            "patcher": [_tool("read_file"), _tool("replace_in_file")],
+            "validator": [_tool("read_file"), _tool("run_test_target")],
         }
         build_agent_calls: list[dict[str, object]] = []
 
@@ -87,8 +91,8 @@ class MultiAgentHandoffArchitectureTests(unittest.TestCase):
         self.assertEqual(architecture.agent_name, "triage")
         self.assertEqual(architecture.agent_role, "triage")
         self.assertEqual(architecture.agent_model, "triage-model")
-        self.assertEqual(architecture.tool_profile, "mixed")
-        self.assertEqual(architecture.tool_count, 4)
+        self.assertEqual(architecture.tool_profile, "triage")
+        self.assertEqual(architecture.tool_count, 5)
         self.assertEqual(facade_agent, {"name": "triage"})
 
         self.assertEqual(len(architecture.sub_agents), 3)
@@ -102,10 +106,10 @@ class MultiAgentHandoffArchitectureTests(unittest.TestCase):
         self.assertEqual(
             [call.args for call in build_tools.call_args_list],
             [
-                ("minimal",),
-                ("core",),
-                ("core",),
-                ("full",),
+                ("triage",),
+                ("localizer",),
+                ("patcher",),
+                ("validator",),
             ],
         )
 

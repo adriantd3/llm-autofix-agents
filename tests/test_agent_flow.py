@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,13 +19,15 @@ from llm_autofix_agents.tools import build_apr_tools
 
 class AgentFlowTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        tmp_path = Path(self._tmp_dir.name)
         self._observability_config_patcher = patch(
             "llm_autofix_agents.agent_flow.resolve_observability_config",
             return_value=ObservabilityConfig(
                 enabled=False,
                 interactive=False,
-                results_dir=Path("results"),
-                sqlite_db_path=Path("results/observability.db"),
+                results_dir=tmp_path / "results",
+                sqlite_db_path=tmp_path / "results" / "observability.db",
                 live_log_enabled=False,
             ),
         )
@@ -38,6 +41,7 @@ class AgentFlowTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._observability_config_patcher.stop()
         self._git_repo_patcher.stop()
+        self._tmp_dir.cleanup()
 
     def test_run_agent_baseline_success(self) -> None:
         provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
@@ -500,20 +504,28 @@ class _SequencedProvider:
 
 
 class AgentFlowStatusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self._tmp_path = Path(self._tmp_dir.name)
+        self._obs_config_patcher = patch(
+            "llm_autofix_agents.agent_flow.resolve_observability_config",
+            return_value=ObservabilityConfig(
+                enabled=False,
+                interactive=False,
+                results_dir=self._tmp_path / "results",
+                sqlite_db_path=self._tmp_path / "results" / "observability.db",
+                live_log_enabled=False,
+            ),
+        )
+        self._obs_config_patcher.start()
+
+    def tearDown(self) -> None:
+        self._obs_config_patcher.stop()
+        self._tmp_dir.cleanup()
+
     @patch("llm_autofix_agents.flow.workspace.manager._git.is_git_repository", return_value=False)
-    @patch(
-        "llm_autofix_agents.agent_flow.resolve_observability_config",
-        return_value=ObservabilityConfig(
-            enabled=False,
-            interactive=False,
-            results_dir=Path("results"),
-            sqlite_db_path=Path("results/observability.db"),
-            live_log_enabled=False,
-        ),
-    )
     def test_run_agent_baseline_stops_when_agent_reports_stuck(
         self,
-        _resolve_obs: object,
         _is_git_repo: object,
     ) -> None:
         provider = _SequencedProvider([_proposal(reasoning_summary="cannot progress", status="stuck")])

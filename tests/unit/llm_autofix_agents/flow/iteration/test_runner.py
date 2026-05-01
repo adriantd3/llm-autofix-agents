@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
+from llm_autofix_agents.observability.interactive import MarkdownLiveObserver
 from llm_autofix_agents.observability.telemetry_models import IterationTelemetryResult
 from llm_autofix_agents.tools.context import APRToolContext
 
@@ -47,16 +49,17 @@ class IterationRunnerTests(unittest.TestCase):
             output_builder=_StubOutputBuilder(),
         )
 
-        with patch(
-            "llm_autofix_agents.flow.execution.tests.run_test_command",
-            return_value=test_execution,
-        ):
-            output = runner.run(
-                run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
-                cfg=cfg,
-                state=state,
-                iteration=1,
-            )
+        with patch.object(IterationRunner, "_write_iteration_patch") as mock_write_patch:
+            with patch(
+                "llm_autofix_agents.flow.execution.tests.run_test_command",
+                return_value=test_execution,
+            ):
+                output = runner.run(
+                    run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
+                    cfg=cfg,
+                    state=state,
+                    iteration=1,
+                )
 
         self.assertIsNone(output)
         self.assertIsNotNone(agent_runner.last_context)
@@ -69,6 +72,104 @@ class IterationRunnerTests(unittest.TestCase):
         self.assertEqual(state.latest_tests.failed, 1)
         self.assertTrue(telemetry.iteration_telemetry.finish_called)
         self.assertEqual(telemetry.iteration_telemetry.test_execution_calls, 1)
+        mock_write_patch.assert_called_once_with(cfg=cfg, iteration=1, diff="")
+
+    def test_run_writes_iteration_patch_file(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            repo_root = Path(tmp_dir)
+            live_path = repo_root / "results" / "run-123" / "live.md"
+            live_observer = MarkdownLiveObserver(live_path)
+
+            expected_diff = "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-old\n+new\n"
+            workspace = _StubWorkspaceManager(
+                changes=WorkspaceChangeSet(
+                    modified_files=["a.py"],
+                    added_files=[],
+                    deleted_files=[],
+                    untracked_files=[],
+                    diff=expected_diff,
+                    diff_excludes_untracked=False,
+                )
+            )
+            telemetry = _StubRunTelemetry()
+            cfg = _build_config(telemetry=telemetry, repo_root=repo_root, live_observer=live_observer)
+            state = RunState()
+
+            test_execution = TestExecution(
+                exit_code=1,
+                timed_out=False,
+                output="FAILED (failures=1)",
+                signature="sig-1",
+            )
+
+            runner = IterationRunner(
+                agent_runner=_CapturingAgentRunner(),
+                workspace=workspace,
+                output_builder=_StubOutputBuilder(),
+            )
+
+            with patch(
+                "llm_autofix_agents.flow.execution.tests.run_test_command",
+                return_value=test_execution,
+            ):
+                output = runner.run(
+                    run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
+                    cfg=cfg,
+                    state=state,
+                    iteration=2,
+                )
+
+            self.assertIsNone(output)
+            patch_path = live_path.parent / "it2.patch"
+            self.assertTrue(patch_path.exists())
+            self.assertEqual(patch_path.read_text(encoding="utf-8"), expected_diff)
+
+    def test_run_writes_iteration_patch_to_results_dir_without_live_observer(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            repo_root = Path(tmp_dir)
+            expected_diff = "diff --git a/b.py b/b.py\n--- b/b.py\n+++ b/b.py\n@@ -1 +1 @@\n-old\n+new\n"
+            workspace = _StubWorkspaceManager(
+                changes=WorkspaceChangeSet(
+                    modified_files=["b.py"],
+                    added_files=[],
+                    deleted_files=[],
+                    untracked_files=[],
+                    diff=expected_diff,
+                    diff_excludes_untracked=False,
+                )
+            )
+            telemetry = _StubRunTelemetry()
+            cfg = _build_config(telemetry=telemetry, repo_root=repo_root)
+            state = RunState()
+
+            test_execution = TestExecution(
+                exit_code=1,
+                timed_out=False,
+                output="FAILED (failures=1)",
+                signature="sig-1",
+            )
+
+            runner = IterationRunner(
+                agent_runner=_CapturingAgentRunner(),
+                workspace=workspace,
+                output_builder=_StubOutputBuilder(),
+            )
+
+            with patch(
+                "llm_autofix_agents.flow.execution.tests.run_test_command",
+                return_value=test_execution,
+            ):
+                output = runner.run(
+                    run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
+                    cfg=cfg,
+                    state=state,
+                    iteration=3,
+                )
+
+            self.assertIsNone(output)
+            patch_path = repo_root / "results" / "run-123" / "it3.patch"
+            self.assertTrue(patch_path.exists())
+            self.assertEqual(patch_path.read_text(encoding="utf-8"), expected_diff)
 
 
 @dataclass
@@ -147,24 +248,31 @@ class _StubRunTelemetry:
         return self.iteration_telemetry
 
 
-def _build_config(*, telemetry: _StubRunTelemetry) -> RunConfig:
+def _build_config(
+    *,
+    telemetry: _StubRunTelemetry,
+    repo_root: Path | None = None,
+    live_observer: MarkdownLiveObserver | None = None,
+) -> RunConfig:
     settings = LLMSettings(provider=ProviderType.OLLAMA, model="test")
+    resolved_repo_root = repo_root or Path(".")
     return RunConfig(
         run_id="run-123",
         run_agent_id="agent-123",
+        run_agent_ids={"mono_agent": "agent-123"},
         architecture_name="mono_agent",
         settings=settings,
         provider=_StubProvider(),
         facade_agent_builder=lambda: object(),
-        agent_context=APRToolContext(root_dir=str(Path(".").resolve())),
+        agent_context=APRToolContext(root_dir=str(resolved_repo_root.resolve())),
         tool_profile="full",
         tool_count=0,
         max_iterations=3,
         test_timeout_seconds=120,
-        repo_root=Path("."),
+        repo_root=resolved_repo_root,
         telemetry=telemetry,
         sqlite_store=None,
-        live_observer=None,
+        live_observer=live_observer,
         run_input_metadata={},
         agent_config={},
         run_started_monotonic=0.0,

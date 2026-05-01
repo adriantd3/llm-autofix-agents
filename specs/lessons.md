@@ -121,3 +121,19 @@
 - Por que estuvo mal: el triage agent usa tools pero no entrega al localizer; el validator debe producir AgentFixIterationRecord pero modelos locales generan texto libre.
 - Alternativa recomendada: (1) usar modelos con mejor seguimiento de instrucciones para handoff (GPT-4, Claude, Gemini), (2) simplificar prompts o usar output_schema mas permisivo como fallback, (3) documentar compatibilidad de modelos por arquitectura.
 - Regla preventiva para futuras specs: validar modelo por arquitectura antes de asumir que handoff funciona; ofrecer fallback a mono_agent cuando el modelo no soporta structured output.
+
+## 2026-05-01 (instrucciones de handoff vs mecanismo del SDK)
+- Contexto: arquitectura handoff fallaba porque el modelo retornaba texto en lugar de llamar herramientas de handoff.
+- Anti-patron detectado: escribir prompts que ensenan al modelo a producir texto con secciones "HANDOFF:" cuando el SDK espera que llame una funcion `transfer_to_<agent>`.
+- Que no hay que hacer: incluir formatos de output de texto (SUMMARY/SIGNALS/HANDOFF) para agentes que deben usar handoff tools del SDK.
+- Por que estuvo mal: el modelo sigue las instrucciones literales y escribe texto; el SDK interpreta ese texto como `final_output` y nunca se ejecuta el handoff.
+- Alternativa recomendada: (1) usar `agents.extensions.handoff_prompt.RECOMMENDED_PROMPT_PREFIX` para ensenar al modelo el mecanismo de handoff del SDK, (2) eliminar formatos de output de texto para agentes intermediarios, (3) instruir explicitamente "llama la herramienta transfer_to_X" en lugar de "escribe HANDOFF:".
+- Regla preventiva para futuras specs: cuando se use handoff del SDK, nunca mezclar instrucciones de formato de texto con expectativas de llamada a tool; usar el prompt prefix oficial del SDK.
+
+## 2026-05-01 (resiliencia ante limites de turnos)
+- Contexto: modelos locales excedian `max_turns` sin producir output final, causando fallo total del run aunque hubieran aplicado cambios utiles.
+- Anti-patron detectado: tratar `MaxTurnsExceeded` como error terminal sin evaluar el trabajo realizado durante el run.
+- Que no hay que hacer: dejar que una excepcion de turnos aborte el run cuando el agente ya ha modificado archivos y los tests pasan.
+- Por que estuvo mal: desecha trabajo util y reduce la tasa de exito por un artefacto del mecanismo de control (limite de turnos) en lugar de un fallo real.
+- Alternativa recomendada: capturar `MaxTurnsExceeded` en el provider, retornar un fallback record con `status="done"` (para que el stop policy evalue tests/diff), y dejar que la iteracion continue o finalice segun la evidencia observable.
+- Regla preventiva para futuras specs: toda excepcion del SDK que pueda ocurrir tras trabajo util debe convertirse en fallback record, no en error terminal.

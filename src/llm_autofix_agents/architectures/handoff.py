@@ -20,10 +20,10 @@ def build_multi_agent_handoff_architecture(
     settings: LLMSettings,
     agent_models: dict[str, str] | None = None,
 ) -> BuiltArchitecture:
-    triage_tools = build_apr_tools("minimal")
-    localizer_tools = build_apr_tools("core")
-    patcher_tools = build_apr_tools("core")
-    validator_tools = build_apr_tools("full")
+    triage_tools = build_apr_tools("triage")
+    localizer_tools = build_apr_tools("localizer")
+    patcher_tools = build_apr_tools("patcher")
+    validator_tools = build_apr_tools("validator")
     tool_names = {
         tool.__name__
         for tool in (triage_tools + localizer_tools + patcher_tools + validator_tools)
@@ -102,7 +102,7 @@ def build_multi_agent_handoff_architecture(
         agent_role="triage",
         agent_model=triage_model,
         instructions=HANDOFF_TRIAGE_INSTRUCTIONS,
-        tool_profile="mixed",
+        tool_profile="triage",
         tool_count=len(tool_names),
         sub_agents=(
             SubAgentDescriptor(
@@ -110,21 +110,21 @@ def build_multi_agent_handoff_architecture(
                 agent_role="localizer",
                 model=localizer_model,
                 instructions=HANDOFF_LOCALIZER_INSTRUCTIONS,
-                tool_profile="core",
+                tool_profile="localizer",
             ),
             SubAgentDescriptor(
                 agent_name="patcher",
                 agent_role="patcher",
                 model=patcher_model,
                 instructions=HANDOFF_PATCHER_INSTRUCTIONS,
-                tool_profile="core",
+                tool_profile="patcher",
             ),
             SubAgentDescriptor(
                 agent_name="validator",
                 agent_role="validator",
                 model=validator_model,
                 instructions=HANDOFF_VALIDATOR_INSTRUCTIONS,
-                tool_profile="full",
+                tool_profile="validator",
             ),
         ),
     )

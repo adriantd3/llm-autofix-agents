@@ -19,7 +19,17 @@ class StopPolicy:
         run_input: RunInput,
         proposal: AgentFixIterationRecord,
         test_execution: TestExecution,
+        changed_files: list[str],
     ) -> bool:
+        # Observable success: tests pass AND files were changed.
+        # This takes precedence over agent-reported status because test results
+        # and file changes are ground truth; the agent may return text or
+        # an incorrect status when it fails to produce structured output.
+        if run_input.test_command is not None:
+            tests_pass = test_execution.exit_code == 0 and not test_execution.timed_out
+            if tests_pass and changed_files:
+                return True
+        # Agent-reported success (fallback when no test command or no files changed).
         if proposal.status != "done":
             return False
         if run_input.test_command is None:

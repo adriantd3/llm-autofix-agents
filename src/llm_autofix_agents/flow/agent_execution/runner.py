@@ -54,10 +54,16 @@ class AgentExecutionRunner:
         try:
             proposal = _run_sync(provider_call(hooks, agent_telemetry.handle_provider_call_event))
         except Exception as exc:  # noqa: BLE001
-            agent_telemetry.finish_failed(error=exc, tool_calls_count=hooks.tool_call_count)
+            duration_seconds = time.perf_counter() - started_monotonic
+            agent_telemetry.finish_failed(
+                error=exc, tool_calls_count=hooks.tool_call_count, duration_seconds=duration_seconds
+            )
             raise ProviderExecutionError(f"provider execution failed: {exc}") from exc
 
-        agent_telemetry.finish(proposal=proposal, tool_calls_count=hooks.tool_call_count)
+        duration_seconds = time.perf_counter() - started_monotonic
+        agent_telemetry.finish(
+            proposal=proposal, tool_calls_count=hooks.tool_call_count, duration_seconds=duration_seconds
+        )
         return AgentExecutionResult(
             proposal=proposal,
             agent_execution_id=agent_telemetry.agent_execution_id,

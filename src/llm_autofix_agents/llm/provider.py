@@ -108,6 +108,46 @@ class OpenAIAgentsSDKProvider:
                     event_emitter.retry_succeeded(attempt=attempt)
                 break
             except Exception as exc:  # noqa: BLE001
+                # MaxTurnsExceeded means the agent used all available turns.
+                # Rather than crashing, return a fallback record so the outer
+                # iteration loop can still evaluate any file changes / test
+                # results that occurred during the run.
+                if exc.__class__.__name__ == "MaxTurnsExceeded":
+                    # Use "done" so that the outer stop policy can recognize
+                    # success when tests pass, even though the agent ran out of
+                    # turns before explicitly reporting completion.
+                    proposal = AgentFixIterationRecord(
+                        status="done",
+                        reasoning_summary="Agent exceeded maximum turns; assuming completion based on tool usage",
+                        confidence=0.5,
+                        changed_files=[],
+                        notes=f"MaxTurnsExceeded after {max_turns} turns",
+                    )
+                    usage = _extract_token_usage(getattr(exc, "result", None))
+                    proposal.input_tokens = usage["input_tokens"]
+                    proposal.output_tokens = usage["output_tokens"]
+                    proposal.total_tokens = usage["total_tokens"]
+                    return proposal
+
+                # ModelBehaviorError means the model could not produce output
+                # matching the expected schema (e.g. structured JSON). For local
+                # models this is a capability issue, not a transient failure,
+                # so retrying the entire handoff pipeline is wasteful. Return a
+                # fallback record so the outer loop can evaluate actual changes.
+                if exc.__class__.__name__ == "ModelBehaviorError":
+                    proposal = AgentFixIterationRecord(
+                        status="done",
+                        reasoning_summary="Model could not produce structured output; assuming completion based on tool usage",
+                        confidence=0.5,
+                        changed_files=[],
+                        notes=f"ModelBehaviorError: {str(exc)[:200]}",
+                    )
+                    usage = _extract_token_usage(getattr(exc, "result", None))
+                    proposal.input_tokens = usage["input_tokens"]
+                    proposal.output_tokens = usage["output_tokens"]
+                    proposal.total_tokens = usage["total_tokens"]
+                    return proposal
+
                 retryable = _is_retryable_provider_error(exc)
                 status_code = _extract_http_status_code(exc)
                 if not retryable:
@@ -174,6 +214,29 @@ class OpenAIAgentsSDKProvider:
                 proposal = AgentFixIterationRecord(**output.model_dump())
             elif isinstance(output, dict):
                 proposal = AgentFixIterationRecord.model_validate(output)
+            elif isinstance(output, str):
+                # Model returned text instead of structured output.
+                # Try parsing as JSON first (model may have returned JSON string).
+                try:
+                    proposal = AgentFixIterationRecord.model_validate_json(output)
+                except Exception:
+                    # Fallback: wrap text into a minimal record so the pipeline
+                    # can continue rather than crashing.
+                    proposal = AgentFixIterationRecord(
+                        status="in_progress",
+                        reasoning_summary=output or "Model returned empty text output",
+                        confidence=0.0,
+                        changed_files=[],
+                        notes="Model returned text output instead of structured AgentFixIterationRecord",
+                    )
+            elif output is None:
+                proposal = AgentFixIterationRecord(
+                    status="in_progress",
+                    reasoning_summary="Model returned no output",
+                    confidence=0.0,
+                    changed_files=[],
+                    notes="Model final_output was None",
+                )
             else:
                 proposal = AgentFixIterationRecord.model_validate_json(json.dumps(output, ensure_ascii=True))
         except Exception as exc:

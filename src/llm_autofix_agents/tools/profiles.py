@@ -42,6 +42,47 @@ APR_SAFE_MINIMAL_TOOLS = [
     execute_command,
 ]
 
+# Handoff-specific tool profiles: each agent gets ONLY the tools it needs.
+# This enforces role boundaries and prevents agents from doing other agents' work.
+APR_TRIAGE_TOOLS = [
+    get_workspace_info,
+    list_files,
+    read_file,
+    search_files,
+]
+
+APR_LOCALIZER_TOOLS = [
+    get_workspace_info,
+    list_files,
+    read_file,
+    search_files,
+    execute_command,
+    run_test_target,
+]
+
+APR_PATCHER_TOOLS = [
+    get_workspace_info,
+    list_files,
+    read_file,
+    search_files,
+    write_file,
+    replace_in_file,
+    replace_lines,
+    execute_command,
+    run_test_target,
+]
+
+APR_VALIDATOR_TOOLS = [
+    get_workspace_info,
+    list_files,
+    read_file,
+    search_files,
+    execute_command,
+    run_test_target,
+    git_status_summary,
+    git_diff_summary,
+]
+
 
 def build_apr_tools(profile: str = "full") -> list[Any]:
     """Return a predefined APR tool profile."""
@@ -49,6 +90,10 @@ def build_apr_tools(profile: str = "full") -> list[Any]:
         "minimal": APR_SAFE_MINIMAL_TOOLS,
         "core": APR_CORE_TOOLS,
         "full": APR_FUNCTION_TOOLS,
+        "triage": APR_TRIAGE_TOOLS,
+        "localizer": APR_LOCALIZER_TOOLS,
+        "patcher": APR_PATCHER_TOOLS,
+        "validator": APR_VALIDATOR_TOOLS,
     }
     try:
         return list(profiles[profile])

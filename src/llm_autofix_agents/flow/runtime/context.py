@@ -55,3 +55,9 @@ class RunConfig:
     run_started_monotonic: float = 0.0
     baseline_test_execution: TestExecution | None = None
     temp_branch: TempBranchContext | None = None
+
+    @property
+    def results_dir(self) -> Path:
+        if self.live_observer is not None:
+            return self.live_observer.path.parent
+        return self.repo_root / "results" / self.run_id

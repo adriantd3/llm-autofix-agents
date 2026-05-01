@@ -87,6 +87,7 @@ class IterationRunner:
         )
 
         changes = self.workspace.inspect_changes(cfg=cfg, before_snapshot=before_snapshot)
+        self._write_iteration_patch(cfg=cfg, iteration=iteration, diff=changes.diff)
         test_execution = _execution_tests.run_test_command(
             run_input.test_command,
             cwd=cfg.repo_root,
@@ -269,6 +270,7 @@ class IterationRunner:
             run_input=run_input,
             proposal=proposal,
             test_execution=test_execution,
+            changed_files=changed_files,
         ):
             self._append_iteration_logs(
                 cfg=cfg,
@@ -314,6 +316,11 @@ class IterationRunner:
             )
 
         return None
+
+    def _write_iteration_patch(self, *, cfg: RunConfig, iteration: int, diff: str) -> None:
+        patch_path = cfg.results_dir / f"it{iteration}.patch"
+        patch_path.parent.mkdir(parents=True, exist_ok=True)
+        patch_path.write_text(diff, encoding="utf-8")
 
     def _remember_progress(self, *, state: RunState, proposal: AgentFixIterationRecord, test_signature: str) -> None:
         state.previous_proposal_signature = proposal_signature(proposal)

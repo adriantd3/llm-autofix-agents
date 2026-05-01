@@ -326,6 +326,7 @@ class AgentExecutionTelemetry:
         *,
         proposal: object,
         tool_calls_count: int,
+        duration_seconds: float,
     ) -> None:
         from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
@@ -346,6 +347,7 @@ class AgentExecutionTelemetry:
                 output_tokens=p.output_tokens if p else 0,
                 total_tokens=p.total_tokens if p else 0,
                 tool_calls_count=tool_calls_count,
+                duration_seconds=duration_seconds,
             )
         )
 
@@ -354,6 +356,7 @@ class AgentExecutionTelemetry:
         *,
         error: Exception,
         tool_calls_count: int,
+        duration_seconds: float,
     ) -> None:
         message = str(error).strip() or error.__class__.__name__
         self.observer.on_agent_execution_finished(
@@ -374,5 +377,6 @@ class AgentExecutionTelemetry:
                 tool_calls_count=tool_calls_count,
                 error_type=error.__class__.__name__,
                 error_message_short=message[:500],
+                duration_seconds=duration_seconds,
             )
         )

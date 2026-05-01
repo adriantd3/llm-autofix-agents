@@ -39,11 +39,7 @@ class RunFinalizer:
         return max(0.0, time.perf_counter() - cfg.run_started_monotonic)
 
     def _paths(self, cfg: RunConfig) -> FinalizedRunPaths:
-        summary_path = (
-            cfg.live_observer.path.parent / "summary.json"
-            if cfg.live_observer
-            else cfg.repo_root / "results" / cfg.run_id / "summary.json"
-        )
+        summary_path = cfg.results_dir / "summary.json"
         return FinalizedRunPaths(
             summary_path=summary_path,
             live_log_path=self._display_path(cfg.live_observer.path, cfg.repo_root) if cfg.live_observer else None,

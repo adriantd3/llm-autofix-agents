@@ -101,6 +101,7 @@ def test_agent_execution_telemetry_finish_failed_records_error_details() -> None
     agent_telemetry.finish_failed(
         error=RuntimeError("Connection error."),
         tool_calls_count=0,
+        duration_seconds=1.23,
     )
 
     assert len(observer.agent_execution_finished) == 1

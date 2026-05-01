@@ -19,6 +19,7 @@ COPY src /workspace/src
 COPY tests /workspace/tests
 COPY docker /workspace/docker
 
-RUN uv sync
+RUN uv sync \
+    && chmod -R a+rX /workspace/.venv
 
 CMD ["uv", "run", "autofix", "run"]

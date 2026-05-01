@@ -4,17 +4,23 @@ services:
     build:
       context: .
       dockerfile: docker/runtime.Dockerfile
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     env_file:
       - path: .env
         required: false
     environment:
+      HOME: /tmp
+      UV_CACHE_DIR: /tmp/.uv-cache
       RUNNER_NAME: "${RUNNER_NAME:-runner}"
       RUN_REPOSITORY: "${RUN_REPOSITORY:-https://github.com/jkoppel/QuixBugs.git}"
       RUN_BRANCH: "${RUN_BRANCH:-master}"
       RUN_ARCHITECTURE: "${RUN_ARCHITECTURE:-mono_agent}"
-      RUN_AGENT_MODELS: '${RUN_AGENT_MODELS:-{"main":"llama3.1:8b"}}'
+      RUN_AGENT_MODELS: '${RUN_AGENT_MODELS:-{"main":"qwen3.5:9b"}}'
       RUN_BOOTSTRAP_PROMPT: "${RUN_BOOTSTRAP_PROMPT:-Fix failing tests with minimal changes.}"
       RUN_TEST_COMMAND: "${RUN_TEST_COMMAND:-uv run --with pytest pytest python_testcases/test_gcd.py}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
+      LLM_MODEL: "${LLM_MODEL:-qwen3.5:9b}"
+      LLM_MAX_TURNS: "${LLM_MAX_TURNS:-20}"
       LLM_API_MAX_RETRIES: "${LLM_API_MAX_RETRIES:-5}"
       LLM_API_RETRY_BASE_SECONDS: "${LLM_API_RETRY_BASE_SECONDS:-1.0}"
       LLM_API_RETRY_MAX_SECONDS: "${LLM_API_RETRY_MAX_SECONDS:-12.0}"
