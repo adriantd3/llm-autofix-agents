@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+from agents import Agent, handoff
+
+from llm_autofix_agents.agents.instructions import (
+    HANDOFF_LOCALIZER_INSTRUCTIONS,
+    HANDOFF_PATCHER_INSTRUCTIONS,
+    HANDOFF_TRIAGE_INSTRUCTIONS,
+    HANDOFF_VALIDATOR_INSTRUCTIONS,
+)
+from llm_autofix_agents.architectures.config import BuiltArchitecture
+from llm_autofix_agents.llm.agent_factory import build_agent
+from llm_autofix_agents.llm.agent_models import resolve_agent_model
+from llm_autofix_agents.llm.settings import LLMSettings
+from llm_autofix_agents.tools.profiles import build_apr_tools
+
+
+def build_multi_agent_handoff_architecture(
+    *,
+    settings: LLMSettings,
+    agent_models: dict[str, str] | None = None,
+) -> BuiltArchitecture:
+    triage_tools = build_apr_tools("minimal")
+    localizer_tools = build_apr_tools("core")
+    patcher_tools = build_apr_tools("core")
+    validator_tools = build_apr_tools("full")
+    tool_names = {
+        tool.__name__
+        for tool in (triage_tools + localizer_tools + patcher_tools + validator_tools)
+        if hasattr(tool, "__name__")
+    }
+
+    triage_model = resolve_agent_model(
+        agent_models,
+        role="triage",
+        default_model=settings.model,
+    )
+    localizer_model = resolve_agent_model(
+        agent_models,
+        role="localizer",
+        default_model=settings.model,
+    )
+    patcher_model = resolve_agent_model(
+        agent_models,
+        role="patcher",
+        default_model=settings.model,
+    )
+    validator_model = resolve_agent_model(
+        agent_models,
+        role="validator",
+        default_model=settings.model,
+    )
+
+    def build_facade_agent() -> Agent[object]:
+        validator_agent = build_agent(
+            settings=settings,
+            name="validator",
+            instructions=HANDOFF_VALIDATOR_INSTRUCTIONS,
+            tools=validator_tools,
+            model_override=validator_model,
+            handoff_description="APR validator that runs final checks and reports results.",
+        )
+
+        patcher_agent = build_agent(
+            settings=settings,
+            name="patcher",
+            instructions=HANDOFF_PATCHER_INSTRUCTIONS,
+            tools=patcher_tools,
+            model_override=patcher_model,
+            output_schema=None,
+            handoffs=[handoff(validator_agent)],
+            handoff_description="APR patcher that applies a minimal fix.",
+        )
+
+        localizer_agent = build_agent(
+            settings=settings,
+            name="localizer",
+            instructions=HANDOFF_LOCALIZER_INSTRUCTIONS,
+            tools=localizer_tools,
+            model_override=localizer_model,
+            output_schema=None,
+            handoffs=[handoff(patcher_agent)],
+            handoff_description="APR localizer that narrows the faulty code.",
+        )
+
+        triage_agent = build_agent(
+            settings=settings,
+            name="triage",
+            instructions=HANDOFF_TRIAGE_INSTRUCTIONS,
+            tools=triage_tools,
+            model_override=triage_model,
+            output_schema=None,
+            handoffs=[handoff(localizer_agent)],
+            handoff_description="APR triage agent that gathers initial signals.",
+        )
+        return triage_agent
+
+    return BuiltArchitecture(
+        architecture_name="multi_agent_handoff",
+        facade_agent_builder=build_facade_agent,
+        agent_name="triage",
+        agent_role="triage",
+        agent_model=triage_model,
+        instructions=HANDOFF_TRIAGE_INSTRUCTIONS,
+        tool_profile="mixed",
+        tool_count=len(tool_names),
+    )

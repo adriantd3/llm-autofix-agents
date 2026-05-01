@@ -189,7 +189,7 @@ class IterationRunner:
         *,
         iteration_telemetry,
         state: RunState,
-        observation: "IterationObservation",
+        observation: IterationObservation,
     ) -> None:
         self._record_state(state=state, observation=observation)
 
@@ -202,15 +202,13 @@ class IterationRunner:
             result=to_iteration_telemetry_result(observation),
         )
 
-    def _record_state(self, *, state: RunState, observation: "IterationObservation") -> None:
+    def _record_state(self, *, state: RunState, observation: IterationObservation) -> None:
         proposal = observation.proposal
         state.total_input_tokens += proposal.input_tokens
         state.total_output_tokens += proposal.output_tokens
         state.total_tokens += proposal.total_tokens
         state.final_message = render_final_message(proposal)
         state.latest_diff = observation.changes.diff
-        state.latest_changed_files = list(observation.changes.all_changed_files)
-        state.latest_proposal_changed_files = list(proposal.changed_files)
         state.latest_tests = to_test_results(observation.test_execution)
         state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
 
@@ -221,7 +219,7 @@ class IterationRunner:
         run_input: RunInput,
         cfg: RunConfig,
         state: RunState,
-        observation: "IterationObservation",
+        observation: IterationObservation,
         validation: IterationValidationResult,
     ) -> RunOutput | None:
         proposal = observation.proposal
@@ -229,6 +227,14 @@ class IterationRunner:
         changed_files = observation.changes.tracked_changed_files
 
         if not validation.ok:
+            self._append_iteration_logs(
+                cfg=cfg,
+                state=state,
+                iteration=observation.iteration,
+                changes=observation.changes,
+                test_execution=test_execution,
+                confidence=proposal.confidence,
+            )
             self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
             state.accumulated_logs.append(f"validation_result={validation.failure_type}")
             return self.output_builder.validation_failure(
@@ -244,6 +250,14 @@ class IterationRunner:
             test_execution=test_execution,
             changed_files=changed_files,
         ):
+            self._append_iteration_logs(
+                cfg=cfg,
+                state=state,
+                iteration=observation.iteration,
+                changes=observation.changes,
+                test_execution=test_execution,
+                confidence=proposal.confidence,
+            )
             self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
             return self.output_builder.build(
                 identity=identity,
@@ -258,6 +272,14 @@ class IterationRunner:
             proposal=proposal,
             test_execution=test_execution,
         ):
+            self._append_iteration_logs(
+                cfg=cfg,
+                state=state,
+                iteration=observation.iteration,
+                changes=observation.changes,
+                test_execution=test_execution,
+                confidence=proposal.confidence,
+            )
             cleanup_error = self.workspace.cleanup_temp_branch_after_success(cfg)
             if cleanup_error:
                 return self.output_builder.branch_cleanup_failed(
@@ -275,6 +297,14 @@ class IterationRunner:
             )
 
         if self.stop_policy.agent_reported_stuck(proposal):
+            self._append_iteration_logs(
+                cfg=cfg,
+                state=state,
+                iteration=observation.iteration,
+                changes=observation.changes,
+                test_execution=test_execution,
+                confidence=proposal.confidence,
+            )
             self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
             state.accumulated_logs.append("iteration_result=agent_reported_stuck")
             return self.output_builder.build(

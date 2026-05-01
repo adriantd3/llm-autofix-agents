@@ -65,6 +65,7 @@ def _run_run(args: argparse.Namespace) -> int:
                 "runtime_repository": instantiation.repository,
                 "runtime_branch": instantiation.branch,
                 "runtime_architecture": instantiation.architecture,
+                "runtime_agent_models": instantiation.agent_models,
             }
         )
         try:

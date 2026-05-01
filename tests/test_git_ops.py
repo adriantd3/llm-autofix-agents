@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from llm_autofix_agents.flow.git_ops import (
+from llm_autofix_agents.flow.workspace.git import (
     build_temp_branch_name,
     create_temp_branch,
     current_branch,

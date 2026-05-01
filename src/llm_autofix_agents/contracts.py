@@ -35,6 +35,11 @@ class ErrorCategory(StrEnum):
     UNKNOWN = "unknown"
 
 
+class RunArchitecture(StrEnum):
+    MONO_AGENT = "mono_agent"
+    MULTI_AGENT_HANDOFF = "multi_agent_handoff"
+
+
 class RunInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -122,31 +127,6 @@ class RunMetrics(BaseModel):
         return normalized
 
 
-class RunObservabilityRecord(BaseModel):
-    """Structured record for observability and tracking of a run iteration,
-    including identifiers, status, metrics, and artifacts."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    run_id: str = Field(min_length=1)
-    run_fingerprint: str = Field(min_length=16, max_length=16)
-    iteration_id: str = Field(min_length=1)
-    status: RunStatus
-    stop_reason: StopReason
-    metrics: RunMetrics
-    tool_calls: list[ToolCallTrace] = Field(default_factory=list)
-    artifacts: dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = Field(min_length=1)
-
-    @field_validator("run_id", "iteration_id", "timestamp")
-    @classmethod
-    def _normalize_non_empty_text(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("value cannot be empty")
-        return normalized
-
-
 class RunIdentity(BaseModel):
     """Unique identifiers for a particular run and iteration, used for tracking and correlation across systems."""
 
@@ -175,6 +155,14 @@ class ContainerInstantiation(BaseModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("value cannot be empty")
+        return normalized
+
+    @field_validator("architecture")
+    @classmethod
+    def _validate_architecture(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in {strategy.value for strategy in RunArchitecture}:
+            raise ValueError(f"Unsupported RUN_ARCHITECTURE: {value}")
         return normalized
 
     @field_validator("agent_models")

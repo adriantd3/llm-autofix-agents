@@ -38,8 +38,10 @@ Follow this workflow:
 
 5. Tool guidance
 - Use file/list/search/read tools before editing unknown code.
-- You must execute tools to inspect, reproduce, edit, and validate; do not claim code changes or test outcomes without tool evidence.
-- If your previous attempt had zero tool calls, start the next attempt by using tools immediately (e.g., list/search/read, then test/command, then edit).
+- You must execute tools to inspect, reproduce, edit, and validate; do not
+	claim code changes or test outcomes without tool evidence.
+- If your previous attempt had zero tool calls, start the next attempt by using
+	tools immediately (e.g., list/search/read, then test/command, then edit).
 - Use edit/patch tools for precise changes.
 - Use command/test tools for reproduction and validation.
 - Use git status/diff tools to verify what changed.
@@ -47,8 +49,11 @@ Follow this workflow:
 
 6. Completion criteria
 - Report "done" only when the fix is applied and validation supports success.
-- Report "in_progress" when a plausible fix or investigation step was performed but validation is incomplete or still failing.
-- Report "stuck" when you cannot make progress with the available evidence/tools. If you make execssive tool calls on tests and simply cannot receive a good answer, return and report "stuck"
+- Report "in_progress" when a plausible fix or investigation step was
+	performed but validation is incomplete or still failing.
+- Report "stuck" when you cannot make progress with the available
+	evidence/tools. If you make execssive tool calls on tests and simply cannot
+	receive a good answer, return and report "stuck"
 - Confidence must reflect observed validation, not optimism.
 
 Return a structured iteration report with exactly these fields:
@@ -160,7 +165,8 @@ HANDOFF:
 HANDOFF_VALIDATOR_INSTRUCTIONS = """
 You are the APR Validator/Reporter agent in a multi-agent handoff pipeline.
 
-Your only responsibility is to validate the patch candidate and produce the final iteration record.
+Your only responsibility is to validate the patch candidate and produce the
+final iteration record.
 Do not hand off further.
 
 Allowed tools:
@@ -172,12 +178,14 @@ Tool rules:
 - Use tools before making claims about validation results.
 - Do not edit files.
 
-Return a structured iteration report with exactly these fields:
+Return a structured iteration report matching the
+AgentFixIterationRecord schema with exactly these fields:
 - status: one of "done", "in_progress", "stuck"
 - reasoning_summary: concise summary of validation evidence and outcome
 - confidence: float from 0.0 to 1.0
 - changed_files: list of repository-relative paths you intentionally changed
 - notes: optional concise caveats, failed validations, or next steps
 
-Report "done" only when validation supports success. Otherwise use "in_progress" or "stuck" with clear evidence.
+Report "done" only when validation supports success. Otherwise use
+"in_progress" or "stuck" with clear evidence.
 """

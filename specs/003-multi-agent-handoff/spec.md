@@ -79,11 +79,11 @@ Roles, tools y criterio de handoff (v1):
 
 ## Decisiones clave
 - El facade agent de la arquitectura es el primer agente del pipeline (Explorador/Triage).
-- La politica de modelos por rol se define en SPEC-004; en esta fase se asume un unico modelo.
-- La seleccion de arquitectura debe aceptar valores de entorno con guion ("mono-agent", "multi-agent-handoff") y mapearlos al identificador interno.
+- La politica de modelos por rol usa keys simples (triage, localizer, patcher, validator) con fallback a "main" y luego a LLMSettings.model.
+- La seleccion de arquitectura usa un enum con valores "mono_agent" y "multi_agent_handoff" (sin aliases).
 
 ## Criterios de aceptacion
-- La estrategia "multi-agent-handoff" se puede seleccionar por RUN_ARCHITECTURE y ejecuta el pipeline completo.
+- La estrategia "multi_agent_handoff" se puede seleccionar por RUN_ARCHITECTURE y ejecuta el pipeline completo.
 - Se registran en observabilidad todos los agentes del pipeline con su rol y orden.
 - Las tool calls quedan asociadas al agente ejecutor (o se registra la transicion de handoff de forma equivalente).
 - Se valida al menos 1 caso QuixBugs end-to-end con la arquitectura handoff y se guarda evidencia (diff, tests, summary).

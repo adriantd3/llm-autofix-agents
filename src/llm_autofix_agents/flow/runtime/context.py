@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from llm_autofix_agents.contracts import TestResults
 from llm_autofix_agents.flow.models import TestExecution
@@ -25,8 +26,6 @@ class RunState:
     latest_tests: TestResults | None = None
     latest_diff: str = ""
     latest_artifacts: dict[str, Any] = field(default_factory=dict)
-    latest_proposal_changed_files: list[str] = field(default_factory=list)
-    latest_changed_files: list[str] = field(default_factory=list)
     previous_proposal_signature: str | None = None
     previous_proposal_status: str | None = None
     previous_proposal_confidence: float | None = None

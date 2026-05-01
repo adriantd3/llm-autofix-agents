@@ -41,7 +41,6 @@ class RunOrchestrator:
         workspace: WorkspaceManager | None = None,
         stop_policy: StopPolicy | None = None,
     ) -> None:
-        self._architecture = architecture
         self._initializer = initializer or RunInitializer(architecture=architecture)
         self._workspace = workspace or WorkspaceManager()
         self._output_builder = output_builder or RunOutputBuilder()

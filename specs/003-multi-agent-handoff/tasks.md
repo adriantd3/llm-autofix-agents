@@ -35,7 +35,7 @@ Formalizar instrucciones por rol y reglas de handoff coherentes con el contrato 
 - [x] SH2-T02 Definir reglas de salida por rol para que el ultimo agente emita AgentFixIterationRecord.
 	Contexto: el loop actual consume AgentFixIterationRecord desde el facade agent.
 	Output: reglas explicitas en los prompts y/o builder para asegurar que solo el ultimo rol devuelve la salida final.
-- [ ] SH2-T03 Definir politica de modelos por rol (RUN_AGENT_MODELS) con fallback a "main". (deferido a SPEC-004)
+- [x] SH2-T03 Definir politica de modelos por rol (RUN_AGENT_MODELS) con fallback a "main".
 	Contexto: el contrato actual carga RUN_AGENT_MODELS en ContainerInstantiation. Falta decidir como mapear roles.
 	Output: reglas claras (ejemplo: buscar modelo por rol, si falta usar "main", si falta usar LLMSettings.model).
 
@@ -47,13 +47,13 @@ Formalizar instrucciones por rol y reglas de handoff coherentes con el contrato 
 Construir el pipeline multi-agente y exponerlo como estrategia.
 
 ### Tasks
-- [ ] SH3-T01 Crear architectures/handoff.py con el pipeline de agentes y handoffs usando SDK 0.14+.
+- [x] SH3-T01 Crear architectures/handoff.py con el pipeline de agentes y handoffs usando SDK 0.14+.
 	Contexto: seguir el patron de architectures/mono_agent.py y construir un facade agent que sea el primer rol del pipeline.
 	Output: funcion build_multi_agent_handoff_architecture que retorna BuiltArchitecture con facade_agent_builder.
-- [ ] SH3-T02 Exponer la arquitectura en architectures/__init__.py y en architectures/factory.py.
+- [x] SH3-T02 Exponer la arquitectura en architectures/__init__.py y en architectures/factory.py.
 	Contexto: factory actual solo acepta "mono_agent".
 	Output: nueva estrategia "multi_agent_handoff" con validacion y error claro si el strategy es invalido.
-- [ ] SH3-T03 Ajustar build_agent o introducir builder por rol si hace falta para soportar modelos distintos por agente.
+- [x] SH3-T03 Ajustar build_agent o introducir builder por rol si hace falta para soportar modelos distintos por agente.
 	Contexto: build_agent hoy usa LLMSettings.model para todo. Necesitamos opcion por rol.
 	Output: helper que acepte modelo override y respete el output_type actual (AgentFixIterationRecord).
 
@@ -65,18 +65,18 @@ Construir el pipeline multi-agente y exponerlo como estrategia.
 Permitir seleccionar la arquitectura handoff por configuracion de entorno.
 
 ### Tasks
-- [ ] SH4-T01 Normalizar RUN_ARCHITECTURE ("mono-agent", "multi-agent-handoff") a identificadores internos.
+- [x] SH4-T01 Definir RUN_ARCHITECTURE como enum ("mono_agent", "multi_agent_handoff").
 	Contexto: main.py registra runtime_architecture en metadata y agent_flow usa build_architecture.
-	Output: mapeo estable (por ejemplo: "mono-agent" -> "mono_agent", "multi-agent-handoff" -> "multi_agent_handoff").
-- [ ] SH4-T02 Usar runtime_architecture (metadata) en agent_flow/run_agent_baseline para elegir estrategia.
+	Output: validacion estricta y valores unicos sin aliases.
+- [x] SH4-T02 Usar runtime_architecture (metadata) en agent_flow/run_agent_baseline para elegir estrategia.
 	Contexto: hoy run_agent_baseline usa default "mono_agent".
 	Output: si metadata.runtime_architecture existe, usarlo como strategy.
-- [ ] SH4-T03 Actualizar docs de runtime (.env.example, docker-compose.yml) y tests de contrato si aplica.
+- [x] SH4-T03 Actualizar docs de runtime (.env.example, docker-compose.yml) y tests de contrato si aplica.
 	Contexto: RUN_ARCHITECTURE aparece en .env.example y docker-compose.yml.
-	Output: ejemplos con "multi-agent-handoff" y tests actualizados si hay validaciones de valores.
+	Output: ejemplos con "multi_agent_handoff" y tests actualizados si hay validaciones de valores.
 
 ### Done cuando
-- Se puede lanzar un run con RUN_ARCHITECTURE=multi-agent-handoff.
+- Se puede lanzar un run con RUN_ARCHITECTURE=multi_agent_handoff.
 
 ## SH5 - Observabilidad y telemetria multi-agente
 ### Objetivo
@@ -85,7 +85,7 @@ Registrar multiples agentes y transiciones de handoff.
 ### Tasks
 - [ ] SH5-T01 Registrar todos los agentes del pipeline en RunTelemetry (orden y rol).
 	Contexto: RunInitializer hoy registra un solo agente. Necesitamos multiples registros para el pipeline.
-	Output: registro de agentes con agent_order y roles consistentes con el pipeline.
+	Output: registro de agentes con agent_order y roles consistentes con el pipeline. El mono agente debera aparecer en los registros (live.md) como `main`
 - [ ] SH5-T02 Ajustar tool call tracing para asociar tool calls al agente ejecutor o registrar eventos de handoff.
 	Contexto: APRRunHooks registra tool calls por agent_execution_id. En handoff, el ejecutor cambia.
 	Output: estrategia clara (por ejemplo: un agent_execution_id por agente o evento de handoff en observabilidad).
@@ -101,8 +101,7 @@ Registrar multiples agentes y transiciones de handoff.
 Demostrar que la arquitectura handoff es funcional en un caso real.
 
 ### Tasks
-- [ ] SH6-T01 Ejecutar un run handoff sobre QuixBugs gcd (similar a la validacion mono-agente).
-	Contexto: usar RUN_ARCHITECTURE=multi-agent-handoff y el mismo RUN_TEST_COMMAND de gcd.
+	Contexto: usar RUN_ARCHITECTURE=multi_agent_handoff y el mismo RUN_TEST_COMMAND de gcd.
 	Output: run reproducible con logs y artefactos completos en results/.
 - [ ] SH6-T02 Guardar evidencia (diff, summary.json, observability.db) y registrar resultados.
 	Contexto: verificar que la observabilidad capture multiples agentes.

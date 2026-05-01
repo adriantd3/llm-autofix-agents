@@ -34,6 +34,7 @@ class RunInitializer:
         test_timeout_seconds: int,
     ) -> tuple[RunConfig, RunState]:
         repo_root = resolve_repo_root(run_input.target_repo)
+        resolved_model = self.architecture.agent_model or settings.model
         agent_config = {
             **settings.fingerprint_payload(),
             "architecture": self.architecture.architecture_name,
@@ -42,6 +43,7 @@ class RunInitializer:
             "tool_profile": self.architecture.tool_profile,
             "tool_count": self.architecture.tool_count,
         }
+        agent_config["model"] = resolved_model
         identity = build_run_identity(run_input=run_input, agent_config=agent_config, iteration=1)
 
         observer, sqlite_store, live_observer = build_observer(
@@ -64,7 +66,7 @@ class RunInitializer:
             agent_name=self.architecture.agent_name,
             agent_role=self.architecture.agent_role,
             provider=settings.provider.value,
-            model=settings.model,
+            model=resolved_model,
             max_turns=settings.max_turns,
             tool_profile=self.architecture.tool_profile,
             instructions=self.architecture.instructions,

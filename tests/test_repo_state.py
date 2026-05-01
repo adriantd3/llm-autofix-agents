@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from llm_autofix_agents.flow.repo_state import (
+from llm_autofix_agents.flow.workspace.state import (
     filter_diff_by_ignore_rules,
     load_ignore_rules,
     should_ignore_path,

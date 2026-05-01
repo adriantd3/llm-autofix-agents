@@ -13,7 +13,7 @@ from llm_autofix_agents.flow.workspace.git import TempBranchContext
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 from llm_autofix_agents.observability import ObservabilityConfig
-from llm_autofix_agents.toolset import build_apr_tools
+from llm_autofix_agents.tools import build_apr_tools
 
 
 class AgentFlowTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class AgentFlowTests(unittest.TestCase):
             ),
         )
         self._git_repo_patcher = patch(
-            "llm_autofix_agents.agent_flow._is_git_repository",
+            "llm_autofix_agents.flow.workspace.manager.is_git_repository",
             return_value=False,
         )
         self._observability_config_patcher.start()
@@ -42,7 +42,7 @@ class AgentFlowTests(unittest.TestCase):
     def test_run_agent_baseline_success(self) -> None:
         provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
         with patch(
-            "llm_autofix_agents.agent_flow._collect_repo_diff",
+            "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
             return_value="",
         ):
             output = run_agent_baseline(
@@ -73,27 +73,57 @@ class AgentFlowTests(unittest.TestCase):
         assert provider.last_context is not None
         self.assertEqual(provider.last_context.root_dir, str(Path(".").resolve()))
 
+    def test_run_agent_baseline_uses_runtime_architecture_metadata(self) -> None:
+        provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
+        sentinel_architecture = SimpleNamespace(architecture_name="multi_agent_handoff")
+
+        with (
+            patch(
+                "llm_autofix_agents.agent_flow.build_architecture",
+                return_value=sentinel_architecture,
+            ) as build_architecture,
+            patch("llm_autofix_agents.agent_flow.RunOrchestrator") as orchestrator_cls,
+        ):
+            orchestrator_cls.return_value.run.return_value = SimpleNamespace(status=RunStatus.SUCCESS)
+            output = run_agent_baseline(
+                RunInput(
+                    prompt="Fix parser failure",
+                    metadata={
+                        "runtime_architecture": "multi_agent_handoff",
+                        "runtime_agent_models": {"triage": "triage-model"},
+                        "tool_profile": "core",
+                    },
+                ),
+                settings=_settings(),
+                provider=provider,
+            )
+
+        self.assertEqual(output.status, RunStatus.SUCCESS)
+        build_architecture.assert_called_once()
+        self.assertEqual(build_architecture.call_args.kwargs["strategy"], "multi_agent_handoff")
+        self.assertEqual(build_architecture.call_args.kwargs["tool_profile"], "core")
+        self.assertEqual(build_architecture.call_args.kwargs["agent_models"], {"triage": "triage-model"})
+
     def test_run_agent_baseline_stops_on_no_progress(self) -> None:
         provider = _SequencedProvider(
             [_proposal(reasoning_summary="same fix"), _proposal(reasoning_summary="same fix")]
         )
         with (
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
+            _patch_run_test_command(
                 side_effect=[
                     SimpleNamespace(
                         exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"
                     ),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
-                ],
+                ]
             ),
             patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
                 return_value={"src/a.py": "abc"},
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="",
             ),
         ):
@@ -119,8 +149,7 @@ class AgentFlowTests(unittest.TestCase):
             ]
         )
         with (
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
+            _patch_run_test_command(
                 side_effect=[
                     SimpleNamespace(
                         exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"
@@ -128,10 +157,10 @@ class AgentFlowTests(unittest.TestCase):
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
-                ],
+                ]
             ),
             patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
@@ -142,7 +171,7 @@ class AgentFlowTests(unittest.TestCase):
                 ],
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -159,51 +188,6 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(output.stop_reason, StopReason.MAX_ITERATIONS)
         self.assertEqual(output.identity.iteration, 3)
 
-    def test_run_agent_baseline_stops_on_changed_files_mismatch(self) -> None:
-        provider = _SequencedProvider(
-            [
-                _proposal(
-                    reasoning_summary="attempt one",
-                    changed_files=["src/other.py"],
-                )
-            ]
-        )
-        with (
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
-                side_effect=[
-                    SimpleNamespace(
-                        exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"
-                    ),
-                    SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
-                ],
-            ),
-            patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
-                side_effect=[
-                    {"src/a.py": "v1"},
-                    {"src/a.py": "v2"},
-                ],
-            ),
-            patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
-                return_value="diff --git a/src/a.py b/src/a.py",
-            ),
-        ):
-            output = run_agent_baseline(
-                RunInput(
-                    prompt="Fix parser failure",
-                    test_command="uv run python -m unittest",
-                ),
-                settings=_settings(),
-                provider=provider,
-            )
-
-        self.assertEqual(output.status, RunStatus.FAILED)
-        self.assertEqual(output.stop_reason, StopReason.VALIDATION_FAILURE)
-        self.assertEqual(output.errors[0].category, ErrorCategory.VALIDATION)
-        self.assertIn("proposal_changed_files", output.errors[0].details)
-
     def test_run_agent_baseline_maps_provider_error(self) -> None:
         output = run_agent_baseline(
             RunInput(prompt="Fix parser failure"),
@@ -219,24 +203,23 @@ class AgentFlowTests(unittest.TestCase):
     def test_run_agent_baseline_stops_on_regression_detected(self) -> None:
         provider = _SequencedProvider([_proposal(reasoning_summary="introduce breaking change")])
         with (
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
+            _patch_run_test_command(
                 side_effect=[
-                    SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-baseline-ok"),
                     SimpleNamespace(
-                        exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-now-fail"
+                        exit_code=0, timed_out=False, output="OK", signature="sig-baseline"
                     ),
-                ],
+                    SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-last"),
+                ]
             ),
             patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
                 ],
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -258,8 +241,7 @@ class AgentFlowTests(unittest.TestCase):
     def test_run_agent_baseline_no_regression_when_baseline_failing(self) -> None:
         provider = _SequencedProvider([_proposal(reasoning_summary="fix tests")])
         with (
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
+            _patch_run_test_command(
                 side_effect=[
                     SimpleNamespace(
                         exit_code=1,
@@ -268,17 +250,17 @@ class AgentFlowTests(unittest.TestCase):
                         signature="sig-baseline-fail",
                     ),
                     SimpleNamespace(exit_code=0, timed_out=False, output="OK", signature="sig-now-ok"),
-                ],
+                ]
             ),
             patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
                 ],
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -299,24 +281,24 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.stop()
         with (
             patch(
-                "llm_autofix_agents.agent_flow._is_git_repository",
+                "llm_autofix_agents.flow.workspace.manager.is_git_repository",
                 return_value=True,
             ),
             patch(
-                "llm_autofix_agents.agent_flow._create_temp_branch",
+                "llm_autofix_agents.flow.workspace.manager.create_temp_branch",
                 return_value=TempBranchContext(
                     branch_name="autofix/20260418T100000Z-run-abc",
                     original_branch="main",
                 ),
             ) as create_branch,
             patch(
-                "llm_autofix_agents.agent_flow._restore_original_branch",
+                "llm_autofix_agents.flow.workspace.manager.restore_original_branch",
             ) as restore_branch,
             patch(
-                "llm_autofix_agents.agent_flow._delete_branch",
+                "llm_autofix_agents.flow.workspace.manager.delete_branch",
             ) as delete_branch,
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="",
             ),
         ):
@@ -333,51 +315,43 @@ class AgentFlowTests(unittest.TestCase):
         delete_branch.assert_called_once()
 
     def test_run_agent_baseline_keeps_temp_branch_on_validation_failure(self) -> None:
-        provider = _SequencedProvider(
-            [
-                _proposal(
-                    reasoning_summary="attempt one",
-                    changed_files=["src/other.py"],
-                )
-            ]
-        )
+        provider = _SequencedProvider([_proposal(reasoning_summary="attempt one")])
         self._git_repo_patcher.stop()
         with (
             patch(
-                "llm_autofix_agents.agent_flow._is_git_repository",
+                "llm_autofix_agents.flow.workspace.manager.is_git_repository",
                 return_value=True,
             ),
             patch(
-                "llm_autofix_agents.agent_flow._create_temp_branch",
+                "llm_autofix_agents.flow.workspace.manager.create_temp_branch",
                 return_value=TempBranchContext(
                     branch_name="autofix/20260418T100000Z-run-abc",
                     original_branch="main",
                 ),
             ),
             patch(
-                "llm_autofix_agents.agent_flow._restore_original_branch",
+                "llm_autofix_agents.flow.workspace.manager.restore_original_branch",
             ) as restore_branch,
             patch(
-                "llm_autofix_agents.agent_flow._delete_branch",
+                "llm_autofix_agents.flow.workspace.manager.delete_branch",
             ) as delete_branch,
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
+            _patch_run_test_command(
                 side_effect=[
                     SimpleNamespace(
-                        exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"
+                        exit_code=0, timed_out=False, output="OK", signature="sig-baseline"
                     ),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
-                ],
+                ]
             ),
             patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
                 ],
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -400,25 +374,25 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.stop()
         with (
             patch(
-                "llm_autofix_agents.agent_flow._is_git_repository",
+                "llm_autofix_agents.flow.workspace.manager.is_git_repository",
                 return_value=True,
             ),
             patch(
-                "llm_autofix_agents.agent_flow._create_temp_branch",
+                "llm_autofix_agents.flow.workspace.manager.create_temp_branch",
                 return_value=TempBranchContext(
                     branch_name="autofix/20260418T100000Z-run-abc",
                     original_branch="main",
                 ),
             ),
             patch(
-                "llm_autofix_agents.agent_flow._restore_original_branch",
+                "llm_autofix_agents.flow.workspace.manager.restore_original_branch",
                 side_effect=RuntimeError("cannot switch back"),
             ),
             patch(
-                "llm_autofix_agents.agent_flow._delete_branch",
+                "llm_autofix_agents.flow.workspace.manager.delete_branch",
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="",
             ),
         ):
@@ -499,7 +473,7 @@ class _SequencedProvider:
 
 
 class AgentFlowStatusTests(unittest.TestCase):
-    @patch("llm_autofix_agents.agent_flow._is_git_repository", return_value=False)
+    @patch("llm_autofix_agents.flow.workspace.manager.is_git_repository", return_value=False)
     @patch(
         "llm_autofix_agents.agent_flow.resolve_observability_config",
         return_value=ObservabilityConfig(
@@ -517,24 +491,23 @@ class AgentFlowStatusTests(unittest.TestCase):
     ) -> None:
         provider = _SequencedProvider([_proposal(reasoning_summary="cannot progress", status="stuck")])
         with (
-            patch(
-                "llm_autofix_agents.agent_flow._run_test_command",
+            _patch_run_test_command(
                 side_effect=[
                     SimpleNamespace(
                         exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-baseline"
                     ),
                     SimpleNamespace(exit_code=1, timed_out=False, output="FAILED (failures=1)", signature="sig-1"),
-                ],
+                ]
             ),
             patch(
-                "llm_autofix_agents.agent_flow._snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
                 ],
             ),
             patch(
-                "llm_autofix_agents.agent_flow._collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -583,7 +556,26 @@ def _settings() -> LLMSettings:
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         max_turns=3,
         tracing_disabled=True,
+        api_max_retries=0,
     )
+
+
+def _patch_run_test_command(*, side_effect):
+    """Patch run_test_command at both import sites used by the flow.
+
+    The first item in side_effect is consumed by the orchestrator baseline test;
+    the remaining items are consumed by the iteration runner.
+    """
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    stack.enter_context(
+        patch("llm_autofix_agents.flow.orchestrator.run_test_command", side_effect=side_effect[:1])
+    )
+    stack.enter_context(
+        patch("llm_autofix_agents.flow.iteration.runner.run_test_command", side_effect=side_effect[1:])
+    )
+    return stack
 
 
 if __name__ == "__main__":

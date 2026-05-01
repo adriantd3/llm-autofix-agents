@@ -2,6 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from llm_autofix_agents.contracts import RunArchitecture
+
+
+def resolve_architecture(metadata: dict[str, Any], explicit: str | None = None) -> str:
+    value = explicit
+    if value is None:
+        value = metadata.get("runtime_architecture")
+    if value is None:
+        return RunArchitecture.MONO_AGENT.value
+    if not isinstance(value, str):
+        raise ValueError("runtime_architecture must be a string")
+    normalized = value.strip().lower()
+    if normalized in {strategy.value for strategy in RunArchitecture}:
+        return normalized
+    raise ValueError(f"Unsupported architecture strategy: {value}")
+
 
 def resolve_max_iterations(metadata: dict[str, Any]) -> int:
     value = metadata.get("max_iterations")
@@ -21,6 +37,26 @@ def resolve_tool_profile(metadata: dict[str, Any]) -> str:
     normalized = value.strip().lower()
     if normalized not in {"minimal", "core", "full"}:
         raise ValueError("metadata.tool_profile must be minimal/core/full")
+    return normalized
+
+
+def resolve_agent_models(metadata: dict[str, Any]) -> dict[str, str]:
+    value = metadata.get("runtime_agent_models")
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("metadata.runtime_agent_models must be a dict of role->model")
+
+    normalized: dict[str, str] = {}
+    for role, model in value.items():
+        if not isinstance(role, str) or not isinstance(model, str):
+            raise ValueError("metadata.runtime_agent_models must contain string role->model")
+        role_name = role.strip().lower()
+        model_name = model.strip()
+        if not role_name or not model_name:
+            raise ValueError("metadata.runtime_agent_models cannot contain empty role or model")
+        normalized[role_name] = model_name
+
     return normalized
 
 

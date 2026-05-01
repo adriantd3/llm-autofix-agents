@@ -7,10 +7,6 @@ from pydantic import ValidationError
 from llm_autofix_agents.contracts import (
     ContainerInstantiation,
     RunInput,
-    RunMetrics,
-    RunObservabilityRecord,
-    RunStatus,
-    StopReason,
     TestResults,
     ToolCallTrace,
     build_run_identity,
@@ -50,14 +46,14 @@ class ContractsTests(unittest.TestCase):
             {
                 "RUN_REPOSITORY": "quixbugs",
                 "RUN_BRANCH": "main",
-                "RUN_ARCHITECTURE": "mono-agent",
+                "RUN_ARCHITECTURE": "mono_agent",
                 "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
                 "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
             }
         )
         self.assertEqual(instantiation.repository, "quixbugs")
         self.assertEqual(instantiation.branch, "main")
-        self.assertEqual(instantiation.architecture, "mono-agent")
+        self.assertEqual(instantiation.architecture, "mono_agent")
         self.assertEqual(instantiation.agent_models, {"main": "llama3.1:8b"})
 
     def test_container_instantiation_rejects_invalid_models_json(self) -> None:
@@ -66,8 +62,20 @@ class ContractsTests(unittest.TestCase):
                 {
                     "RUN_REPOSITORY": "quixbugs",
                     "RUN_BRANCH": "main",
-                    "RUN_ARCHITECTURE": "mono-agent",
+                    "RUN_ARCHITECTURE": "mono_agent",
                     "RUN_AGENT_MODELS": "not-json",
+                    "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+                }
+            )
+
+    def test_container_instantiation_rejects_invalid_architecture(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported RUN_ARCHITECTURE"):
+            ContainerInstantiation.from_env(
+                {
+                    "RUN_REPOSITORY": "quixbugs",
+                    "RUN_BRANCH": "main",
+                    "RUN_ARCHITECTURE": "mono-agent",
+                    "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
                     "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                 }
             )
@@ -80,27 +88,6 @@ class ContractsTests(unittest.TestCase):
         )
         self.assertEqual(trace.name, "shell")
         self.assertEqual(trace.status, "ok")
-
-    def test_run_observability_record_requires_non_empty_identifiers(self) -> None:
-        with self.assertRaises(ValidationError):
-            RunObservabilityRecord(
-                run_id="",
-                run_fingerprint="0123456789abcdef",
-                iteration_id="run-1-it01",
-                status=RunStatus.SUCCESS,
-                stop_reason=StopReason.COMPLETED,
-                metrics=RunMetrics(
-                    success=True,
-                    iterations=1,
-                    duration_seconds=0.1,
-                    input_tokens=0,
-                    output_tokens=0,
-                    total_tokens=0,
-                    estimated_cost_usd=0.0,
-                    cost_source="missing_rate",
-                ),
-                timestamp="2026-04-18T10:00:00+00:00",
-            )
 
 
 if __name__ == "__main__":

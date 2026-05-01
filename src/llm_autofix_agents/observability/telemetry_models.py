@@ -12,10 +12,6 @@ class FileChangeTelemetrySet:
     deleted_files: list[str]
     untracked_files: list[str]
 
-    @property
-    def all_files(self) -> list[str]:
-        return sorted({*self.modified_files, *self.added_files, *self.deleted_files, *self.untracked_files})
-
 
 @dataclass(frozen=True)
 class IterationTelemetryResult:

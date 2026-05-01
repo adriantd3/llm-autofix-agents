@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from llm_autofix_agents.toolset import (
+from llm_autofix_agents.tools import (
     APR_CORE_TOOLS,
     APR_FUNCTION_TOOLS,
     APR_SAFE_MINIMAL_TOOLS,

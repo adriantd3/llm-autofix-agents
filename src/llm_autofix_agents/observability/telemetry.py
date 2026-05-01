@@ -134,42 +134,6 @@ class RunTelemetry:
             )
         )
 
-    def record_provider_call_event(
-        self,
-        *,
-        run_id: str,
-        iteration_id: str,
-        agent_execution_id: str | None,
-        event_type: str,
-        attempt: int,
-        total_attempts: int,
-        status_code: int | None = None,
-        error_type: str | None = None,
-        error_message_short: str | None = None,
-        tool_calls_count: int | None = None,
-        retry_delay_seconds: float | None = None,
-        rerun_full_runner: bool = True,
-    ) -> None:
-        provider_call_id = f"{run_id}-{iteration_id}-{attempt:02d}-{event_type}"
-        self.observer.on_provider_call_event(
-            record=ProviderCallRecord(
-                provider_call_id=provider_call_id,
-                run_id=run_id,
-                iteration_id=iteration_id,
-                agent_execution_id=agent_execution_id,
-                event_type=event_type,
-                attempt=attempt,
-                total_attempts=total_attempts,
-                status_code=status_code,
-                error_type=error_type,
-                error_message_short=error_message_short,
-                tool_calls_count=tool_calls_count,
-                retry_delay_seconds=retry_delay_seconds,
-                rerun_full_runner=rerun_full_runner,
-                occurred_at=utc_now_iso(),
-            )
-        )
-
     def record_test_execution(
         self,
         *,

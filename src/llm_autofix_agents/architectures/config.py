@@ -15,3 +15,4 @@ class BuiltArchitecture:
     instructions: str
     tool_profile: str
     tool_count: int
+    agent_model: str | None = None

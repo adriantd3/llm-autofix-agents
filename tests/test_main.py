@@ -30,7 +30,7 @@ class MainCliTests(unittest.TestCase):
                     {
                         "RUN_REPOSITORY": tmp_dir,
                         "RUN_BRANCH": "master",
-                        "RUN_ARCHITECTURE": "mono-agent",
+                        "RUN_ARCHITECTURE": "mono_agent",
                         "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
                         "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                     },
@@ -41,7 +41,7 @@ class MainCliTests(unittest.TestCase):
                     return_value=ContainerInstantiation(
                         repository=tmp_dir,
                         branch="master",
-                        architecture="mono-agent",
+                        architecture="mono_agent",
                         agent_models={"main": "llama3.1:8b"},
                         bootstrap_prompt="Fix failing tests with minimal changes.",
                     ),
@@ -72,7 +72,7 @@ class MainCliTests(unittest.TestCase):
                 {
                     "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
                     "RUN_BRANCH": "master",
-                    "RUN_ARCHITECTURE": "mono-agent",
+                    "RUN_ARCHITECTURE": "mono_agent",
                     "RUN_AGENT_MODELS": "not-json",
                     "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                 },
@@ -98,7 +98,7 @@ class MainCliTests(unittest.TestCase):
                     {
                         "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
                         "RUN_BRANCH": "master",
-                        "RUN_ARCHITECTURE": "mono-agent",
+                        "RUN_ARCHITECTURE": "mono_agent",
                         "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
                         "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                     },
@@ -109,7 +109,7 @@ class MainCliTests(unittest.TestCase):
                     return_value=ContainerInstantiation(
                         repository="https://github.com/jkoppel/QuixBugs.git",
                         branch="master",
-                        architecture="mono-agent",
+                        architecture="mono_agent",
                         agent_models={"main": "llama3.1:8b"},
                         bootstrap_prompt="Fix failing tests with minimal changes.",
                     ),

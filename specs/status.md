@@ -42,6 +42,7 @@
 - SH4-T02/T04 completados: artefactos enriquecidos por iteracion con `patch_summary.json` y `file_changes.json`, mas consolidacion de trazabilidad por archivo en `manifest.json`.
 - SH4-T03 completado: filtrado de artefactos de build/test/cache con `.autofixignore` aplicado a snapshot y diff para parches limpios.
 - Cobertura SH4 agregada: tests unitarios dedicados para operaciones Git, reglas de exclusión y artefactos; suite total en verde.
+- Cobertura SH3/SH4 reforzada: tests de dispatch de arquitectura handoff, wiring del pipeline multi-agente y seleccion runtime por metadata.
 - Decision de observabilidad revisada: MongoDB deja de ser backend principal del MVP; se adopta SQLite local normalizado + artefactos por run (live.md, summary.json, diff.patch) para facilitar ETL y reducir complejidad operativa.
 - SH5 completado: observabilidad SQLite-first con observers desacoplados (Null/Composite/SQLite/Markdown/Console), lifecycle hooks del SDK, live.md y summary.json por run.
 - SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
@@ -60,6 +61,7 @@
 - Validacion real QuixBugs `gcd` completada con exito en Docker Compose: run `run-20260426T084255Z-2eaa022d73` finalizado en `success`, 1 iteracion, 1 archivo modificado y test final en verde.
 - Spec 002 Phase 2 aplicado: configuracion explicita de agente/tools, factory de arquitectura mono-agente, inicializacion runtime basada en config y provider ejecutando agentes preconfigurados.
 - Spec 002 ajuste aplicado: arquitecturas ahora construyen el facade agent; el flujo ejecuta el agente directo sin DTOs de arquitectura ni runner dedicado.
+- Spec 003 SH3/SH4 completados: arquitectura multi-agent handoff y seleccion runtime por enum.
 
 ## En curso
 - Spec activa: specs/002-arquitecture-simplification/spec.md
