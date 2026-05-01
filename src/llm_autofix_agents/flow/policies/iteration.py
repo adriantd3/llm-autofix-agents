@@ -117,15 +117,18 @@ def is_no_progress(
 
 
 def is_regression(*, baseline: TestExecution, current: TestExecution) -> bool:
+    """Return True only when baseline was passing (exit_code==0) and now fails.
+
+    This intentionally does NOT detect "worsening" when both baseline and current fail.
+    """
     return baseline.exit_code == 0 and current.exit_code != 0
 
 
 def proposal_signature(proposal: AgentFixIterationRecord) -> str:
     status = proposal.status.strip().lower()
     reasoning_summary = _normalize(proposal.reasoning_summary)
-    changed = "|".join(proposal.changed_files)
     notes = _normalize(proposal.notes or "")
-    return f"status={status}|reasoning_summary={reasoning_summary}|changed={changed}|notes={notes}"
+    return f"status={status}|reasoning_summary={reasoning_summary}|notes={notes}"
 
 
 def _normalize(text: str) -> str:

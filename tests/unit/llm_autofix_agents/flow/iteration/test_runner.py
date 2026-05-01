@@ -27,7 +27,7 @@ class IterationRunnerTests(unittest.TestCase):
                 deleted_files=[],
                 untracked_files=[],
                 diff="",
-                diff_complete=False,
+                diff_excludes_untracked=False,
             )
         )
         telemetry = _StubRunTelemetry()
@@ -48,7 +48,7 @@ class IterationRunnerTests(unittest.TestCase):
         )
 
         with patch(
-            "llm_autofix_agents.flow.iteration.runner.run_test_command",
+            "llm_autofix_agents.flow.execution.tests.run_test_command",
             return_value=test_execution,
         ):
             output = runner.run(
@@ -63,7 +63,7 @@ class IterationRunnerTests(unittest.TestCase):
         assert agent_runner.last_context is not None
         self.assertEqual(agent_runner.last_context.user_input, "Fix parser failure")
         self.assertIn("stage=agent", state.accumulated_logs)
-        self.assertIn("proposal_matches_observed_files=true", state.accumulated_logs)
+        self.assertIn("changed_files=0", state.accumulated_logs)
         self.assertIsNotNone(state.latest_tests)
         assert state.latest_tests is not None
         self.assertEqual(state.latest_tests.failed, 1)
@@ -94,13 +94,10 @@ class _CapturingAgentRunner:
             status="in_progress",
             reasoning_summary="attempt",
             confidence=0.2,
-            changed_files=[],
         )
         return AgentExecutionResult(
             proposal=proposal,
             agent_execution_id="agent-1",
-            started_at="2026-04-28T00:00:00Z",
-            duration_seconds=0.1,
             tool_calls_count=0,
         )
 
@@ -156,7 +153,6 @@ def _build_config(*, telemetry: _StubRunTelemetry) -> RunConfig:
         run_id="run-123",
         run_agent_id="agent-123",
         architecture_name="mono_agent",
-        instructions="fix bugs",
         settings=settings,
         provider=_StubProvider(),
         facade_agent_builder=lambda: object(),
@@ -166,8 +162,6 @@ def _build_config(*, telemetry: _StubRunTelemetry) -> RunConfig:
         max_iterations=3,
         test_timeout_seconds=120,
         repo_root=Path("."),
-        test_command="pytest",
-        ignore_rules=[],
         telemetry=telemetry,
         sqlite_store=None,
         live_observer=None,

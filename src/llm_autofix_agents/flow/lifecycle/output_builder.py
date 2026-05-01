@@ -21,16 +21,15 @@ class RunOutputBuilder:
         cfg: RunConfig,
         errors: list[RunError] | None = None,
     ) -> RunOutput:
+        artifacts = dict(state.latest_artifacts)
+        if errors:
+            artifacts["errors"] = [e.model_dump() for e in errors]
         return RunOutput(
             identity=identity,
             status=status,
             stop_reason=stop_reason,
-            diff=state.latest_diff,
             logs=list(state.accumulated_logs),
-            tests=state.latest_tests,
-            errors=errors or [],
-            artifacts=dict(state.latest_artifacts),
-            final_message=state.final_message,
+            artifacts=artifacts,
         )
 
     def validation_failure(

@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 from llm_autofix_agents.flow.errors import WorkspaceError
-from llm_autofix_agents.flow.models import WorkspaceChangeSet
+from llm_autofix_agents.flow import models as _models
 
 _DEFAULT_IGNORE_PATTERNS = [
     ".git/",
@@ -85,21 +85,19 @@ def detect_workspace_change_set(
 
     for path in after:
         if path not in before:
-            if path in untracked_set:
-                continue
             added_files.append(path)
 
     diff = collect_repo_diff(repo_root)
 
-    # `git diff` does not include untracked files, so mark completeness explicitly.
-    diff_complete = not bool(untracked_files)
-    return WorkspaceChangeSet(
+    # `git diff` does not include untracked files, so mark when diff is incomplete.
+    diff_excludes_untracked = bool(untracked_files)
+    return _models.WorkspaceChangeSet(
         modified_files=sorted(modified_files),
         added_files=sorted(added_files),
         deleted_files=sorted(deleted_files),
         untracked_files=sorted(untracked_files),
         diff=diff,
-        diff_complete=diff_complete,
+        diff_excludes_untracked=diff_excludes_untracked,
     )
 
 

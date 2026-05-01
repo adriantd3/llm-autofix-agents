@@ -384,12 +384,8 @@ class SQLiteObservabilityStore:
                     duration_seconds,
                     exit_code,
                     timed_out,
-                    tests_total,
-                    tests_passed,
-                    tests_failed,
-                    output_path,
                     signature
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.test_execution_id,
@@ -402,10 +398,6 @@ class SQLiteObservabilityStore:
                     record.duration_seconds,
                     record.exit_code,
                     None if record.timed_out is None else (1 if record.timed_out else 0),
-                    record.tests_total,
-                    record.tests_passed,
-                    record.tests_failed,
-                    record.output_path,
                     record.signature,
                 ),
             )

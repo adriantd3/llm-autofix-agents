@@ -29,6 +29,7 @@ def run_shell(cfg: APRToolContext, *, command: str, cwd: str = ".", timeout_seco
         },
     )
     payload = asdict(execution)
+    payload["ok"] = execution.error is None
     payload["cwd"] = cwd
     return payload
 

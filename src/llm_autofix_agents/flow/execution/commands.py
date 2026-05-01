@@ -8,15 +8,9 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class CommandExecution:
-    ok: bool
-    command: str
-    cwd: str
-    timeout_seconds: int
     exit_code: int | None
     stdout: str
     stderr: str
-    stdout_truncated: bool
-    stderr_truncated: bool
     error: str | None = None
 
 
@@ -51,33 +45,21 @@ class CommandExecutor:
                 env=env,
             )
         except subprocess.TimeoutExpired as exc:
-            stdout, stdout_truncated = self._truncate(exc.stdout or "")
-            stderr, stderr_truncated = self._truncate(exc.stderr or "")
+            stdout, _ = self._truncate(exc.stdout or "")
+            stderr, _ = self._truncate(exc.stderr or "")
             return CommandExecution(
-                ok=False,
-                command=command,
-                cwd=str(cwd),
-                timeout_seconds=timeout_seconds,
                 exit_code=124,
                 stdout=stdout,
                 stderr=stderr,
-                stdout_truncated=stdout_truncated,
-                stderr_truncated=stderr_truncated,
                 error="timeout",
             )
 
-        stdout, stdout_truncated = self._truncate(completed.stdout)
-        stderr, stderr_truncated = self._truncate(completed.stderr)
+        stdout, _ = self._truncate(completed.stdout)
+        stderr, _ = self._truncate(completed.stderr)
         return CommandExecution(
-            ok=True,
-            command=command,
-            cwd=str(cwd),
-            timeout_seconds=timeout_seconds,
             exit_code=completed.returncode,
             stdout=stdout,
             stderr=stderr,
-            stdout_truncated=stdout_truncated,
-            stderr_truncated=stderr_truncated,
         )
 
     def _truncate(self, text: str) -> tuple[str, bool]:

@@ -112,8 +112,6 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(result.input_tokens, 11)
         self.assertEqual(result.output_tokens, 7)
         self.assertEqual(result.total_tokens, 18)
-        self.assertEqual(len(result.tool_calls), 1)
-        self.assertEqual(result.tool_calls[0], {"name": "shell", "status": "completed"})
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_rejects_invalid_schema(self, runner_run: AsyncMock) -> None:

@@ -14,12 +14,7 @@ from llm_autofix_agents.tools.context import APRToolContext
 
 @dataclass(frozen=True)
 class AgentExecutionContext:
-    run_id: str
-    iteration_id: str
-    iteration_index: int
     run_agent_id: str
-    provider: LLMProvider
-    agent: object
     agent_context: APRToolContext
     iteration_telemetry: IterationTelemetry
     user_input: str
@@ -30,8 +25,6 @@ class AgentExecutionContext:
 class AgentExecutionResult:
     proposal: AgentFixIterationRecord
     agent_execution_id: str
-    started_at: str
-    duration_seconds: float
     tool_calls_count: int
 
 
@@ -67,8 +60,6 @@ class AgentExecutionRunner:
         return AgentExecutionResult(
             proposal=proposal,
             agent_execution_id=agent_telemetry.agent_execution_id,
-            started_at=agent_telemetry.started_at,
-            duration_seconds=max(0.0, time.perf_counter() - started_monotonic),
             tool_calls_count=hooks.tool_call_count,
         )
 

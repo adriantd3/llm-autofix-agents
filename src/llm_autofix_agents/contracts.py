@@ -106,27 +106,6 @@ class ToolCallTrace(BaseModel):
         return normalized
 
 
-class RunMetrics(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    success: bool
-    iterations: int = Field(ge=1)
-    duration_seconds: float = Field(ge=0.0)
-    input_tokens: int = Field(ge=0)
-    output_tokens: int = Field(ge=0)
-    total_tokens: int = Field(ge=0)
-    estimated_cost_usd: float = Field(ge=0.0)
-    cost_source: str = Field(min_length=1)
-
-    @field_validator("cost_source")
-    @classmethod
-    def _normalize_cost_source(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("value cannot be empty")
-        return normalized
-
-
 class RunIdentity(BaseModel):
     """Unique identifiers for a particular run and iteration, used for tracking and correlation across systems."""
 
@@ -213,12 +192,8 @@ class RunOutput(BaseModel):
     identity: RunIdentity
     status: RunStatus
     stop_reason: StopReason
-    diff: str = ""
-    tests: TestResults | None = None
     logs: list[str] = Field(default_factory=list)
-    errors: list[RunError] = Field(default_factory=list)
     artifacts: dict[str, Any] = Field(default_factory=dict)
-    final_message: str | None = None
 
 
 def new_run_id(now: datetime | None = None) -> str:

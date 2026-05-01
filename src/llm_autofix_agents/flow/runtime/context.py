@@ -37,7 +37,6 @@ class RunConfig:
     run_id: str
     run_agent_id: str
     architecture_name: str
-    instructions: str
     settings: LLMSettings
     provider: LLMProvider
     facade_agent_builder: Callable[[], object]
@@ -47,8 +46,6 @@ class RunConfig:
     max_iterations: int
     test_timeout_seconds: int
     repo_root: Path
-    test_command: str | None
-    ignore_rules: list[str]
     telemetry: RunTelemetry
     sqlite_store: SQLiteObservabilityStore | None
     live_observer: MarkdownLiveObserver | None

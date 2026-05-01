@@ -29,7 +29,7 @@ class AgentFlowTests(unittest.TestCase):
             ),
         )
         self._git_repo_patcher = patch(
-            "llm_autofix_agents.flow.workspace.manager.is_git_repository",
+            "llm_autofix_agents.flow.workspace.manager._git.is_git_repository",
             return_value=False,
         )
         self._observability_config_patcher.start()
@@ -41,9 +41,19 @@ class AgentFlowTests(unittest.TestCase):
 
     def test_run_agent_baseline_success(self) -> None:
         provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
-        with patch(
-            "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
-            return_value="",
+        with (
+            patch(
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                return_value="",
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
+                return_value={},
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.state.detect_untracked_files",
+                return_value=[],
+            ),
         ):
             output = run_agent_baseline(
                 RunInput(prompt="Fix parser failure"),
@@ -53,8 +63,6 @@ class AgentFlowTests(unittest.TestCase):
 
         self.assertEqual(output.status, RunStatus.SUCCESS)
         self.assertEqual(output.stop_reason, StopReason.COMPLETED)
-        self.assertIn("status: done", output.final_message or "")
-        self.assertIn("reasoning_summary: suggested fix", output.final_message or "")
         self.assertEqual(output.identity.iteration, 1)
         self.assertIn("stage=agent", output.logs)
         self.assertIn("stage=observability", output.logs)
@@ -119,8 +127,12 @@ class AgentFlowTests(unittest.TestCase):
                 ]
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
                 return_value={"src/a.py": "abc"},
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.state.detect_untracked_files",
+                return_value=[],
             ),
             patch(
                 "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
@@ -160,7 +172,7 @@ class AgentFlowTests(unittest.TestCase):
                 ]
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
@@ -197,8 +209,9 @@ class AgentFlowTests(unittest.TestCase):
 
         self.assertEqual(output.status, RunStatus.FAILED)
         self.assertEqual(output.stop_reason, StopReason.TOOL_FAILURE)
-        self.assertEqual(len(output.errors), 1)
-        self.assertEqual(output.errors[0].category, ErrorCategory.MODEL)
+        self.assertIn("errors", output.artifacts)
+        self.assertEqual(len(output.artifacts["errors"]), 1)
+        self.assertEqual(output.artifacts["errors"][0]["category"], ErrorCategory.MODEL.value)
 
     def test_run_agent_baseline_stops_on_regression_detected(self) -> None:
         provider = _SequencedProvider([_proposal(reasoning_summary="introduce breaking change")])
@@ -212,7 +225,7 @@ class AgentFlowTests(unittest.TestCase):
                 ]
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
@@ -234,8 +247,9 @@ class AgentFlowTests(unittest.TestCase):
 
         self.assertEqual(output.status, RunStatus.FAILED)
         self.assertEqual(output.stop_reason, StopReason.VALIDATION_FAILURE)
-        self.assertEqual(len(output.errors), 1)
-        self.assertEqual(output.errors[0].category, ErrorCategory.VALIDATION)
+        self.assertIn("errors", output.artifacts)
+        self.assertEqual(len(output.artifacts["errors"]), 1)
+        self.assertEqual(output.artifacts["errors"][0]["category"], ErrorCategory.VALIDATION.value)
         self.assertIn("validation_result=regression", output.logs)
 
     def test_run_agent_baseline_no_regression_when_baseline_failing(self) -> None:
@@ -253,7 +267,7 @@ class AgentFlowTests(unittest.TestCase):
                 ]
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
@@ -281,25 +295,33 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.stop()
         with (
             patch(
-                "llm_autofix_agents.flow.workspace.manager.is_git_repository",
+                "llm_autofix_agents.flow.workspace.manager._git.is_git_repository",
                 return_value=True,
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.create_temp_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.create_temp_branch",
                 return_value=TempBranchContext(
                     branch_name="autofix/20260418T100000Z-run-abc",
                     original_branch="main",
                 ),
             ) as create_branch,
             patch(
-                "llm_autofix_agents.flow.workspace.manager.restore_original_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.restore_original_branch",
             ) as restore_branch,
             patch(
-                "llm_autofix_agents.flow.workspace.manager.delete_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.delete_branch",
             ) as delete_branch,
             patch(
                 "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="",
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
+                return_value={},
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.state.detect_untracked_files",
+                return_value=[],
             ),
         ):
             output = run_agent_baseline(
@@ -319,21 +341,21 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.stop()
         with (
             patch(
-                "llm_autofix_agents.flow.workspace.manager.is_git_repository",
+                "llm_autofix_agents.flow.workspace.manager._git.is_git_repository",
                 return_value=True,
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.create_temp_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.create_temp_branch",
                 return_value=TempBranchContext(
                     branch_name="autofix/20260418T100000Z-run-abc",
                     original_branch="main",
                 ),
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.restore_original_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.restore_original_branch",
             ) as restore_branch,
             patch(
-                "llm_autofix_agents.flow.workspace.manager.delete_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.delete_branch",
             ) as delete_branch,
             _patch_run_test_command(
                 side_effect=[
@@ -344,7 +366,7 @@ class AgentFlowTests(unittest.TestCase):
                 ]
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
@@ -374,26 +396,34 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.stop()
         with (
             patch(
-                "llm_autofix_agents.flow.workspace.manager.is_git_repository",
+                "llm_autofix_agents.flow.workspace.manager._git.is_git_repository",
                 return_value=True,
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.create_temp_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.create_temp_branch",
                 return_value=TempBranchContext(
                     branch_name="autofix/20260418T100000Z-run-abc",
                     original_branch="main",
                 ),
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.restore_original_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.restore_original_branch",
                 side_effect=RuntimeError("cannot switch back"),
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.delete_branch",
+                "llm_autofix_agents.flow.workspace.manager._git.delete_branch",
             ),
             patch(
                 "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
                 return_value="",
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
+                return_value={},
+            ),
+            patch(
+                "llm_autofix_agents.flow.workspace.state.detect_untracked_files",
+                return_value=[],
             ),
         ):
             output = run_agent_baseline(
@@ -405,9 +435,10 @@ class AgentFlowTests(unittest.TestCase):
         self._git_repo_patcher.start()
         self.assertEqual(output.status, RunStatus.FAILED)
         self.assertEqual(output.stop_reason, StopReason.INFRA_FAILURE)
-        self.assertEqual(len(output.errors), 1)
-        self.assertEqual(output.errors[0].category, ErrorCategory.INFRA)
-        self.assertIn("branch_cleanup_error", output.errors[0].details)
+        self.assertIn("errors", output.artifacts)
+        self.assertEqual(len(output.artifacts["errors"]), 1)
+        self.assertEqual(output.artifacts["errors"][0]["category"], ErrorCategory.INFRA.value)
+        self.assertIn("branch_cleanup_error", output.artifacts["errors"][0]["details"])
 
 
 class _CapturingProvider:
@@ -473,7 +504,7 @@ class _SequencedProvider:
 
 
 class AgentFlowStatusTests(unittest.TestCase):
-    @patch("llm_autofix_agents.flow.workspace.manager.is_git_repository", return_value=False)
+    @patch("llm_autofix_agents.flow.workspace.manager._git.is_git_repository", return_value=False)
     @patch(
         "llm_autofix_agents.agent_flow.resolve_observability_config",
         return_value=ObservabilityConfig(
@@ -500,7 +531,7 @@ class AgentFlowStatusTests(unittest.TestCase):
                 ]
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.manager.snapshot_repo_state",
+                "llm_autofix_agents.flow.workspace.manager._state.snapshot_repo_state",
                 side_effect=[
                     {"src/a.py": "v1"},
                     {"src/a.py": "v2"},
@@ -530,7 +561,6 @@ def _proposal(
     reasoning_summary: str,
     status: str = "done",
     confidence: float = 0.8,
-    changed_files: list[str] | None = None,
     input_tokens: int = 0,
     output_tokens: int = 0,
     total_tokens: int = 0,
@@ -540,7 +570,6 @@ def _proposal(
         status=status,
         reasoning_summary=reasoning_summary,
         confidence=confidence,
-        changed_files=changed_files if changed_files is not None else ["src/a.py"],
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total_tokens,
@@ -570,10 +599,7 @@ def _patch_run_test_command(*, side_effect):
 
     stack = ExitStack()
     stack.enter_context(
-        patch("llm_autofix_agents.flow.orchestrator.run_test_command", side_effect=side_effect[:1])
-    )
-    stack.enter_context(
-        patch("llm_autofix_agents.flow.iteration.runner.run_test_command", side_effect=side_effect[1:])
+        patch("llm_autofix_agents.flow.execution.tests.run_test_command", side_effect=side_effect)
     )
     return stack
 

@@ -3,13 +3,18 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
+from llm_autofix_agents.flow.policies.validation import validate_iteration
 from llm_autofix_agents.flow.workspace.state import (
+    detect_workspace_change_set,
     filter_diff_by_ignore_rules,
     load_ignore_rules,
     should_ignore_path,
     snapshot_repo_state,
 )
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
 
 class RepoStateTests(unittest.TestCase):
@@ -67,6 +72,71 @@ class RepoStateTests(unittest.TestCase):
     def test_should_ignore_path_matches_basename_globs(self) -> None:
         self.assertTrue(should_ignore_path("src/module.pyc", ["*.pyc"]))
         self.assertFalse(should_ignore_path("src/module.py", ["*.pyc"]))
+
+    @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff", return_value="diff")
+    @patch("llm_autofix_agents.flow.workspace.state.detect_untracked_files", return_value=[])
+    def test_detect_workspace_change_set_modified_file(self, _mock_untracked, _mock_diff) -> None:
+        repo = Path("/fake/repo")
+        before = {"src/a.py": "hash1"}
+        after = {"src/a.py": "hash2"}
+        changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
+        self.assertEqual(changes.modified_files, ["src/a.py"])
+        self.assertEqual(changes.added_files, [])
+        self.assertEqual(changes.deleted_files, [])
+
+    @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff", return_value="")
+    @patch("llm_autofix_agents.flow.workspace.state.detect_untracked_files", return_value=["src/new.py"])
+    def test_detect_workspace_change_set_new_untracked_file(self, _mock_untracked, _mock_diff) -> None:
+        repo = Path("/fake/repo")
+        before: dict[str, str] = {}
+        after = {"src/new.py": "hash1"}
+        changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
+        self.assertEqual(changes.added_files, ["src/new.py"])
+        self.assertEqual(changes.untracked_files, ["src/new.py"])
+        self.assertEqual(changes.modified_files, [])
+        self.assertEqual(changes.deleted_files, [])
+
+    @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff", return_value="diff")
+    @patch("llm_autofix_agents.flow.workspace.state.detect_untracked_files", return_value=[])
+    def test_detect_workspace_change_set_deleted_file(self, _mock_untracked, _mock_diff) -> None:
+        repo = Path("/fake/repo")
+        before = {"src/old.py": "hash1"}
+        after: dict[str, str] = {}
+        changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
+        self.assertEqual(changes.deleted_files, ["src/old.py"])
+        self.assertEqual(changes.modified_files, [])
+        self.assertEqual(changes.added_files, [])
+
+    @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff", return_value="diff")
+    @patch("llm_autofix_agents.flow.workspace.state.detect_untracked_files", return_value=[])
+    def test_detect_workspace_change_set_diff_excludes_untracked_false_when_no_untracked(self, _mock_untracked, _mock_diff) -> None:
+        repo = Path("/fake/repo")
+        before = {"src/a.py": "hash1"}
+        after = {"src/a.py": "hash2"}
+        changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
+        self.assertFalse(changes.diff_excludes_untracked)
+
+    def test_diff_integrity_does_not_trigger_on_untracked_and_empty_diff(self) -> None:
+        proposal = AgentFixIterationRecord(
+            status="done",
+            reasoning_summary="added a new helper",
+            confidence=0.8,
+        )
+        changes = WorkspaceChangeSet(
+            modified_files=[],
+            added_files=["src/new_helper.py"],
+            deleted_files=[],
+            untracked_files=["src/new_helper.py"],
+            diff="",
+            diff_excludes_untracked=True,
+        )
+        validation = validate_iteration(
+            proposal=proposal,
+            changes=changes,
+            current_test_execution=TestExecution(exit_code=1, timed_out=False, output="fail", signature="sig-now"),
+            baseline_test_execution=None,
+        )
+        self.assertTrue(validation.ok)
 
 
 if __name__ == "__main__":

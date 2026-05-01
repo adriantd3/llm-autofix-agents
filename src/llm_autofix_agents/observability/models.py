@@ -247,10 +247,6 @@ class TestExecutionRecord:
     duration_seconds: float | None = None
     exit_code: int | None = None
     timed_out: bool | None = None
-    tests_total: int | None = None
-    tests_passed: int | None = None
-    tests_failed: int | None = None
-    output_path: str | None = None
     signature: str | None = None
 
     @classmethod

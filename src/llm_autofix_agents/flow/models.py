@@ -26,7 +26,7 @@ class WorkspaceChangeSet:
     deleted_files: list[str]
     untracked_files: list[str]
     diff: str
-    diff_complete: bool
+    diff_excludes_untracked: bool
 
     @property
     def tracked_changed_files(self) -> list[str]:

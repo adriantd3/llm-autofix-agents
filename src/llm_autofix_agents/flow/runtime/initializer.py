@@ -8,7 +8,7 @@ from llm_autofix_agents.contracts import RunInput, build_run_identity
 from llm_autofix_agents.flow.lifecycle.observer_factory import build_observer
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.runtime.options import metadata_text
-from llm_autofix_agents.flow.workspace.state import load_ignore_rules, resolve_repo_root
+from llm_autofix_agents.flow.workspace.state import resolve_repo_root
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
 from llm_autofix_agents.observability import (
@@ -78,7 +78,6 @@ class RunInitializer:
             run_id=identity.run_id,
             run_agent_id=run_agent_id,
             architecture_name=self.architecture.architecture_name,
-            instructions=self.architecture.instructions,
             settings=settings,
             provider=provider,
             facade_agent_builder=self.architecture.facade_agent_builder,
@@ -88,8 +87,6 @@ class RunInitializer:
             max_iterations=max_iterations,
             test_timeout_seconds=test_timeout_seconds,
             repo_root=repo_root,
-            test_command=run_input.test_command,
-            ignore_rules=load_ignore_rules(repo_root),
             telemetry=telemetry,
             sqlite_store=sqlite_store,
             live_observer=live_observer,

@@ -28,7 +28,6 @@ class AgentFixIterationRecord(AgentFixIterationResult):
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     total_tokens: int = Field(default=0, ge=0)
-    tool_calls: list[dict[str, str | None]] = Field(default_factory=list)
 
 
 class LLMProvider(Protocol):
@@ -184,8 +183,6 @@ class OpenAIAgentsSDKProvider:
         proposal.input_tokens = usage["input_tokens"]
         proposal.output_tokens = usage["output_tokens"]
         proposal.total_tokens = usage["total_tokens"]
-        proposal.tool_calls = _extract_tool_calls(result)
-        # TODO: extract changed files from logging. Study if tool hooks are viable
 
         return proposal
 

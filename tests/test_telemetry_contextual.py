@@ -40,7 +40,7 @@ def test_file_change_telemetry_set_registers_correct_types() -> None:
         deleted_files=["d.py"],
         untracked_files=["e.py"],
         diff="",
-        diff_complete=True,
+        diff_excludes_untracked=False,
     )
     telemetry_set = to_file_change_telemetry_set(changes)
 

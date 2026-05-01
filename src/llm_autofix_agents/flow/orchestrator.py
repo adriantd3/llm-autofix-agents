@@ -4,7 +4,8 @@ from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.errors import error_category_from_exception
-from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds, run_test_command
+from llm_autofix_agents.flow.execution import tests as _execution_tests
+from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds
 from llm_autofix_agents.flow.iteration_runner import IterationRunner
 from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
@@ -65,6 +66,7 @@ class RunOrchestrator:
             cfg.baseline_test_execution = self._run_baseline_tests(run_input=run_input, cfg=cfg, state=state)
             return self._run_iterations(run_input=run_input, cfg=cfg, state=state)
         except Exception as exc:
+            import traceback; traceback.print_exc()
             output = self._output_builder.exception_failure(
                 identity=build_run_identity(
                     run_input=run_input,
@@ -99,7 +101,7 @@ class RunOrchestrator:
         if run_input.test_command is None:
             return None
 
-        execution = run_test_command(
+        execution = _execution_tests.run_test_command(
             run_input.test_command,
             cwd=cfg.repo_root,
             timeout_seconds=cfg.test_timeout_seconds,

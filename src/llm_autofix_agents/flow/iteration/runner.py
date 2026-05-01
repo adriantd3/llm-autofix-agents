@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.agent_execution.runner import AgentExecutionContext
-from llm_autofix_agents.flow.execution.tests import run_test_command, to_test_results
+from llm_autofix_agents.flow.execution import tests as _execution_tests
+from llm_autofix_agents.flow.execution.tests import to_test_results
 from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs, record_validation_logs
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.lifecycle.telemetry_mapping import (
@@ -86,7 +87,7 @@ class IterationRunner:
         )
 
         changes = self.workspace.inspect_changes(cfg=cfg, before_snapshot=before_snapshot)
-        test_execution = run_test_command(
+        test_execution = _execution_tests.run_test_command(
             run_input.test_command,
             cwd=cfg.repo_root,
             timeout_seconds=cfg.test_timeout_seconds,
@@ -165,12 +166,7 @@ class IterationRunner:
         agent,
     ) -> AgentExecutionContext:
         return AgentExecutionContext(
-            run_id=cfg.run_id,
-            iteration_id=identity.iteration_id,
-            iteration_index=iteration,
             run_agent_id=cfg.run_agent_id,
-            provider=cfg.provider,
-            agent=agent,
             agent_context=cfg.agent_context,
             iteration_telemetry=iteration_telemetry,
             user_input=build_iteration_input(
@@ -211,6 +207,7 @@ class IterationRunner:
         state.latest_diff = observation.changes.diff
         state.latest_tests = to_test_results(observation.test_execution)
         state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
+        proposal.changed_files = list(observation.changes.all_changed_files)
 
     def _evaluate_outcome(
         self,

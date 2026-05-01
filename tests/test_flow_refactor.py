@@ -17,7 +17,6 @@ class FlowRefactorTests(unittest.TestCase):
             status="done",
             reasoning_summary="added a new helper",
             confidence=0.8,
-            changed_files=["src/new_helper.py"],
         )
         changes = WorkspaceChangeSet(
             modified_files=[],
@@ -25,7 +24,7 @@ class FlowRefactorTests(unittest.TestCase):
             deleted_files=[],
             untracked_files=["src/new_helper.py"],
             diff="",
-            diff_complete=False,
+            diff_excludes_untracked=True,
         )
         validation = validate_iteration(
             proposal=proposal,
@@ -34,6 +33,7 @@ class FlowRefactorTests(unittest.TestCase):
             baseline_test_execution=None,
         )
         self.assertTrue(validation.ok)
+        self.assertNotIn("proposal_changed_files", validation.details)
 
     def test_output_builder_copies_mutable_state(self) -> None:
         state = RunState(
@@ -86,7 +86,8 @@ class FlowRefactorTests(unittest.TestCase):
         )
 
         self.assertEqual(output.stop_reason, StopReason.TOOL_FAILURE)
-        self.assertEqual(output.errors[0].category, ErrorCategory.MODEL)
+        self.assertIn("errors", output.artifacts)
+        self.assertEqual(output.artifacts["errors"][0]["category"], ErrorCategory.MODEL.value)
 
 
 if __name__ == "__main__":

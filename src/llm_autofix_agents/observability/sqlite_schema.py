@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -153,10 +153,6 @@ CREATE TABLE IF NOT EXISTS test_executions (
   duration_seconds REAL,
   exit_code INTEGER,
   timed_out INTEGER,
-  tests_total INTEGER,
-  tests_passed INTEGER,
-  tests_failed INTEGER,
-  output_path TEXT,
   signature TEXT,
   FOREIGN KEY (run_id) REFERENCES runs(run_id),
   FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id),
