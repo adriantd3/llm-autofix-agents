@@ -6,11 +6,360 @@ tooling:
   checkout_command_template: "bugsinpy-checkout -p {project} -v {version} -i {bug_id} -w {container_workspace}"
   compile_command: "bugsinpy-compile"
   test_command: "bugsinpy-test"
+  compile_required: true
 
 bugs:
+  # youtube-dl (10 bugs)
+  - id: youtube-dl-1
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "1"
+      version: "0"
+
   - id: youtube-dl-2
     program: youtube-dl
     metadata:
       project: youtube-dl
       bug_id: "2"
+      version: "0"
+
+  - id: youtube-dl-3
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "3"
+      version: "0"
+
+  - id: youtube-dl-4
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "4"
+      version: "0"
+
+  - id: youtube-dl-5
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "5"
+      version: "0"
+
+  - id: youtube-dl-6
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "6"
+      version: "0"
+
+  - id: youtube-dl-7
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "7"
+      version: "0"
+
+  - id: youtube-dl-8
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "8"
+      version: "0"
+
+  - id: youtube-dl-9
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "9"
+      version: "0"
+
+  - id: youtube-dl-10
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "10"
+      version: "0"
+
+  # pandas (10 bugs)
+  - id: pandas-1
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "1"
+      version: "0"
+
+  - id: pandas-2
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "2"
+      version: "0"
+
+  - id: pandas-3
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "3"
+      version: "0"
+
+  - id: pandas-4
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "4"
+      version: "0"
+
+  - id: pandas-5
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "5"
+      version: "0"
+
+  - id: pandas-6
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "6"
+      version: "0"
+
+  - id: pandas-7
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "7"
+      version: "0"
+
+  - id: pandas-8
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "8"
+      version: "0"
+
+  - id: pandas-9
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "9"
+      version: "0"
+
+  - id: pandas-10
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "10"
+      version: "0"
+
+  # tornado (10 bugs)
+  - id: tornado-1
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "1"
+      version: "0"
+
+  - id: tornado-2
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "2"
+      version: "0"
+
+  - id: tornado-3
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "3"
+      version: "0"
+
+  - id: tornado-4
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "4"
+      version: "0"
+
+  - id: tornado-5
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "5"
+      version: "0"
+
+  - id: tornado-6
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "6"
+      version: "0"
+
+  - id: tornado-7
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "7"
+      version: "0"
+
+  - id: tornado-8
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "8"
+      version: "0"
+
+  - id: tornado-9
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "9"
+      version: "0"
+
+  - id: tornado-10
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "10"
+      version: "0"
+
+  # ansible (10 bugs)
+  - id: ansible-1
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "1"
+      version: "0"
+
+  - id: ansible-2
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "2"
+      version: "0"
+
+  - id: ansible-3
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "3"
+      version: "0"
+
+  - id: ansible-4
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "4"
+      version: "0"
+
+  - id: ansible-5
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "5"
+      version: "0"
+
+  - id: ansible-6
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "6"
+      version: "0"
+
+  - id: ansible-7
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "7"
+      version: "0"
+
+  - id: ansible-8
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "8"
+      version: "0"
+
+  - id: ansible-9
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "9"
+      version: "0"
+
+  - id: ansible-10
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "10"
+      version: "0"
+
+  # thefuck (10 bugs)
+  - id: thefuck-1
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "1"
+      version: "0"
+
+  - id: thefuck-2
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "2"
+      version: "0"
+
+  - id: thefuck-3
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "3"
+      version: "0"
+
+  - id: thefuck-4
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "4"
+      version: "0"
+
+  - id: thefuck-5
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "5"
+      version: "0"
+
+  - id: thefuck-6
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "6"
+      version: "0"
+
+  - id: thefuck-7
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "7"
+      version: "0"
+
+  - id: thefuck-8
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "8"
+      version: "0"
+
+  - id: thefuck-9
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "9"
+      version: "0"
+
+  - id: thefuck-10
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "10"
       version: "0"

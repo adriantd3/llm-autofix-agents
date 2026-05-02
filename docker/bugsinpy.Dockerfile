@@ -5,8 +5,10 @@ ENV UV_SYSTEM_PYTHON=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Some BugsInPy cases may require additional system packages or older Python versions.
+# Those must be added incrementally when validating real cases.
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates git nodejs npm docker.io \
+    && apt-get install --no-install-recommends -y ca-certificates git nodejs npm docker.io dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir --upgrade pip \

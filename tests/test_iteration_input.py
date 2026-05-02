@@ -27,6 +27,24 @@ class IterationInputTests(unittest.TestCase):
         self.assertIn("python_testcases/test_gcd.py", user_input)
         self.assertNotIn("legacy prompt should not be primary", user_input)
 
+    def test_first_iteration_includes_critical_rules(self) -> None:
+        user_input = build_iteration_input(
+            prompt="prompt",
+            iteration=1,
+            max_iterations=3,
+            previous_message=None,
+            baseline_test_execution=TestExecution(
+                exit_code=1,
+                timed_out=False,
+                output="FAILED",
+                signature="sig",
+            ),
+            test_command="pytest",
+        )
+
+        self.assertIn("NEVER modify test files", user_input)
+        self.assertIn("Do NOT re-run the failing test before making code changes", user_input)
+
     def test_first_iteration_falls_back_to_prompt_without_baseline_failure(self) -> None:
         user_input = build_iteration_input(
             prompt="fallback prompt",
@@ -57,6 +75,69 @@ class IterationInputTests(unittest.TestCase):
         self.assertIn("[ITERATION 2/3]", user_input)
         self.assertIn("patched gcd but tests still fail", user_input)
         self.assertIn("signature=sig-base", user_input)
+
+    def test_followup_iteration_with_validation_feedback(self) -> None:
+        user_input = build_iteration_input(
+            prompt="fallback prompt",
+            iteration=2,
+            max_iterations=3,
+            previous_message="attempted fix",
+            baseline_test_execution=None,
+            test_command=None,
+            validation_feedback="You modified test files (test_foo.py). DO NOT modify test files.",
+        )
+
+        self.assertIn("[ITERATION 2/3]", user_input)
+        self.assertIn("VALIDATION REJECTION FROM PREVIOUS ITERATION", user_input)
+        self.assertIn("You modified test files (test_foo.py)", user_input)
+        self.assertIn("DO NOT repeat the same mistake", user_input)
+
+    def test_first_iteration_with_validation_feedback(self) -> None:
+        user_input = build_iteration_input(
+            prompt="prompt without baseline",
+            iteration=1,
+            max_iterations=3,
+            previous_message=None,
+            baseline_test_execution=None,
+            test_command=None,
+            validation_feedback="You modified test files. Fix ONLY source code.",
+        )
+
+        self.assertIn("VALIDATION REJECTION FROM PREVIOUS ITERATION", user_input)
+        self.assertIn("Fix ONLY source code", user_input)
+        self.assertIn("prompt without baseline", user_input)
+
+    def test_first_iteration_failing_test_with_validation_feedback(self) -> None:
+        user_input = build_iteration_input(
+            prompt="prompt",
+            iteration=1,
+            max_iterations=3,
+            previous_message=None,
+            baseline_test_execution=TestExecution(
+                exit_code=1,
+                timed_out=False,
+                output="FAILED",
+                signature="sig",
+            ),
+            test_command="pytest",
+            validation_feedback="REJECTED: test files modified",
+        )
+
+        self.assertIn("VALIDATION REJECTION FROM PREVIOUS ITERATION", user_input)
+        self.assertIn("REJECTED: test files modified", user_input)
+        self.assertIn("autonomous software repair agent", user_input)
+
+    def test_no_validation_feedback_by_default(self) -> None:
+        user_input = build_iteration_input(
+            prompt="prompt",
+            iteration=2,
+            max_iterations=3,
+            previous_message="previous",
+            baseline_test_execution=None,
+            test_command=None,
+        )
+
+        self.assertNotIn("VALIDATION REJECTION", user_input)
 
 
 if __name__ == "__main__":

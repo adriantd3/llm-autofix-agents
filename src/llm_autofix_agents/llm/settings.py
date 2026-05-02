@@ -27,7 +27,7 @@ class LLMSettings(BaseModel):
     model: str = Field(min_length=1)
     api_key: SecretStr | None = None
     base_url: str | None = None
-    max_turns: int = Field(default=3, ge=1, le=20)
+    max_turns: int = Field(default=3, ge=1, le=50)
     api_max_retries: int = Field(default=5, ge=0, le=10)
     api_retry_base_seconds: float = Field(default=1.0, ge=0.1, le=30.0)
     api_retry_max_seconds: float = Field(default=8.0, ge=0.1, le=120.0)

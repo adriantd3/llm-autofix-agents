@@ -17,7 +17,11 @@ from llm_autofix_agents.flow.lifecycle.telemetry_mapping import (
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.policies.iteration import build_iteration_input, proposal_signature
 from llm_autofix_agents.flow.policies.stop import StopPolicy
-from llm_autofix_agents.flow.policies.validation import IterationValidationResult, validate_iteration
+from llm_autofix_agents.flow.policies.validation import (
+    IterationValidationResult,
+    build_validation_feedback,
+    validate_iteration,
+)
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
@@ -61,6 +65,8 @@ class IterationRunner:
         )
 
         before_snapshot = self.workspace.snapshot(cfg)
+
+        state.validation_feedback = None
 
         # Run the iteration and get the proposed fix from the facade agent
         agent = cfg.facade_agent_builder()
@@ -178,6 +184,7 @@ class IterationRunner:
                 previous_message=state.final_message,
                 baseline_test_execution=cfg.baseline_test_execution,
                 test_command=run_input.test_command,
+                validation_feedback=state.validation_feedback,
             ),
             max_turns=cfg.settings.max_turns,
         )
@@ -226,6 +233,20 @@ class IterationRunner:
         changed_files = observation.changes.tracked_changed_files
 
         if not validation.ok:
+            if validation.retryable and state.validation_retries < 1:
+                self.workspace.restore_all_changes(cfg=cfg, logs=state.accumulated_logs)
+                state.validation_feedback = build_validation_feedback(validation)
+                state.validation_retries += 1
+                self._append_iteration_logs(
+                    cfg=cfg,
+                    state=state,
+                    iteration=observation.iteration,
+                    changes=observation.changes,
+                    test_execution=test_execution,
+                    confidence=proposal.confidence,
+                )
+                state.accumulated_logs.append(f"validation_result={validation.failure_type}_retryable")
+                return None
             self._append_iteration_logs(
                 cfg=cfg,
                 state=state,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -56,7 +57,8 @@ class BatchRunner:
             dataset.name,
         )
 
-        self._docker_build()
+        service = "bugsinpy-runner" if dataset.type == "bugsinpy" else "runner"
+        self._docker_build(service)
 
         adapter = get_adapter(dataset.type)
         context = DatasetPreparationContext(
@@ -136,7 +138,7 @@ class BatchRunner:
 
         uid = os.getuid()
         gid = os.getgid()
-        wrapped = f"cd {case.container_workspace} && {case.test_command}"
+        wrapped = f"cd {shlex.quote(case.container_workspace)} && {case.test_command}"
         cmd = [
             "docker",
             "compose",
@@ -184,10 +186,10 @@ class BatchRunner:
             )
             return None
 
-    def _docker_build(self) -> None:
-        logger.info("Building Docker images...")
+    def _docker_build(self, service: str) -> None:
+        logger.info("Building Docker image for service '%s'...", service)
         result = subprocess.run(
-            ["docker", "compose", "-f", str(self.compose_file), "build"],
+            ["docker", "compose", "-f", str(self.compose_file), "build", service],
             cwd=str(self.project_dir),
             capture_output=True,
             text=True,
@@ -195,7 +197,7 @@ class BatchRunner:
         if result.returncode != 0:
             logger.error("Docker build failed:\n%s", result.stderr)
             raise RuntimeError(f"Docker build failed: {result.stderr[:500]}")
-        logger.info("Docker images built successfully")
+        logger.info("Docker image for service '%s' built successfully", service)
 
     def _docker_run(
         self,

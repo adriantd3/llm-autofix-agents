@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import shlex
 import shutil
 import subprocess
+from pathlib import Path
 
 from llm_autofix_agents.batch.config import BugEntry, DatasetConfig
 from llm_autofix_agents.datasets.base import DatasetPreparationContext, PreparedExecutionCase
@@ -11,7 +13,28 @@ logger = logging.getLogger(__name__)
 
 
 class BugsInPyAdapter:
+    """Adapter for BugsInPy dataset.
+
+    Current limitation: the BugsInPy runner supports only bugs compatible with
+    the Python version installed in docker/bugsinpy.Dockerfile.
+    Future work: select runner images by BugsInPy python_version.
+    """
+
     type: str = "bugsinpy"
+
+    # Files expected after a successful checkout
+    _CHECKOUT_REQUIRED_FILES = (
+        ".git",
+        "bugsinpy_bug.info",
+        "bugsinpy_requirements.txt",
+        "bugsinpy_run_test.sh",
+    )
+
+    # Files expected after a successful compile
+    _COMPILE_REQUIRED_FILES = (
+        "bugsinpy_compile_flag",
+        "env",
+    )
 
     def prepare_case(
         self,
@@ -19,24 +42,32 @@ class BugsInPyAdapter:
         bug: BugEntry,
     ) -> PreparedExecutionCase:
         dataset = context.dataset
-        host_workspace = context.host_workspace_root / bug.id
-        container_workspace = f"{context.container_workspace_root}/{bug.id}"
-
-        if host_workspace.exists():
-            shutil.rmtree(host_workspace, ignore_errors=True)
-        host_workspace.mkdir(parents=True, exist_ok=True)
-
         project = bug.metadata.get("project", bug.program or bug.id)
         bug_id = str(bug.metadata.get("bug_id", bug.id))
         version = str(bug.metadata.get("version", "0"))
 
+        # BugsInPy checkout creates <work_dir>/<project>, not <work_dir>.
+        host_case_root = context.host_workspace_root / bug.id
+        container_case_root = f"{context.container_workspace_root}/{bug.id}"
+
+        host_project_workspace = host_case_root / project
+        container_project_workspace = f"{container_case_root}/{project}"
+
+        if host_case_root.exists():
+            shutil.rmtree(host_case_root, ignore_errors=True)
+        host_case_root.mkdir(parents=True, exist_ok=True)
+
         try:
             self._checkout(
-                dataset, bug, context, container_workspace, project, bug_id, version
+                dataset, bug, context, container_case_root, project, bug_id, version
             )
-            self._compile(dataset, bug, context, container_workspace)
+            self._validate_checkout(host_project_workspace, bug.id)
+            self._compile(dataset, bug, context, container_project_workspace)
+            self._validate_compile(
+                host_project_workspace, bug.id, dataset.tooling.get("compile_required", True)
+            )
         except Exception:
-            shutil.rmtree(host_workspace, ignore_errors=True)
+            shutil.rmtree(host_case_root, ignore_errors=True)
             raise
 
         test_command = self._resolve_test_command(dataset, bug)
@@ -56,8 +87,8 @@ class BugsInPyAdapter:
             case_id=bug.id,
             dataset_name=dataset.name,
             dataset_type=self.type,
-            host_workspace=host_workspace,
-            container_workspace=container_workspace,
+            host_workspace=host_project_workspace,
+            container_workspace=container_project_workspace,
             test_command=test_command,
             prompt_variables=prompt_variables,
             cleanup_paths=(),
@@ -69,7 +100,7 @@ class BugsInPyAdapter:
         dataset: DatasetConfig,
         bug: BugEntry,
         context: DatasetPreparationContext,
-        container_workspace: str,
+        container_case_root: str,
         project: str,
         bug_id: str,
         version: str,
@@ -84,24 +115,39 @@ class BugsInPyAdapter:
             bug_id=bug_id,
             version=version,
             host_workspace=str(context.host_workspace_root / bug.id),
-            container_workspace=container_workspace,
+            container_workspace=container_case_root,
         )
-        result = self._run_in_bugsinpy_container(context, command, cwd=container_workspace)
+        result = self._run_in_bugsinpy_container(
+            context, command, cwd=container_case_root
+        )
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             raise RuntimeError(f"Checkout failed for '{bug.id}': {stderr}")
+
+    def _validate_checkout(self, host_project_workspace: Path, bug_id: str) -> None:
+        missing = []
+        for name in self._CHECKOUT_REQUIRED_FILES:
+            if not (host_project_workspace / name).exists():
+                missing.append(name)
+        if missing:
+            raise RuntimeError(
+                f"Checkout validation failed for '{bug_id}': missing {', '.join(missing)} "
+                f"in {host_project_workspace}"
+            )
 
     def _compile(
         self,
         dataset: DatasetConfig,
         bug: BugEntry,
         context: DatasetPreparationContext,
-        container_workspace: str,
+        container_project_workspace: str,
     ) -> None:
         compile_command = dataset.tooling.get("compile_command")
         if not compile_command:
             return
-        result = self._run_in_bugsinpy_container(context, compile_command, cwd=container_workspace)
+        result = self._run_in_bugsinpy_container(
+            context, compile_command, cwd=container_project_workspace
+        )
         if result.returncode != 0:
             compile_required = dataset.tooling.get("compile_required", True)
             stderr = (result.stderr or "").strip()
@@ -109,6 +155,24 @@ class BugsInPyAdapter:
             if compile_required:
                 raise RuntimeError(msg)
             logger.warning(msg)
+
+    def _validate_compile(
+        self,
+        host_project_workspace: Path,
+        bug_id: str,
+        compile_required: bool,
+    ) -> None:
+        if not compile_required:
+            return
+        missing = []
+        for name in self._COMPILE_REQUIRED_FILES:
+            if not (host_project_workspace / name).exists():
+                missing.append(name)
+        if missing:
+            raise RuntimeError(
+                f"Compile validation failed for '{bug_id}': missing {', '.join(missing)} "
+                f"in {host_project_workspace}"
+            )
 
     def _run_in_bugsinpy_container(
         self,
@@ -135,7 +199,7 @@ class BugsInPyAdapter:
             "-c",
         ]
         if cwd:
-            wrapped = f"cd {cwd} && {command}"
+            wrapped = f"cd {shlex.quote(cwd)} && {command}"
         else:
             wrapped = command
         cmd.append(wrapped)
@@ -150,7 +214,14 @@ class BugsInPyAdapter:
     def _resolve_test_command(self, dataset: DatasetConfig, bug: BugEntry) -> str:
         if bug.test_command is not None:
             return bug.test_command
-        test_command = dataset.tooling.get("test_command")
-        if test_command:
-            return str(test_command)
-        return "bugsinpy-test"
+        # Always use the wrapper by default because `bugsinpy-test` does not
+        # propagate non-zero exit codes reliably (it writes failures to
+        # bugsinpy_fail.txt but exits 0).
+        return (
+            "test -f bugsinpy_run_test.sh && test -f bugsinpy_compile_flag || exit 2; "
+            "rm -f bugsinpy_fail.txt; "
+            "bugsinpy-test; "
+            "status=$?; "
+            "if [ -s bugsinpy_fail.txt ]; then cat bugsinpy_fail.txt; exit 1; fi; "
+            "exit $status"
+        )

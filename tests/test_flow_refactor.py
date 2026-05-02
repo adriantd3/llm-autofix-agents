@@ -6,7 +6,11 @@ from llm_autofix_agents.contracts import ErrorCategory, RunInput, RunStatus, Sto
 from llm_autofix_agents.flow.errors import ProviderExecutionError, WorkspaceError, error_category_from_exception
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
-from llm_autofix_agents.flow.policies.validation import validate_iteration
+from llm_autofix_agents.flow.policies.validation import (
+    IterationValidationResult,
+    build_validation_feedback,
+    validate_iteration,
+)
 from llm_autofix_agents.flow.runtime.context import RunState
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
@@ -34,6 +38,105 @@ class FlowRefactorTests(unittest.TestCase):
         )
         self.assertTrue(validation.ok)
         self.assertNotIn("proposal_changed_files", validation.details)
+
+    def test_validate_iteration_test_file_modified_is_retryable(self) -> None:
+        proposal = AgentFixIterationRecord(
+            status="done",
+            reasoning_summary="modified test",
+            confidence=0.8,
+        )
+        changes = WorkspaceChangeSet(
+            modified_files=["tests/test_foo.py", "src/foo.py"],
+            added_files=[],
+            deleted_files=[],
+            untracked_files=[],
+            diff="diff content",
+            diff_excludes_untracked=False,
+        )
+        validation = validate_iteration(
+            proposal=proposal,
+            changes=changes,
+            current_test_execution=TestExecution(exit_code=1, timed_out=False, output="fail", signature="sig-now"),
+            baseline_test_execution=None,
+        )
+        self.assertFalse(validation.ok)
+        self.assertEqual(validation.failure_type, "test_file_modified")
+        self.assertTrue(validation.retryable)
+        self.assertIn("tests/test_foo.py", validation.details["changed_test_files"])
+
+    def test_validate_iteration_diff_integrity_is_not_retryable(self) -> None:
+        proposal = AgentFixIterationRecord(
+            status="done",
+            reasoning_summary="strange diff",
+            confidence=0.8,
+        )
+        changes = WorkspaceChangeSet(
+            modified_files=["src/a.py"],
+            added_files=[],
+            deleted_files=[],
+            untracked_files=["src/untracked.py"],
+            diff="",
+            diff_excludes_untracked=False,
+        )
+        validation = validate_iteration(
+            proposal=proposal,
+            changes=changes,
+            current_test_execution=TestExecution(exit_code=1, timed_out=False, output="fail", signature="sig-now"),
+            baseline_test_execution=None,
+        )
+        self.assertFalse(validation.ok)
+        self.assertEqual(validation.failure_type, "diff_integrity")
+        self.assertFalse(validation.retryable)
+
+    def test_validate_iteration_regression_is_not_retryable(self) -> None:
+        proposal = AgentFixIterationRecord(
+            status="done",
+            reasoning_summary="fix attempt",
+            confidence=0.8,
+        )
+        changes = WorkspaceChangeSet(
+            modified_files=["src/a.py"],
+            added_files=[],
+            deleted_files=[],
+            untracked_files=[],
+            diff="diff",
+            diff_excludes_untracked=False,
+        )
+        validation = validate_iteration(
+            proposal=proposal,
+            changes=changes,
+            current_test_execution=TestExecution(exit_code=1, timed_out=False, output="fail", signature="sig-now"),
+            baseline_test_execution=TestExecution(exit_code=0, timed_out=False, output="ok", signature="sig-ok"),
+        )
+        self.assertFalse(validation.ok)
+        self.assertEqual(validation.failure_type, "regression")
+        self.assertFalse(validation.retryable)
+
+    def test_build_validation_feedback_test_file_modified(self) -> None:
+        validation = IterationValidationResult(
+            ok=False,
+            failure_type="test_file_modified",
+            retryable=True,
+            details={
+                "reason": "Agent modified test files",
+                "changed_test_files": ["tests/test_bar.py", "tests/test_baz.py"],
+            },
+        )
+        feedback = build_validation_feedback(validation)
+        self.assertIn("tests/test_bar.py", feedback)
+        self.assertIn("tests/test_baz.py", feedback)
+        self.assertIn("FORBIDDEN", feedback)
+        self.assertIn("reverted", feedback)
+
+    def test_build_validation_feedback_unknown_type(self) -> None:
+        validation = IterationValidationResult(
+            ok=False,
+            failure_type="diff_integrity",
+            retryable=False,
+            details={"reason": "Diff integrity failed"},
+        )
+        feedback = build_validation_feedback(validation)
+        self.assertEqual(feedback, "Diff integrity failed")
 
     def test_output_builder_copies_mutable_state(self) -> None:
         state = RunState(

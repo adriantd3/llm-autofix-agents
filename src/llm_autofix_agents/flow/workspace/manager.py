@@ -55,6 +55,14 @@ class WorkspaceManager:
         except Exception as exc:  # noqa: BLE001
             raise WorkspaceError(f"failed to inspect workspace changes: {exc}") from exc
 
+    def restore_all_changes(self, *, cfg: RunConfig, logs: list[str]) -> None:
+        try:
+            _git.restore_all_changes(cfg.repo_root)
+            logs.append("workspace_restored_after_retryable_validation")
+        except Exception as exc:  # noqa: BLE001
+            logs.append(f"workspace_restore_error={exc}")
+            raise WorkspaceError(f"failed to restore workspace after retryable validation: {exc}") from exc
+
     def restore_temp_branch_for_debug(self, *, cfg: RunConfig, logs: list[str]) -> None:
         if cfg.temp_branch is None:
             return

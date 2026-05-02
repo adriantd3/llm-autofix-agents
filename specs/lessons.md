@@ -169,3 +169,19 @@
 - Por que estuvo mal: el host solo orquesta; todo trabajo del agente (git branches, edits, tests) debe estar encapsulado en un contenedor efimero que muere tras cada bug. Reutilizar contenedores o ejecutar en host rompe aislamiento y deja artefactos.
 - Alternativa recomendada: `BatchRunner` en host prepara workspace → lanza `docker compose run --rm` por bug → monta `./benchmark-workspaces:/benchmark-workspaces` → `RUN_REPOSITORY=/benchmark-workspaces/<batch>/<case>` → container ejecuta y muere.
 - Regla preventiva para futuras specs: el agente APR siempre corre dentro de un contenedor Docker efimero; el host nunca ejecuta logica del agente ni toca repos objetivo.
+
+## 2026-05-02 (prompt engineering para modelos debiles)
+- Contexto: modelo local qwen3.5:9b ignora sistemáticamente instrucciones sobre no modificar tests y hacer tool calls redundantes; desperdicia 40-60% de turns en llamadas redundantes.
+- Anti-patron detectado: instrucciones suaves ("Do not make redundant tool calls") sin consecuencias explícitas ni ejemplos concretos de lo que NO hacer.
+- Que no hay que hacer: dejar las restricciones críticas enterradas en secciones secundarias del prompt o formularlas como sugerencias sin consecuencias.
+- Por que estuvo mal: modelos débiles no siguen instrucciones implícitas; necesitan consecuencias explícitas ("your iteration will be REJECTED"), posición prominente (ABSOLUTE RULES), y anti-patrones concretos.
+- Alternativa recomendada: (1) elevar restricciones críticas a ABSOLUTE RULES con consecuencias explícitas, (2) añadir TURN BUDGET AWARENESS para crear urgencia, (3) enumerar ANTI-PATTERNS concretos, (4) hacer restricciones no terminales (retryable) con feedback explícito inyectado en el prompt de la siguiente iteración.
+- Regla preventiva para futuras specs: para modelos débiles, las instrucciones de sistema deben combinar (a) reglas absolutas con consecuencias, (b) ejemplos negativos concretos, (c) feedback de errores previos en el prompt de continuación, y (d) noción de presupuesto limitado.
+
+## 2026-05-02 (validación retryable vs terminal)
+- Contexto: `test_file_modified` era terminal (FAILED/VALIDATION_FAILURE) sin oportunidad de reintento; el agente perdía toda la corrida por un error corregible.
+- Anti-patron detectado: tratar toda violación de validación como error terminal sin distinguir entre errores corregibles (modificar tests) y errores estructurales (diff integrity, regression).
+- Que no hay que hacer: terminar el run por una violación de política que se puede corregir revirtiendo cambios y dando feedback al agente.
+- Por que estuvo mal: el agente hace un intento completo, pierde los cambios de código fuente válidos, y no recibe feedback explícito sobre qué hizo mal.
+- Alternativa recomendada: clasificar validaciones en retryable (test_file_modified, con rollback + feedback) y terminal (diff_integrity, regression). Para las retryable: restaurar workspace, inyectar feedback explícito en el prompt de la siguiente iteración, y permitir un reintento.
+- Regla preventiva para futuras specs: distinguir siempre entre violaciones corregibles (retryable) y errores estructurales (terminal); las corregibles deben incluir rollback y feedback, no solo rechazo.

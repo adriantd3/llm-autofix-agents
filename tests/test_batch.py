@@ -537,10 +537,42 @@ class TestQuixBugsAdapter(unittest.TestCase):
 
 
 class TestBugsInPyAdapter(unittest.TestCase):
+    def _create_checkout_artifacts(self, project_dir: Path) -> None:
+        for name in BugsInPyAdapter._CHECKOUT_REQUIRED_FILES:
+            if name == ".git":
+                (project_dir / name).mkdir(parents=True, exist_ok=True)
+            else:
+                (project_dir / name).write_text("", encoding="utf-8")
+
+    def _create_compile_artifacts(self, project_dir: Path) -> None:
+        for name in BugsInPyAdapter._COMPILE_REQUIRED_FILES:
+            if name == "env":
+                (project_dir / name).mkdir(parents=True, exist_ok=True)
+            else:
+                (project_dir / name).write_text("", encoding="utf-8")
+
+    def _make_side_effect_with_artifacts(
+        self,
+        workspace_root: Path,
+        bug_id: str,
+        project: str,
+        checkout_rc: int = 0,
+        compile_rc: int = 0,
+        create_checkout: bool = True,
+        create_compile: bool = True,
+    ):
+        def side_effect(*args, **kwargs):
+            project_dir = workspace_root / bug_id / project
+            project_dir.mkdir(parents=True, exist_ok=True)
+            if create_checkout:
+                self._create_checkout_artifacts(project_dir)
+            if create_compile:
+                self._create_compile_artifacts(project_dir)
+            return subprocess.CompletedProcess(args=[], returncode=checkout_rc, stdout="", stderr="")
+        return side_effect
+
     @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
     def test_prepare_case_with_checkout(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
-
         adapter = BugsInPyAdapter()
         dataset = DatasetConfig(
             type="bugsinpy",
@@ -568,6 +600,10 @@ class TestBugsInPyAdapter(unittest.TestCase):
             compose_file = Path(tmp_dir) / "docker-compose.yml"
             compose_file.write_text("", encoding="utf-8")
             project_dir = Path(tmp_dir)
+            workspace_root = Path(tmp_dir) / "workspaces"
+            mock_run.side_effect = self._make_side_effect_with_artifacts(
+                workspace_root, bug.id, "youtube-dl"
+            )
             context = DatasetPreparationContext(
                 dataset=dataset,
                 batch=GlobalSettings(
@@ -578,18 +614,28 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch_id="batch-test",
                 project_dir=project_dir,
                 compose_file=compose_file,
-                host_workspace_root=Path(tmp_dir) / "workspaces",
+                host_workspace_root=workspace_root,
                 container_workspace_root="/benchmark-workspaces/batch-test",
             )
+
             case = adapter.prepare_case(context, bug)
 
             self.assertEqual(case.case_id, "youtube-dl-2")
             self.assertEqual(case.dataset_type, "bugsinpy")
-            self.assertEqual(case.test_command, "bugsinpy-test")
+            self.assertIn("bugsinpy-test", case.test_command)
+            self.assertIn("bugsinpy_fail.txt", case.test_command)
             self.assertEqual(case.runner_service, "bugsinpy-runner")
             self.assertIn("project", case.prompt_variables)
             self.assertEqual(case.prompt_variables["project"], "youtube-dl")
             self.assertEqual(case.cleanup_paths, ())
+            # Workspace must point to the project subdir, not the case root
+            self.assertEqual(
+                case.host_workspace, workspace_root / bug.id / "youtube-dl"
+            )
+            self.assertEqual(
+                case.container_workspace,
+                "/benchmark-workspaces/batch-test/youtube-dl-2/youtube-dl",
+            )
 
             # Verify docker compose was called for checkout and compile
             self.assertEqual(mock_run.call_count, 2)
@@ -598,6 +644,13 @@ class TestBugsInPyAdapter(unittest.TestCase):
             self.assertIn("bugsinpy-checkout", checkout_call[0][0][-1])
             self.assertIn("-f", checkout_call[0][0])
             self.assertEqual(checkout_call[1]["cwd"], str(project_dir))
+
+            # Verify compile runs in the project workspace, not case root
+            compile_call = mock_run.call_args_list[1]
+            shell_cmd = compile_call[0][0][-1]
+            self.assertIn(
+                "/benchmark-workspaces/batch-test/youtube-dl-2/youtube-dl", shell_cmd
+            )
 
     @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
     def test_prepare_case_checkout_failure(self, mock_run):
@@ -637,11 +690,57 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 adapter.prepare_case(context, bug)
 
     @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
+    def test_prepare_case_checkout_validation_fails(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        adapter = BugsInPyAdapter()
+        dataset = DatasetConfig(
+            type="bugsinpy",
+            name="test-bugsinpy",
+            language="python",
+            tooling={
+                "checkout_command_template": "bugsinpy-checkout -p {project}",
+                "compile_command": "bugsinpy-compile",
+            },
+            bugs=[BugEntry(id="test-bug", metadata={"project": "test"})],
+        )
+        bug = dataset.bugs[0]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            compose_file = Path(tmp_dir) / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            workspace_root = Path(tmp_dir) / "workspaces"
+            context = DatasetPreparationContext(
+                dataset=dataset,
+                batch=GlobalSettings(
+                    architecture=RunArchitecture.MONO_AGENT,
+                    llm=LLMSettings(model="test"),
+                    prompt_template="Fix {bug_id}",
+                ),
+                batch_id="batch-test",
+                project_dir=Path(tmp_dir),
+                compose_file=compose_file,
+                host_workspace_root=workspace_root,
+                container_workspace_root="/benchmark-workspaces/batch-test",
+            )
+            # Do NOT create checkout artifacts -> validation should fail
+            with self.assertRaises(RuntimeError) as exc:
+                adapter.prepare_case(context, bug)
+            self.assertIn("Checkout validation failed", str(exc.exception))
+            self.assertIn("bugsinpy_bug.info", str(exc.exception))
+
+    @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
     def test_prepare_case_compile_required_raises(self, mock_run):
-        mock_run.side_effect = [
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="compile failed"),
-        ]
+        calls: list[int] = []
+
+        def side_effect(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                project_dir = Path(tmp_dir) / "workspaces" / "test-bug" / "test"
+                project_dir.mkdir(parents=True, exist_ok=True)
+                self._create_checkout_artifacts(project_dir)
+                return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+            return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="compile failed")
 
         adapter = BugsInPyAdapter()
         dataset = DatasetConfig(
@@ -660,6 +759,8 @@ class TestBugsInPyAdapter(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             compose_file = Path(tmp_dir) / "docker-compose.yml"
             compose_file.write_text("", encoding="utf-8")
+            workspace_root = Path(tmp_dir) / "workspaces"
+            mock_run.side_effect = side_effect
             context = DatasetPreparationContext(
                 dataset=dataset,
                 batch=GlobalSettings(
@@ -670,19 +771,70 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
                 compose_file=compose_file,
-                host_workspace_root=Path(tmp_dir) / "workspaces",
+                host_workspace_root=workspace_root,
                 container_workspace_root="/benchmark-workspaces/batch-test",
             )
+
             with self.assertRaises(RuntimeError) as exc:
                 adapter.prepare_case(context, bug)
             self.assertIn("Compile command failed", str(exc.exception))
 
     @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
+    def test_prepare_case_compile_validation_fails(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        adapter = BugsInPyAdapter()
+        dataset = DatasetConfig(
+            type="bugsinpy",
+            name="test-bugsinpy",
+            language="python",
+            tooling={
+                "checkout_command_template": "bugsinpy-checkout -p {project}",
+                "compile_command": "bugsinpy-compile",
+                "compile_required": True,
+            },
+            bugs=[BugEntry(id="test-bug", metadata={"project": "test"})],
+        )
+        bug = dataset.bugs[0]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            compose_file = Path(tmp_dir) / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            workspace_root = Path(tmp_dir) / "workspaces"
+            mock_run.side_effect = self._make_side_effect_with_artifacts(
+                workspace_root, bug.id, "test", create_compile=False
+            )
+            context = DatasetPreparationContext(
+                dataset=dataset,
+                batch=GlobalSettings(
+                    architecture=RunArchitecture.MONO_AGENT,
+                    llm=LLMSettings(model="test"),
+                    prompt_template="Fix {bug_id}",
+                ),
+                batch_id="batch-test",
+                project_dir=Path(tmp_dir),
+                compose_file=compose_file,
+                host_workspace_root=workspace_root,
+                container_workspace_root="/benchmark-workspaces/batch-test",
+            )
+
+            with self.assertRaises(RuntimeError) as exc:
+                adapter.prepare_case(context, bug)
+            self.assertIn("Compile validation failed", str(exc.exception))
+            self.assertIn("bugsinpy_compile_flag", str(exc.exception))
+
+    @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
     def test_prepare_case_compile_not_required_warns(self, mock_run):
-        mock_run.side_effect = [
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="compile failed"),
-        ]
+        calls: list[int] = []
+
+        def side_effect(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                project_dir = Path(tmp_dir) / "workspaces" / "test-bug" / "test"
+                project_dir.mkdir(parents=True, exist_ok=True)
+                self._create_checkout_artifacts(project_dir)
+                return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+            return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="compile failed")
 
         adapter = BugsInPyAdapter()
         dataset = DatasetConfig(
@@ -701,6 +853,8 @@ class TestBugsInPyAdapter(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             compose_file = Path(tmp_dir) / "docker-compose.yml"
             compose_file.write_text("", encoding="utf-8")
+            workspace_root = Path(tmp_dir) / "workspaces"
+            mock_run.side_effect = side_effect
             context = DatasetPreparationContext(
                 dataset=dataset,
                 batch=GlobalSettings(
@@ -711,11 +865,55 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
                 compose_file=compose_file,
-                host_workspace_root=Path(tmp_dir) / "workspaces",
+                host_workspace_root=workspace_root,
                 container_workspace_root="/benchmark-workspaces/batch-test",
             )
+
             case = adapter.prepare_case(context, bug)
             self.assertEqual(case.case_id, "test-bug")
+
+    def test_resolve_test_command_default_wrapper(self):
+        adapter = BugsInPyAdapter()
+        dataset = DatasetConfig(
+            type="bugsinpy",
+            name="test-bugsinpy",
+            language="python",
+            bugs=[BugEntry(id="test-bug")],
+        )
+        bug = dataset.bugs[0]
+        cmd = adapter._resolve_test_command(dataset, bug)
+        self.assertIn("bugsinpy_run_test.sh", cmd)
+        self.assertIn("bugsinpy_compile_flag", cmd)
+        self.assertIn("bugsinpy_fail.txt", cmd)
+        self.assertIn("bugsinpy-test", cmd)
+
+    def test_resolve_test_command_respects_bug_override(self):
+        adapter = BugsInPyAdapter()
+        dataset = DatasetConfig(
+            type="bugsinpy",
+            name="test-bugsinpy",
+            language="python",
+            bugs=[BugEntry(id="test-bug", test_command="custom-test")],
+        )
+        bug = dataset.bugs[0]
+        cmd = adapter._resolve_test_command(dataset, bug)
+        self.assertEqual(cmd, "custom-test")
+
+    def test_resolve_test_command_ignores_dataset_tooling(self):
+        adapter = BugsInPyAdapter()
+        dataset = DatasetConfig(
+            type="bugsinpy",
+            name="test-bugsinpy",
+            language="python",
+            tooling={"test_command": "dataset-test"},
+            bugs=[BugEntry(id="test-bug")],
+        )
+        bug = dataset.bugs[0]
+        cmd = adapter._resolve_test_command(dataset, bug)
+        # Wrapper is always used by default; tooling.test_command is ignored
+        # because bugsinpy-test does not propagate exit codes reliably.
+        self.assertIn("bugsinpy_fail.txt", cmd)
+        self.assertIn("bugsinpy-test", cmd)
 
 
 class TestPreparedExecutionCase(unittest.TestCase):
@@ -795,6 +993,33 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
             self.assertEqual(call_args[1]["cwd"], str(project_dir))
 
     @patch("llm_autofix_agents.batch.runner.subprocess.run")
+    def test_capture_error_output_uses_shlex_quote(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="error output", stderr=""
+        )
+
+        from llm_autofix_agents.batch.runner import BatchRunner
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir)
+            compose_file = project_dir / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
+            case = PreparedExecutionCase(
+                case_id="gcd",
+                dataset_name="test",
+                dataset_type="quixbugs",
+                host_workspace=Path("/tmp/ws"),
+                container_workspace="/benchmark-workspaces/batch 1/gcd",
+                test_command="pytest test_gcd.py",
+                prompt_variables={"bug_id": "gcd"},
+                runner_service="runner",
+            )
+            runner._capture_error_output_in_container(case)
+            shell_cmd = mock_run.call_args[0][0][-1]
+            self.assertIn("'/benchmark-workspaces/batch 1/gcd'", shell_cmd)
+
+    @patch("llm_autofix_agents.batch.runner.subprocess.run")
     def test_capture_error_output_truncates(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="a" * 5000, stderr=""
@@ -819,6 +1044,42 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
             )
             result = runner._capture_error_output_in_container(case)
             self.assertTrue(len(result) <= 4000)
+
+
+class TestBatchRunnerDockerBuild(unittest.TestCase):
+    @patch("llm_autofix_agents.batch.runner.subprocess.run")
+    def test_builds_runner_for_quixbugs(self, mock_run):
+        from llm_autofix_agents.batch.runner import BatchRunner
+
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir)
+            compose_file = project_dir / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
+            runner._docker_build("runner")
+            cmd = mock_run.call_args[0][0]
+            self.assertIn("build", cmd)
+            self.assertIn("runner", cmd)
+            self.assertNotIn("bugsinpy-runner", cmd)
+
+    @patch("llm_autofix_agents.batch.runner.subprocess.run")
+    def test_builds_bugsinpy_runner_for_bugsinpy(self, mock_run):
+        from llm_autofix_agents.batch.runner import BatchRunner
+
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir)
+            compose_file = project_dir / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
+            runner._docker_build("bugsinpy-runner")
+            cmd = mock_run.call_args[0][0]
+            self.assertIn("build", cmd)
+            self.assertIn("bugsinpy-runner", cmd)
+            self.assertNotIn(" runner", cmd)
 
 
 class TestBatchRunnerCleanup(unittest.TestCase):

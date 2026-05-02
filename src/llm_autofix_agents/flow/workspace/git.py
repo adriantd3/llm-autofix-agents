@@ -78,6 +78,29 @@ def _sanitize_branch_component(value: str) -> str:
     return "".join(ch for ch in sanitized if ch in allowed).strip("/-")
 
 
+def restore_files(repo_root: Path, files: list[str]) -> None:
+    if not files:
+        return
+    result = _run_git(repo_root, ["checkout", "--", *files])
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to restore files in {repo_root}: {result.stderr.strip() or 'unknown error'}"
+        )
+
+
+def restore_all_changes(repo_root: Path) -> None:
+    result = _run_git(repo_root, ["checkout", "--", "."])
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to restore working directory: {result.stderr.strip() or 'unknown error'}"
+        )
+    clean_result = _run_git(repo_root, ["clean", "-fd"])
+    if clean_result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to clean untracked files in {repo_root}: {clean_result.stderr.strip() or 'unknown error'}"
+        )
+
+
 def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args],

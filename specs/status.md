@@ -92,6 +92,23 @@
   - Cleanup de workspaces deshabilitado por defecto (`cleanup_workspaces: false`) para facilitar depuracion; `cleanup_paths=()` en adapters.
   - Tests actualizados: determinismo Docker, error capture en contenedor, persistencia de workspaces, `compile_required`.
   - 159 tests pasando tras el refinamiento.
+- **Validación retryable y prompt engineering robusto** (post-SPEC-005):
+  - `IterationValidationResult.retryable`: clasifica validaciones en corregibles (test_file_modified) y terminales (diff_integrity, regression).
+  - Validaciones retryable: restauran workspace (`git checkout .` + `git clean -fd`), inyectan feedback explícito en el prompt de la siguiente iteración, y permiten un reintento.
+  - `RunState.validation_feedback` y `RunState.validation_retries` transportan el feedback entre iteraciones.
+  - `build_iteration_input()` acepta `validation_feedback` e inyecta bloque de rechazo prominente.
+  - `build_validation_feedback()` genera mensajes específicos por tipo de violación (ej: lista de archivos test modificados).
+  - Instrucciones de sistema reforzadas: ABSOLUTE RULES con consecuencias explícitas, TURN BUDGET AWARENESS, ANTI-PATTERNS concretos.
+  - `_FAILURE_DRIVEN_INTRO` reforzado con CRITICAL RULES sobre test files y tool efficiency.
+  - 189 tests pasando, lint limpio.
+  - Corregido workspace real de BugsInPy: checkout crea `<case_root>/<project>`, no `<case_root>`. `BugsInPyAdapter` ajusta `host_workspace` y `container_workspace` al subdirectorio del proyecto.
+  - Validacion explicita post-checkout: falla si faltan `.git`, `bugsinpy_bug.info`, `bugsinpy_requirements.txt` o `bugsinpy_run_test.sh`.
+  - Validacion explicita post-compile: falla si faltan `bugsinpy_compile_flag` o `env/` cuando `compile_required=true`.
+  - Wrapper de test por defecto para BugsInPy: verifica archivos requeridos, limpia `bugsinpy_fail.txt`, ejecuta `bugsinpy-test` y propaga errores desde `bugsinpy_fail.txt` como exit code no cero.
+  - `BatchRunner._docker_build` construye solo el servicio necesario (`runner` vs `bugsinpy-runner`), no todos.
+  - Quoting seguro con `shlex.quote()` en comandos shell generados por adapter y runner.
+  - `docker/bugsinpy.Dockerfile` actualizado con `dos2unix` y comentario sobre limitaciones de version de Python.
+  - 168 tests pasando, lint limpio.
 
 ## En curso
 - Spec activa: specs/004-agent-model-overrides/spec.md (propuesta)

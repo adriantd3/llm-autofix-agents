@@ -30,6 +30,8 @@ class RunState:
     previous_proposal_status: str | None = None
     previous_proposal_confidence: float | None = None
     previous_test_signature: str | None = None
+    validation_feedback: str | None = None
+    validation_retries: int = 0
 
 
 @dataclass

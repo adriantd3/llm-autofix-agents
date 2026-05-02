@@ -15,6 +15,7 @@ class IterationValidationResult:
 
     ok: bool
     failure_type: str | None = None
+    retryable: bool = False
     details: dict[str, Any] = field(default_factory=dict)
 
     def to_errors(self) -> list[RunError]:
@@ -60,6 +61,19 @@ def validate_iteration(
             },
         )
 
+    changed_test_files = [f for f in observed_files if _is_test_file(f)]
+    if changed_test_files:
+        return IterationValidationResult(
+            ok=False,
+            failure_type="test_file_modified",
+            retryable=True,
+            details={
+                **details,
+                "reason": "Agent modified test files, which is forbidden. The failing tests are correct.",
+                "changed_test_files": changed_test_files,
+            },
+        )
+
     if baseline_test_execution and is_regression(baseline=baseline_test_execution, current=current_test_execution):
         return IterationValidationResult(
             ok=False,
@@ -80,8 +94,31 @@ def _validation_message(failure_type: str | None) -> str:
     return {
         "diff_integrity": "Diff integrity validation failed",
         "regression": "Regression detected against baseline test execution",
+        "test_file_modified": "Agent modified test files, which is forbidden",
     }.get(failure_type or "", "Validation failed")
+
+
+def build_validation_feedback(validation: IterationValidationResult) -> str:
+    """Build a human-readable feedback message for a retryable validation failure."""
+    if validation.failure_type == "test_file_modified":
+        files = validation.details.get("changed_test_files", [])
+        files_str = ", ".join(files) if files else "(unknown)"
+        return (
+            f"You modified test files ({files_str}), which is FORBIDDEN. "
+            f"The failing tests are CORRECT — the bug is in the source code, not the tests. "
+            f"Your changes have been reverted. Fix ONLY source code files."
+        )
+    return validation.details.get("reason", "Validation failed")
 
 
 def _normalize_paths(paths: list[str]) -> list[str]:
     return sorted(path.replace("\\", "/") for path in paths)
+
+
+def _is_test_file(path: str) -> bool:
+    """Return True if the path looks like a test file."""
+    lowered = path.lower()
+    if lowered.startswith("test/") or lowered.startswith("tests/"):
+        return True
+    parts = lowered.split("/")
+    return any(part.startswith("test_") or part.endswith("_test") for part in parts)
