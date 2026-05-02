@@ -70,39 +70,37 @@ def _build_parser() -> argparse.ArgumentParser:
 def _run_run(args: argparse.Namespace) -> int:
     del args
     _configure_logging()
-    prepared_repo: PreparedRepository | None = None
+
+    if not _has_runtime_contract_env():
+        logger.error("Missing RUN_* environment variables. RUN_REPOSITORY and RUN_BRANCH are required.")
+        return 2
+
+    try:
+        instantiation = ContainerInstantiation.from_env()
+    except ValueError as exc:
+        logger.error("Invalid RUN_* runtime configuration: %s", exc)
+        return 2
+
     metadata: dict[str, object] = {"source": "run"}
-    target_repo = "."
-    prompt = os.environ.get("RUN_BOOTSTRAP_PROMPT", _DEFAULT_AGENT_PROMPT).strip() or _DEFAULT_AGENT_PROMPT
+    prompt = instantiation.bootstrap_prompt or os.environ.get("RUN_BOOTSTRAP_PROMPT", _DEFAULT_AGENT_PROMPT).strip() or _DEFAULT_AGENT_PROMPT
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
+    metadata.update(
+        {
+            "runtime_repository": instantiation.repository,
+            "runtime_branch": instantiation.branch,
+            "runtime_architecture": instantiation.architecture,
+            "runtime_agent_models": instantiation.agent_models,
+        }
+    )
 
-    instantiation: ContainerInstantiation | None = None
-    if _has_runtime_contract_env():
-        try:
-            instantiation = ContainerInstantiation.from_env()
-        except ValueError as exc:
-            logger.error("Invalid RUN_* runtime configuration: %s", exc)
-            return 2
-
-    if instantiation is not None:
-        prompt = instantiation.bootstrap_prompt or prompt
-        metadata.update(
-            {
-                "runtime_repository": instantiation.repository,
-                "runtime_branch": instantiation.branch,
-                "runtime_architecture": instantiation.architecture,
-                "runtime_agent_models": instantiation.agent_models,
-            }
+    try:
+        prepared_repo = prepare_target_repository(
+            repository=instantiation.repository,
+            branch=instantiation.branch,
         )
-        try:
-            prepared_repo = prepare_target_repository(
-                repository=instantiation.repository,
-                branch=instantiation.branch,
-            )
-        except ValueError as exc:
-            logger.error("%s", exc)
-            return 2
-        target_repo = str(prepared_repo.path)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        return 2
 
     max_iterations_env = _resolve_optional_text(os.environ.get("AUTOFIX_MAX_ITERATIONS"))
     if max_iterations_env is not None:
@@ -115,7 +113,7 @@ def _run_run(args: argparse.Namespace) -> int:
     run_input = RunInput(
         prompt=prompt,
         metadata=metadata,
-        target_repo=target_repo,
+        target_repo=str(prepared_repo.path),
         test_command=test_command,
     )
     try:
@@ -127,8 +125,7 @@ def _run_run(args: argparse.Namespace) -> int:
         logger.exception("Run execution failed: %s", exc)
         return 1
     finally:
-        if prepared_repo is not None:
-            prepared_repo.cleanup()
+        prepared_repo.cleanup()
 
     payload = {
         "input": run_input.model_dump(mode="json"),

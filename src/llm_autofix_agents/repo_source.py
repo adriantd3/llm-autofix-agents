@@ -26,12 +26,6 @@ def prepare_target_repository(*, repository: str, branch: str) -> PreparedReposi
     if not normalized_repository:
         raise ValueError("RUN_REPOSITORY cannot be empty")
 
-    # First check if it's a local path
-    local_path = Path(normalized_repository)
-    if local_path.exists() and local_path.is_dir():
-        return PreparedRepository(path=local_path.resolve(), temporary=False)
-
-    # Otherwise, treat it as a git repository URL or GitHub slug and attempt to clone it
     clone_url = _to_clone_url(normalized_repository)
     destination = Path(mkdtemp(prefix="autofix-repo-"))
     command = [
@@ -58,4 +52,4 @@ def _to_clone_url(repository: str) -> str:
         return repository
     if _GITHUB_SLUG_PATTERN.match(repository):
         return f"https://github.com/{repository}.git"
-    raise ValueError("RUN_REPOSITORY must be an existing local path, a git URL, or a GitHub slug like owner/repo")
+    raise ValueError("RUN_REPOSITORY must be a git URL or a GitHub slug like owner/repo")
