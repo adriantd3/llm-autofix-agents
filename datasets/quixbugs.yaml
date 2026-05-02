@@ -1,0 +1,166 @@
+name: quixbugs
+repository: https://github.com/jkoppel/QuixBugs.git
+branch: master
+language: python
+test_command_template: "uv run --with pytest pytest python_testcases/test_{bug_id}.py"
+
+bugs:
+  - id: bitcount
+    program: python_programs/bitcount.py
+    test: python_testcases/test_bitcount.py
+
+  - id: breadth_first_search
+    program: python_programs/breadth_first_search.py
+    test: python_testcases/test_breadth_first_search.py
+
+  - id: bucketsort
+    program: python_programs/bucketsort.py
+    test: python_testcases/test_bucketsort.py
+
+  - id: depth_first_search
+    program: python_programs/depth_first_search.py
+    test: python_testcases/test_depth_first_search.py
+
+  - id: detect_cycle
+    program: python_programs/detect_cycle.py
+    test: python_testcases/test_detect_cycle.py
+
+  - id: find_first_in_sorted
+    program: python_programs/find_first_in_sorted.py
+    test: python_testcases/test_find_first_in_sorted.py
+
+  - id: find_in_sorted
+    program: python_programs/find_in_sorted.py
+    test: python_testcases/test_find_in_sorted.py
+
+  - id: flatten
+    program: python_programs/flatten.py
+    test: python_testcases/test_flatten.py
+
+  - id: gcd
+    program: python_programs/gcd.py
+    test: python_testcases/test_gcd.py
+
+  - id: get_factors
+    program: python_programs/get_factors.py
+    test: python_testcases/test_get_factors.py
+
+  - id: hanoi
+    program: python_programs/hanoi.py
+    test: python_testcases/test_hanoi.py
+
+  - id: is_valid_parenthesization
+    program: python_programs/is_valid_parenthesization.py
+    test: python_testcases/test_is_valid_parenthesization.py
+
+  - id: kheapsort
+    program: python_programs/kheapsort.py
+    test: python_testcases/test_kheapsort.py
+
+  - id: knapsack
+    program: python_programs/knapsack.py
+    test: python_testcases/test_knapsack.py
+
+  - id: kth
+    program: python_programs/kth.py
+    test: python_testcases/test_kth.py
+
+  - id: lcs_length
+    program: python_programs/lcs_length.py
+    test: python_testcases/test_lcs_length.py
+
+  - id: levenshtein
+    program: python_programs/levenshtein.py
+    test: python_testcases/test_levenshtein.py
+
+  - id: lis
+    program: python_programs/lis.py
+    test: python_testcases/test_lis.py
+
+  - id: longest_common_subsequence
+    program: python_programs/longest_common_subsequence.py
+    test: python_testcases/test_longest_common_subsequence.py
+
+  - id: max_sublist_sum
+    program: python_programs/max_sublist_sum.py
+    test: python_testcases/test_max_sublist_sum.py
+
+  - id: mergesort
+    program: python_programs/mergesort.py
+    test: python_testcases/test_mergesort.py
+
+  - id: minimum_spanning_tree
+    program: python_programs/minimum_spanning_tree.py
+    test: python_testcases/test_minimum_spanning_tree.py
+
+  - id: next_palindrome
+    program: python_programs/next_palindrome.py
+    test: python_testcases/test_next_palindrome.py
+
+  - id: next_permutation
+    program: python_programs/next_permutation.py
+    test: python_testcases/test_next_permutation.py
+
+  - id: pascal
+    program: python_programs/pascal.py
+    test: python_testcases/test_pascal.py
+
+  - id: possible_change
+    program: python_programs/possible_change.py
+    test: python_testcases/test_possible_change.py
+
+  - id: powerset
+    program: python_programs/powerset.py
+    test: python_testcases/test_powerset.py
+
+  - id: quicksort
+    program: python_programs/quicksort.py
+    test: python_testcases/test_quicksort.py
+
+  - id: reverse_linked_list
+    program: python_programs/reverse_linked_list.py
+    test: python_testcases/test_reverse_linked_list.py
+
+  - id: rpn_eval
+    program: python_programs/rpn_eval.py
+    test: python_testcases/test_rpn_eval.py
+
+  - id: shortest_path_length
+    program: python_programs/shortest_path_length.py
+    test: python_testcases/test_shortest_path_length.py
+
+  - id: shortest_path_lengths
+    program: python_programs/shortest_path_lengths.py
+    test: python_testcases/test_shortest_path_lengths.py
+
+  - id: shortest_paths
+    program: python_programs/shortest_paths.py
+    test: python_testcases/test_shortest_paths.py
+
+  - id: shunting_yard
+    program: python_programs/shunting_yard.py
+    test: python_testcases/test_shunting_yard.py
+
+  - id: sieve
+    program: python_programs/sieve.py
+    test: python_testcases/test_sieve.py
+
+  - id: sqrt
+    program: python_programs/sqrt.py
+    test: python_testcases/test_sqrt.py
+
+  - id: subsequences
+    program: python_programs/subsequences.py
+    test: python_testcases/test_subsequences.py
+
+  - id: to_base
+    program: python_programs/to_base.py
+    test: python_testcases/test_to_base.py
+
+  - id: topological_ordering
+    program: python_programs/topological_ordering.py
+    test: python_testcases/test_topological_ordering.py
+
+  - id: wrap
+    program: python_programs/wrap.py
+    test: python_testcases/test_wrap.py

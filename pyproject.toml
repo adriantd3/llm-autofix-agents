@@ -8,11 +8,16 @@ dependencies = [
     "langchain>=1.2.15",
     "openai-agents>=0.14.4",
     "pydantic>=2.11.0",
+    "pyyaml>=6.0.3",
 ]
 authors = [{ name = "adriantd3", email = "adriantorremocha@hotmail.com" }]
 
 [dependency-groups]
-dev = ["mypy>=1.20.0", "ruff>=0.15.9"]
+dev = [
+    "mypy>=1.20.0",
+    "ruff>=0.15.9",
+    "types-pyyaml>=6.0.12.20260408",
+]
 
 [project.scripts]
 autofix = "llm_autofix_agents.main:app"

@@ -137,3 +137,19 @@
 - Por que estuvo mal: desecha trabajo util y reduce la tasa de exito por un artefacto del mecanismo de control (limite de turnos) en lugar de un fallo real.
 - Alternativa recomendada: capturar `MaxTurnsExceeded` en el provider, retornar un fallback record con `status="done"` (para que el stop policy evalue tests/diff), y dejar que la iteracion continue o finalice segun la evidencia observable.
 - Regla preventiva para futuras specs: toda excepcion del SDK que pueda ocurrir tras trabajo util debe convertirse en fallback record, no en error terminal.
+
+## 2026-05-01 (ModelBehaviorError como fallo de capacidad, no transitorio)
+- Contexto: modelos locales no producen structured output para AgentFixIterationRecord; el provider reintentaba 5 veces re-ejecutando todo el pipeline handoff.
+- Anti-patron detectado: clasificar ModelBehaviorError como error retryable y re-ejecutar el pipeline completo desde triage.
+- Que no hay que hacer: reintentar ModelBehaviorError con re-ejecucion completa del pipeline multi-agente.
+- Por que estuvo mal: cada reintento re-ejecuta triage→localizer→patcher→validator, quemando 60-90s por intento; el modelo local no va a producir structured output de repente.
+- Alternativa recomendada: tratar ModelBehaviorError como fallo de capacidad (no transitorio), retornar fallback record con status="done" y dejar que el stop policy evalue cambios reales.
+- Regla preventiva para futuras specs: distinguir errores de capacidad del modelo de errores transitorios de infraestructura; solo reintentar los segundos.
+
+## 2026-05-01 (config separada de secrets)
+- Contexto: .env mezclaba API keys, provider config y run-specific config (RUN_REPOSITORY, RUN_TEST_COMMAND, RUNNER_A/B/C) en un solo archivo.
+- Anti-patron detectado: almacenar configuracion de ejecucion experimental junto con secrets en .env.
+- Que no hay que hacer: usar .env para parametros que cambian por experimento (bug, arquitectura, modelo).
+- Por que estuvo mal: .env no es versionable, no soporta multiples configuraciones simultaneas y mezcla concerns diferentes.
+- Alternativa recomendada: .env solo para secrets y provider defaults; batch YAML para configuracion experimental (arquitectura, modelo, bugs, prompts).
+- Regla preventiva para futuras specs: separar secrets de configuracion experimental; usar formatos declarativos versionables para lo segundo.

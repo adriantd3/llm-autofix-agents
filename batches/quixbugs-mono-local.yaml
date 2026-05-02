@@ -1,0 +1,25 @@
+name: quixbugs-mono-local
+description: Mono-agent on QuixBugs with local Qwen 3.5
+
+dataset: ../datasets/quixbugs.yaml
+
+global:
+  architecture: mono_agent
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 6
+  timeout_seconds: 300
+  capture_errors: true
+  prompt_template: |
+    Fix the failing {bug_id} implementation in {program}.
+
+    The test {test} is failing. Here is the error output:
+
+    {error_output}
+
+    Analyze the bug, apply the smallest correct change, and verify the fix by running the test.
+
+bugs:
+  - all

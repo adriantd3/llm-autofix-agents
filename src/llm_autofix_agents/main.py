@@ -5,8 +5,10 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 from llm_autofix_agents.agent_flow import run_agent_baseline
+from llm_autofix_agents.batch.runner import BatchRunner
 from llm_autofix_agents.contracts import ContainerInstantiation, RunInput, RunStatus
 from llm_autofix_agents.repo_source import PreparedRepository, prepare_target_repository
 
@@ -31,6 +33,10 @@ def app() -> None:
         exit_code = _run_run(args)
         _hard_exit(exit_code)
 
+    if args.command_name == "batch":
+        exit_code = _run_batch(args)
+        _hard_exit(exit_code)
+
     parser.print_help()
 
 
@@ -38,6 +44,26 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autofix")
     subcommands = parser.add_subparsers(dest="command_name")
     subcommands.add_parser("run", help="Run the Docker Compose entrypoint.")
+
+    batch_parser = subcommands.add_parser("batch", help="Run a batch of bugs from a config file.")
+    batch_parser.add_argument("config", type=Path, help="Path to the batch YAML config file.")
+    batch_parser.add_argument(
+        "--compose-file",
+        type=Path,
+        default=Path("docker-compose.yml"),
+        help="Path to docker-compose.yml (default: docker-compose.yml)",
+    )
+    batch_parser.add_argument(
+        "--project-dir",
+        type=Path,
+        default=None,
+        help="Path to the project directory (default: current directory)",
+    )
+    batch_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show the batch plan without executing runs.",
+    )
     return parser
 
 
@@ -78,6 +104,14 @@ def _run_run(args: argparse.Namespace) -> int:
             return 2
         target_repo = str(prepared_repo.path)
 
+    max_iterations_env = _resolve_optional_text(os.environ.get("AUTOFIX_MAX_ITERATIONS"))
+    if max_iterations_env is not None:
+        try:
+            metadata["max_iterations"] = int(max_iterations_env)
+        except ValueError:
+            logger.error("AUTOFIX_MAX_ITERATIONS must be an integer, got: %s", max_iterations_env)
+            return 2
+
     run_input = RunInput(
         prompt=prompt,
         metadata=metadata,
@@ -102,6 +136,23 @@ def _run_run(args: argparse.Namespace) -> int:
     }
     print(json.dumps(payload, indent=2, ensure_ascii=True))
     return 0 if run_output.status == RunStatus.SUCCESS else 1
+
+
+def _run_batch(args: argparse.Namespace) -> int:
+    _configure_logging()
+    config_path = args.config.resolve()
+    project_dir = args.project_dir.resolve() if args.project_dir else Path.cwd()
+    compose_file = args.compose_file
+    if not compose_file.is_absolute():
+        compose_file = project_dir / compose_file
+
+    runner = BatchRunner(
+        compose_file=compose_file,
+        project_dir=project_dir,
+    )
+    summary = runner.run_batch(config_path, dry_run=args.dry_run)
+    print(summary.model_dump_json(indent=2, ensure_ascii=True))
+    return 0
 
 
 def _configure_logging() -> None:

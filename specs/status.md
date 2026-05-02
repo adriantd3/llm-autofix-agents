@@ -66,6 +66,10 @@
 - Spec 003 SH5 completado: observabilidad multi-agente con registro de 4 agentes en run_agents, eventos de handoff en tabla agent_handoffs, atribucion de tool calls por agent_name, migracion schema v3→v4, y hooks on_agent_start/on_handoff en APRRunHooks.
 - Spec 003 SH6 completado: validacion end-to-end QuixBugs con arquitectura handoff exitosa (run-20260501T140716Z-66fcdfbec8, status=success).
 - Bugs criticos corregidos durante SH6: duration tracking, string/None output crash, MaxTurnsExceeded handling, instrucciones de handoff compatibles con SDK.
+- Batch runner implementado: CLI `autofix batch` con configuracion YAML (Pydantic), datasets, orquestacion secuencial de Docker, captura de errores pre-run, y resumen de batch.
+- QuixBugs dataset manifest con 40 bugs en `datasets/quixbugs.yaml`.
+- `.env` limpiado: solo secrets y provider defaults; run-specific config movido a batch YAML.
+- `AUTOFIX_MAX_ITERATIONS` integrado en docker-compose.yml y main.py como env var.
 
 ## En curso
 - Spec activa: specs/003-multi-agent-handoff/spec.md (completada)

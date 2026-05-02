@@ -11,28 +11,8 @@ services:
     environment:
       HOME: /tmp
       UV_CACHE_DIR: /tmp/.uv-cache
-      RUNNER_NAME: "${RUNNER_NAME:-runner}"
-      RUN_REPOSITORY: "${RUN_REPOSITORY:-https://github.com/jkoppel/QuixBugs.git}"
-      RUN_BRANCH: "${RUN_BRANCH:-master}"
-      RUN_ARCHITECTURE: "${RUN_ARCHITECTURE:-mono_agent}"
-      RUN_AGENT_MODELS: '${RUN_AGENT_MODELS:-{"main":"qwen3.5:9b"}}'
-      RUN_BOOTSTRAP_PROMPT: "${RUN_BOOTSTRAP_PROMPT:-Fix failing tests with minimal changes.}"
-      RUN_TEST_COMMAND: "${RUN_TEST_COMMAND:-uv run --with pytest pytest python_testcases/test_gcd.py}"
-      LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
-      LLM_MODEL: "${LLM_MODEL:-qwen3.5:9b}"
-      LLM_MAX_TURNS: "${LLM_MAX_TURNS:-20}"
-      LLM_API_MAX_RETRIES: "${LLM_API_MAX_RETRIES:-5}"
-      LLM_API_RETRY_BASE_SECONDS: "${LLM_API_RETRY_BASE_SECONDS:-1.0}"
-      LLM_API_RETRY_MAX_SECONDS: "${LLM_API_RETRY_MAX_SECONDS:-12.0}"
-      AUTOFIX_INTERACTIVE: "${AUTOFIX_INTERACTIVE:-false}"
-      AUTOFIX_LOG_LEVEL: "${AUTOFIX_LOG_LEVEL:-INFO}"
-      AUTOFIX_RESULTS_DIR: "${AUTOFIX_RESULTS_DIR:-/results}"
-      AUTOFIX_OBSERVABILITY_DB: "${AUTOFIX_OBSERVABILITY_DB:-/results/observability.db}"
-      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11500/v1}"
     volumes:
       - ./results:/results
-      # Required only for nested Docker operations used by runtime tools.
-      # Override DOCKER_SOCKET_PATH when the host socket path differs.
       - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

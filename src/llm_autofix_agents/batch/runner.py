@@ -1,0 +1,340 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from llm_autofix_agents.batch.config import (
+    BatchConfig,
+    BugEntry,
+    DatasetConfig,
+    expand_bugs,
+    load_batch_config,
+    load_dataset_config,
+)
+from llm_autofix_agents.batch.prompt import capture_error_output, generate_prompt
+from llm_autofix_agents.batch.summary import BatchSummary, BugRunResult, new_batch_id
+from llm_autofix_agents.repo_source import PreparedRepository, prepare_target_repository
+
+logger = logging.getLogger(__name__)
+
+
+class BatchRunner:
+    def __init__(self, compose_file: Path, project_dir: Path, results_dir: Path | None = None):
+        self.compose_file = compose_file.resolve()
+        self.project_dir = project_dir.resolve()
+        self.results_dir = results_dir or (project_dir / "results").resolve()
+
+    def run_batch(self, config_path: Path, *, dry_run: bool = False) -> BatchSummary:
+        config, dataset_path = load_batch_config(config_path)
+        dataset = load_dataset_config(dataset_path)
+        bugs = expand_bugs(config, dataset)
+
+        if dry_run:
+            self._print_dry_run(config, dataset, bugs)
+            return self._build_summary(config, dataset, [], datetime.now(UTC), datetime.now(UTC))
+
+        batch_id = new_batch_id(config.name)
+        batch_dir = self.results_dir / batch_id
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(
+            "Starting batch '%s' (%s) with %d bugs from dataset '%s'",
+            config.name,
+            batch_id,
+            len(bugs),
+            dataset.name,
+        )
+
+        self._docker_build()
+
+        repo = prepare_target_repository(
+            repository=dataset.repository,
+            branch=dataset.branch,
+        )
+
+        started_at = datetime.now(UTC)
+        results: list[BugRunResult] = []
+
+        try:
+            for i, bug in enumerate(bugs, 1):
+                logger.info("[%d/%d] Running bug '%s'", i, len(bugs), bug.id)
+                result = self._run_bug(bug, dataset, config, repo, batch_dir, i, len(bugs))
+                results.append(result)
+                self._log_bug_result(bug.id, result, i, len(bugs))
+        finally:
+            repo.cleanup()
+
+        completed_at = datetime.now(UTC)
+        summary = self._build_summary(config, dataset, results, started_at, completed_at)
+        self._save_summary(summary, batch_dir)
+        return summary
+
+    def _run_bug(
+        self,
+        bug: BugEntry,
+        dataset: DatasetConfig,
+        config: BatchConfig,
+        repo: PreparedRepository,
+        batch_dir: Path,
+        index: int,
+        total: int,
+    ) -> BugRunResult:
+        settings = config.global_settings
+        test_command = dataset.resolve_test_command(bug)
+
+        error_output: str | None = None
+        if settings.capture_errors:
+            error_output = capture_error_output(repo.path, test_command)
+
+        prompt = generate_prompt(bug, dataset, settings.prompt_template, error_output)
+        agent_models = settings.llm.resolve_agent_models(settings.architecture)
+        env = self._build_env(bug, dataset, config, prompt, agent_models, batch_dir)
+
+        started = datetime.now(UTC)
+        process = self._docker_run(env, settings.timeout_seconds)
+        duration = (datetime.now(UTC) - started).total_seconds()
+
+        result = self._parse_result(bug, process, duration)
+
+        if result.run_id:
+            self._rename_run_dir(batch_dir, result.run_id, bug, settings)
+
+        return result
+
+    def _docker_build(self) -> None:
+        logger.info("Building Docker image...")
+        result = subprocess.run(
+            ["docker", "compose", "-f", str(self.compose_file), "build", "runner"],
+            cwd=str(self.project_dir),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            logger.error("Docker build failed:\n%s", result.stderr)
+            raise RuntimeError(f"Docker build failed: {result.stderr[:500]}")
+        logger.info("Docker image built successfully")
+
+    def _docker_run(self, env: dict[str, str], timeout_seconds: int) -> subprocess.CompletedProcess[str]:
+        timeout_arg = f"{timeout_seconds}s"
+        cmd = [
+            "timeout",
+            "--foreground",
+            timeout_arg,
+            "docker",
+            "compose",
+            "-f",
+            str(self.compose_file),
+            "run",
+            "--rm",
+            "-T",
+        ]
+        for key, value in sorted(env.items()):
+            if key.startswith(("RUN_", "LLM_", "AUTOFIX_", "OPENAI_", "GEMINI_", "OLLAMA_")):
+                cmd.extend(["-e", f"{key}={value}"])
+        cmd.append("runner")
+        return subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=str(self.project_dir))
+
+    def _build_env(
+        self,
+        bug: BugEntry,
+        dataset: DatasetConfig,
+        config: BatchConfig,
+        prompt: str,
+        agent_models: dict[str, str],
+        batch_dir: Path,
+    ) -> dict[str, str]:
+        settings = config.global_settings
+        batch_name = batch_dir.name
+        env = os.environ.copy()
+        env.update(
+            {
+                "HOST_UID": str(os.getuid()),
+                "HOST_GID": str(os.getgid()),
+                "RUN_REPOSITORY": dataset.repository,
+                "RUN_BRANCH": dataset.branch,
+                "RUN_ARCHITECTURE": settings.architecture.value,
+                "RUN_AGENT_MODELS": json.dumps(agent_models),
+                "RUN_BOOTSTRAP_PROMPT": prompt,
+                "RUN_TEST_COMMAND": dataset.resolve_test_command(bug),
+                "LLM_PROVIDER": settings.llm.provider,
+                "LLM_MODEL": settings.llm.model,
+                "LLM_MAX_TURNS": str(settings.llm.max_turns),
+                "AUTOFIX_MAX_ITERATIONS": str(settings.max_iterations),
+                "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
+                "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
+                "AUTOFIX_INTERACTIVE": "false",
+            }
+        )
+        if settings.llm.ollama_base_url:
+            env["OLLAMA_BASE_URL"] = settings.llm.ollama_base_url
+        return env
+
+    def _parse_result(
+        self,
+        bug: BugEntry,
+        process: subprocess.CompletedProcess[str],
+        duration_seconds: float,
+    ) -> BugRunResult:
+        if process.returncode == 124:
+            return BugRunResult(
+                bug_id=bug.id,
+                status="timed_out",
+                duration_seconds=duration_seconds,
+                exit_code=124,
+                error_message="Container timed out",
+            )
+
+        if process.returncode == 2:
+            return BugRunResult(
+                bug_id=bug.id,
+                status="infra_failure",
+                duration_seconds=duration_seconds,
+                exit_code=process.returncode,
+                error_message=_truncate(process.stderr, 1000),
+            )
+
+        if process.returncode not in (0, 1):
+            return BugRunResult(
+                bug_id=bug.id,
+                status="infra_failure",
+                duration_seconds=duration_seconds,
+                exit_code=process.returncode,
+                error_message=_truncate(process.stderr, 1000),
+            )
+
+        payload = _parse_json_output(process.stdout)
+        if payload is None:
+            return BugRunResult(
+                bug_id=bug.id,
+                status="infra_failure",
+                duration_seconds=duration_seconds,
+                exit_code=process.returncode,
+                error_message=_truncate(process.stderr, 1000) or "Failed to parse container output",
+            )
+
+        output = payload.get("output", {})
+        identity = output.get("identity", {})
+        return BugRunResult(
+            bug_id=bug.id,
+            status=output.get("status", "unknown"),
+            run_id=identity.get("run_id"),
+            duration_seconds=duration_seconds,
+            iterations=identity.get("iteration"),
+            exit_code=process.returncode,
+        )
+
+    def _rename_run_dir(self, batch_dir: Path, run_id: str, bug: BugEntry, settings: Any) -> None:
+        src = batch_dir / run_id
+        if not src.exists():
+            logger.warning("Run directory %s not found for renaming", src)
+            return
+
+        safe_model = _sanitize_dir_name(settings.llm.model)
+        dest_name = f"{bug.id}-{settings.architecture.value}-{safe_model}"
+        dest = batch_dir / dest_name
+
+        counter = 1
+        original_dest = dest
+        while dest.exists():
+            dest = batch_dir / f"{original_dest.name}-{counter}"
+            counter += 1
+
+        src.rename(dest)
+        logger.info("Run directory renamed: %s -> %s", src.name, dest.name)
+
+    def _print_dry_run(self, config: BatchConfig, dataset: DatasetConfig, bugs: list[BugEntry]) -> None:
+        settings = config.global_settings
+        agent_models = settings.llm.resolve_agent_models(settings.architecture)
+        print(f"Batch: {config.name}")
+        print(f"Dataset: {dataset.name} ({dataset.repository})")
+        print(f"Architecture: {settings.architecture.value}")
+        print(f"Model: {settings.llm.model}")
+        print(f"Agent models: {agent_models}")
+        print(f"Max iterations: {settings.max_iterations}")
+        print(f"Timeout: {settings.timeout_seconds}s")
+        print(f"Bugs ({len(bugs)}):")
+        for bug in bugs:
+            tc = dataset.resolve_test_command(bug)
+            print(f"  - {bug.id} ({tc})")
+        print(f"\nPrompt template:\n{settings.prompt_template}")
+        print(f"\nCapture errors: {settings.capture_errors}")
+
+    def _log_bug_result(self, bug_id: str, result: BugRunResult, index: int, total: int) -> None:
+        status_emoji = {
+            "success": "+",
+            "failed": "-",
+            "timed_out": "!",
+            "infra_failure": "x",
+        }.get(result.status, "?")
+        logger.info(
+            "[%d/%d] %s [%s] %s (%.1fs)",
+            index,
+            total,
+            status_emoji,
+            result.status,
+            bug_id,
+            result.duration_seconds,
+        )
+
+    def _build_summary(
+        self,
+        config: BatchConfig,
+        dataset: DatasetConfig,
+        results: list[BugRunResult],
+        started_at: datetime,
+        completed_at: datetime,
+    ) -> BatchSummary:
+        successful = sum(1 for r in results if r.status == "success")
+        failed = sum(1 for r in results if r.status == "failed")
+        timed_out = sum(1 for r in results if r.status == "timed_out")
+        infra_failures = sum(1 for r in results if r.status == "infra_failure")
+        return BatchSummary(
+            batch_name=config.name,
+            config_path=str(config.name),
+            dataset_name=dataset.name,
+            architecture=config.global_settings.architecture.value,
+            model=config.global_settings.llm.model,
+            provider=config.global_settings.llm.provider,
+            started_at=started_at,
+            completed_at=completed_at,
+            total_bugs=len(results),
+            successful=successful,
+            failed=failed,
+            timed_out=timed_out,
+            infra_failures=infra_failures,
+            results=results,
+        )
+
+    def _save_summary(self, summary: BatchSummary, batch_dir: Path) -> Path:
+        summary_path = batch_dir / "summary.json"
+        summary_path.write_text(
+            summary.model_dump_json(indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+        logger.info("Batch summary saved to %s", summary_path)
+        return summary_path
+
+
+def _parse_json_output(stdout: str) -> dict[str, Any] | None:
+    try:
+        data = json.loads(stdout)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
+def _truncate(text: str, max_len: int) -> str:
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "..."
+
+
+def _sanitize_dir_name(name: str) -> str:
+    """Replace characters unsafe for directory names with safe equivalents."""
+    return name.replace("/", "-").replace(":", "-").replace(" ", "-")
