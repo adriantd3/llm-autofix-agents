@@ -13,6 +13,26 @@ services:
       UV_CACHE_DIR: /tmp/.uv-cache
     volumes:
       - ./results:/results
+      - ./benchmark-workspaces:/benchmark-workspaces
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  bugsinpy-runner:
+    init: true
+    build:
+      context: .
+      dockerfile: docker/bugsinpy.Dockerfile
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOME: /tmp
+      UV_CACHE_DIR: /tmp/.uv-cache
+    volumes:
+      - ./results:/results
+      - ./benchmark-workspaces:/benchmark-workspaces
       - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

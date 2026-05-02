@@ -137,7 +137,10 @@ class OpenAIAgentsSDKProvider:
                 if exc.__class__.__name__ == "ModelBehaviorError":
                     proposal = AgentFixIterationRecord(
                         status="done",
-                        reasoning_summary="Model could not produce structured output; assuming completion based on tool usage",
+                        reasoning_summary=(
+                            "Model could not produce structured output; "
+                            "assuming completion based on tool usage"
+                        ),
                         confidence=0.5,
                         changed_files=[],
                         notes=f"ModelBehaviorError: {str(exc)[:200]}",

@@ -1,0 +1,16 @@
+type: bugsinpy
+name: bugsinpy
+language: python
+
+tooling:
+  checkout_command_template: "bugsinpy-checkout -p {project} -v {version} -i {bug_id} -w {container_workspace}"
+  compile_command: "bugsinpy-compile"
+  test_command: "bugsinpy-test"
+
+bugs:
+  - id: youtube-dl-2
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "2"
+      version: "0"

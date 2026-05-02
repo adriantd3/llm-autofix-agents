@@ -13,27 +13,74 @@ class BugEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(min_length=1)
-    program: str = Field(min_length=1)
-    test: str = Field(min_length=1)
+    program: str | None = None
+    test: str | None = None
     test_command: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("id", "program", "test")
+    @field_validator("id")
     @classmethod
     def _strip_whitespace(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("program", "test")
+    @classmethod
+    def _strip_optional_whitespace(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class RepositoryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1)
+    branch: str | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _strip_url(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("url cannot be empty")
+        return normalized
+
+    @field_validator("branch")
+    @classmethod
+    def _strip_branch(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class TestConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_template: str = Field(min_length=1)
+
+    @field_validator("command_template")
+    @classmethod
+    def _strip_template(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("command_template cannot be empty")
+        return normalized
 
 
 class DatasetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    type: str = Field(min_length=1)
     name: str = Field(min_length=1)
-    repository: str = Field(min_length=1)
-    branch: str = Field(min_length=1)
     language: str = Field(min_length=1)
-    test_command_template: str = Field(min_length=1)
+    repository: RepositoryConfig | None = None
+    test: TestConfig | None = None
+    tooling: dict[str, Any] = Field(default_factory=dict)
     bugs: list[BugEntry] = Field(min_length=1)
 
-    @field_validator("name", "repository", "branch", "language", "test_command_template")
+    @field_validator("name", "language", "type")
     @classmethod
     def _strip_required_text(cls, value: str) -> str:
         normalized = value.strip()
@@ -44,7 +91,9 @@ class DatasetConfig(BaseModel):
     def resolve_test_command(self, bug: BugEntry) -> str:
         if bug.test_command is not None:
             return bug.test_command
-        return self.test_command_template.format(bug_id=bug.id)
+        if self.test is None:
+            raise ValueError(f"No test_command for bug '{bug.id}' and no dataset-level test config")
+        return self.test.command_template.format(bug_id=bug.id)
 
 
 class LLMSettings(BaseModel):
@@ -69,8 +118,8 @@ class LLMSettings(BaseModel):
         return {
             "triage": self.model,
             "localizer": self.model,
-            "patcher": self.model,
             "validator": self.model,
+            "patcher": self.model,
         }
 
 

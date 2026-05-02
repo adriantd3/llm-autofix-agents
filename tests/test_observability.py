@@ -47,7 +47,7 @@ class SQLiteSchemaV4Tests(unittest.TestCase):
     def test_fresh_install_creates_v4_schema(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "obs.db"
-            store = self._init_store(db_path)
+            self._init_store(db_path)
             with sqlite3.connect(db_path) as conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 self.assertEqual(version, SCHEMA_VERSION)

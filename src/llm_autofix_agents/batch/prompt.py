@@ -4,7 +4,7 @@ import logging
 import subprocess
 from pathlib import Path
 
-from llm_autofix_agents.batch.config import BugEntry, DatasetConfig
+from llm_autofix_agents.datasets.base import PreparedExecutionCase
 
 logger = logging.getLogger(__name__)
 
@@ -12,18 +12,16 @@ _ERROR_CAPTURE_FALLBACK = "(error output not available)"
 
 
 def generate_prompt(
-    bug: BugEntry,
-    dataset: DatasetConfig,
+    case: PreparedExecutionCase,
     template: str,
     error_output: str | None = None,
 ) -> str:
     resolved_error = error_output if error_output is not None else _ERROR_CAPTURE_FALLBACK
-    return template.format(
-        bug_id=bug.id,
-        program=bug.program,
-        test=bug.test,
-        error_output=resolved_error,
-    )
+    variables = {
+        **case.prompt_variables,
+        "error_output": resolved_error,
+    }
+    return template.format(**variables)
 
 
 def capture_error_output(

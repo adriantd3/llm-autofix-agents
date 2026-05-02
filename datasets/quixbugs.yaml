@@ -1,8 +1,13 @@
-name: quixbugs
-repository: https://github.com/jkoppel/QuixBugs.git
-branch: master
+type: quixbugs
+name: quixbugs-python
 language: python
-test_command_template: "uv run --with pytest pytest python_testcases/test_{bug_id}.py"
+
+repository:
+  url: https://github.com/jkoppel/QuixBugs.git
+  branch: master
+
+test:
+  command_template: "uv run --with pytest pytest python_testcases/test_{bug_id}.py"
 
 bugs:
   - id: bitcount

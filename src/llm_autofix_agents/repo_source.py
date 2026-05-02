@@ -21,10 +21,17 @@ class PreparedRepository:
         shutil.rmtree(self.path, ignore_errors=True)
 
 
-def prepare_target_repository(*, repository: str, branch: str) -> PreparedRepository:
+def prepare_target_repository(*, repository: str, branch: str | None = None) -> PreparedRepository:
     normalized_repository = repository.strip()
     if not normalized_repository:
         raise ValueError("RUN_REPOSITORY cannot be empty")
+
+    local_path = Path(normalized_repository)
+    if local_path.is_dir():
+        return PreparedRepository(path=local_path.resolve(), temporary=False)
+
+    if not branch:
+        raise ValueError("branch is required when repository is a remote URL or GitHub slug")
 
     clone_url = _to_clone_url(normalized_repository)
     destination = Path(mkdtemp(prefix="autofix-repo-"))
@@ -32,7 +39,7 @@ def prepare_target_repository(*, repository: str, branch: str) -> PreparedReposi
         "git",
         "clone",
         "--depth",
-        "1",  # Shallow clone for efficiency, since we only need the latest state of the specified branch
+        "1",
         "--branch",
         branch.strip(),
         clone_url,

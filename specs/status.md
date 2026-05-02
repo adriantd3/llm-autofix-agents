@@ -41,7 +41,7 @@
 - SH4 completado: rama temporal por run (`autofix/<timestamp>-<run_id>`), restauracion de rama original y limpieza en exito, con trazas de auditoria en logs.
 - SH4-T02/T04 completados: artefactos enriquecidos por iteracion con `patch_summary.json` y `file_changes.json`, mas consolidacion de trazabilidad por archivo en `manifest.json`.
 - SH4-T03 completado: filtrado de artefactos de build/test/cache con `.autofixignore` aplicado a snapshot y diff para parches limpios.
-- Cobertura SH4 agregada: tests unitarios dedicados para operaciones Git, reglas de exclusión y artefactos; suite total en verde.
+- Cobertura SH4 agregada: tests unitarios dedicados para operaciones Git, reglas de exclusion y artefactos; suite total en verde.
 - Cobertura SH3/SH4 reforzada: tests de dispatch de arquitectura handoff, wiring del pipeline multi-agente y seleccion runtime por metadata.
 - Decision de observabilidad revisada: MongoDB deja de ser backend principal del MVP; se adopta SQLite local normalizado + artefactos por run (live.md, summary.json, diff.patch) para facilitar ETL y reducir complejidad operativa.
 - SH5 completado: observabilidad SQLite-first con observers desacoplados (Null/Composite/SQLite/Markdown/Console), lifecycle hooks del SDK, live.md y summary.json por run.
@@ -62,7 +62,6 @@
 - Spec 002 Phase 2 aplicado: configuracion explicita de agente/tools, factory de arquitectura mono-agente, inicializacion runtime basada en config y provider ejecutando agentes preconfigurados.
 - Spec 002 ajuste aplicado: arquitecturas ahora construyen el facade agent; el flujo ejecuta el agente directo sin DTOs de arquitectura ni runner dedicado.
 - Spec 003 SH3/SH4 completados: arquitectura multi-agent handoff y seleccion runtime por enum.
-
 - Spec 003 SH5 completado: observabilidad multi-agente con registro de 4 agentes en run_agents, eventos de handoff en tabla agent_handoffs, atribucion de tool calls por agent_name, migracion schema v3→v4, y hooks on_agent_start/on_handoff en APRRunHooks.
 - Spec 003 SH6 completado: validacion end-to-end QuixBugs con arquitectura handoff exitosa (run-20260501T140716Z-66fcdfbec8, status=success).
 - Bugs criticos corregidos durante SH6: duration tracking, string/None output crash, MaxTurnsExceeded handling, instrucciones de handoff compatibles con SDK.
@@ -70,10 +69,23 @@
 - QuixBugs dataset manifest con 40 bugs en `datasets/quixbugs.yaml`.
 - `.env` limpiado: solo secrets y provider defaults; run-specific config movido a batch YAML.
 - `AUTOFIX_MAX_ITERATIONS` integrado en docker-compose.yml y main.py como env var.
+- **SPEC-005 completado**: Dataset Adapter Architecture (ver `specs/005-dataset-adapters/`).
+  - Adapter pattern con `PreparedExecutionCase`, `DatasetPreparationContext`, `DatasetAdapter` (Protocol).
+  - `QuixBugsAdapter` y `BugsInPyAdapter` registrados en `DatasetAdapterRegistry`.
+  - `BatchRunner` refactorizado: depende unicamente de `PreparedExecutionCase`, sin logica dataset-specific.
+  - `DatasetConfig`/`BugEntry` refactorizados: campos genericos + `metadata` para datos dataset-specific.
+  - Sandbox Docker: un contenedor efimero por bug via `docker compose run --rm`.
+  - Workspaces locales montados en `/benchmark-workspaces/` con `RUN_BRANCH` opcional.
+  - Prompt generation basada en `prompt_variables` proveidas por el adapter.
+  - Preparation failures como `infra_failure` por caso sin detener el batch.
+  - **Servicios Docker dataset-specific**: `runner` (generico) y `bugsinpy-runner` (con herramientas BugsInPy).
+  - `BugsInPyAdapter` ejecuta checkout/compile dentro de `bugsinpy-runner`, sin requerir tools en el host.
+  - `runner_service` en `PreparedExecutionCase` permite que cada dataset elija su servicio Docker.
+  - Validacion real: QuixBugs `gcd` (success, 34s) y BugsInPy `youtube-dl-2` (success, 48s).
+  - 162 tests pasando, lint limpio.
 
 ## En curso
-- Spec activa: specs/003-multi-agent-handoff/spec.md (completada)
-- Spec propuesta: specs/004-agent-model-overrides/spec.md
+- Spec activa: specs/004-agent-model-overrides/spec.md (propuesta)
 
 ## Siguiente
 - Spec 004: agent-model-overrides (permitir configurar modelos distintos por rol de agente).

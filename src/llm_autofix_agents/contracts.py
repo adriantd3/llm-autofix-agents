@@ -123,17 +123,27 @@ class ContainerInstantiation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     repository: str = Field(min_length=1)
-    branch: str = Field(min_length=1)
+    branch: str | None = None
     architecture: str = Field(min_length=1)
     agent_models: dict[str, str] = Field(min_length=1)
     bootstrap_prompt: str = Field(min_length=1)
 
-    @field_validator("repository", "branch", "architecture", "bootstrap_prompt")
+    @field_validator("repository", "architecture", "bootstrap_prompt")
     @classmethod
     def _normalize_non_empty(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
             raise ValueError("value cannot be empty")
+        return normalized
+
+    @field_validator("branch")
+    @classmethod
+    def _normalize_branch(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
         return normalized
 
     @field_validator("architecture")
@@ -177,9 +187,10 @@ class ContainerInstantiation(BaseModel):
                 raise ValueError("RUN_AGENT_MODELS values must map string roles to string model names")
             normalized_agent_models[role] = model
 
+        raw_branch = source_env.get("RUN_BRANCH", "").strip()
         return cls(
             repository=source_env.get("RUN_REPOSITORY", ""),
-            branch=source_env.get("RUN_BRANCH", ""),
+            branch=raw_branch or None,
             architecture=source_env.get("RUN_ARCHITECTURE", ""),
             agent_models=normalized_agent_models,
             bootstrap_prompt=source_env.get("RUN_BOOTSTRAP_PROMPT", ""),

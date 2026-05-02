@@ -10,7 +10,7 @@ from pathlib import Path
 from llm_autofix_agents.agent_flow import run_agent_baseline
 from llm_autofix_agents.batch.runner import BatchRunner
 from llm_autofix_agents.contracts import ContainerInstantiation, RunInput, RunStatus
-from llm_autofix_agents.repo_source import PreparedRepository, prepare_target_repository
+from llm_autofix_agents.repo_source import prepare_target_repository
 
 _DEFAULT_AGENT_PROMPT = "Analyze a failing test and suggest a minimal fix strategy."
 
@@ -72,7 +72,7 @@ def _run_run(args: argparse.Namespace) -> int:
     _configure_logging()
 
     if not _has_runtime_contract_env():
-        logger.error("Missing RUN_* environment variables. RUN_REPOSITORY and RUN_BRANCH are required.")
+        logger.error("Missing RUN_* environment variables. RUN_REPOSITORY is required.")
         return 2
 
     try:
@@ -82,7 +82,8 @@ def _run_run(args: argparse.Namespace) -> int:
         return 2
 
     metadata: dict[str, object] = {"source": "run"}
-    prompt = instantiation.bootstrap_prompt or os.environ.get("RUN_BOOTSTRAP_PROMPT", _DEFAULT_AGENT_PROMPT).strip() or _DEFAULT_AGENT_PROMPT
+    fallback_prompt = os.environ.get("RUN_BOOTSTRAP_PROMPT", _DEFAULT_AGENT_PROMPT).strip() or _DEFAULT_AGENT_PROMPT
+    prompt = instantiation.bootstrap_prompt or fallback_prompt
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
     metadata.update(
         {

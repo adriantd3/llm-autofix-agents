@@ -68,9 +68,8 @@ def detect_workspace_change_set(
     repo_root: Path,
     before: dict[str, str],
     after: dict[str, str],
-) -> WorkspaceChangeSet:
+) -> _models.WorkspaceChangeSet:
     untracked_files = detect_untracked_files(repo_root)
-    untracked_set = set(untracked_files)
 
     modified_files: list[str] = []
     added_files: list[str] = []

@@ -153,3 +153,19 @@
 - Por que estuvo mal: .env no es versionable, no soporta multiples configuraciones simultaneas y mezcla concerns diferentes.
 - Alternativa recomendada: .env solo para secrets y provider defaults; batch YAML para configuracion experimental (arquitectura, modelo, bugs, prompts).
 - Regla preventiva para futuras specs: separar secrets de configuracion experimental; usar formatos declarativos versionables para lo segundo.
+
+## 2026-05-02 (nunca ejecutar el agente sobre el repo de desarrollo)
+- Contexto: validacion e2e del refactor de adapters donde se ejecuto `autofix run` con `RUN_REPOSITORY=$(pwd)` sobre el repo del proyecto.
+- Anti-patron detectado: ejecutar el flujo del agente directamente en el repositorio de desarrollo del usuario.
+- Que no hay que hacer: invocar `autofix run` o `run_agent_baseline` con un path que apunte al repo de trabajo local del usuario.
+- Por que estuvo mal: el flujo crea ramas temporales (`autofix/...`), modifica archivos y deja el repo en un estado no deseado; ademas, el run debe vivir dentro del contenedor Docker, no en el host.
+- Alternativa recomendada: para validar e2e, usar dry-run (`--dry-run`) o ejecutar dentro de un contenedor Docker con un repo clonado en un workspace temporal aislado (`benchmark-workspaces/` o `/tmp`).
+- Regla preventiva para futuras specs: nunca ejecutar agentes APR sobre el repo de desarrollo del usuario; siempre usar workspaces aislados o contenedores.
+
+## 2026-05-02 (sandbox Docker: un contenedor por bug)
+- Contexto: aclaracion del modelo de ejecucion tras el refactor de adapters.
+- Anti-patron detectado: asumir que el agente puede ejecutarse en el host o compartir estado entre bugs.
+- Que no hay que hacer: (1) ejecutar `autofix run` directamente en el host, (2) reutilizar un contenedor para multiples bugs, (3) hacer que el agente modifique el filesystem del host.
+- Por que estuvo mal: el host solo orquesta; todo trabajo del agente (git branches, edits, tests) debe estar encapsulado en un contenedor efimero que muere tras cada bug. Reutilizar contenedores o ejecutar en host rompe aislamiento y deja artefactos.
+- Alternativa recomendada: `BatchRunner` en host prepara workspace → lanza `docker compose run --rm` por bug → monta `./benchmark-workspaces:/benchmark-workspaces` → `RUN_REPOSITORY=/benchmark-workspaces/<batch>/<case>` → container ejecuta y muere.
+- Regla preventiva para futuras specs: el agente APR siempre corre dentro de un contenedor Docker efimero; el host nunca ejecuta logica del agente ni toca repos objetivo.
