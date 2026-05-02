@@ -1,0 +1,27 @@
+name: bugsinpy-handoff-local
+description: Multi-agent handoff on BugsInPy youtube-dl-2 with local Qwen 3.5
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_handoff
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 300
+  capture_errors: true
+  prompt_template: |
+    Fix the failing bug {bug_id} in project {project}.
+
+    The test command is: {test_command}
+
+    Here is the error output:
+
+    {error_output}
+
+    Analyze the bug, apply the smallest correct change, and verify the fix by running the test.
+
+bugs:
+  - youtube-dl-2

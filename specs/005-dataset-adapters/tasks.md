@@ -44,6 +44,13 @@ Eliminar logica dataset-specific de BatchRunner y habilitar ejecucion de multipl
 - [x] SH1-T32 Actualizar `BatchRunner._docker_build` para construir todas las imagenes.
 - [x] SH1-T33 Validar QuixBugs real end-to-end sigue funcionando.
 - [x] SH1-T34 Validar BugsInPy real end-to-end (`youtube-dl-2`) con preparacion y ejecucion en Docker.
+- [x] SH1-T35 Hacer explicito el contexto Docker en `DatasetPreparationContext` (`project_dir`, `compose_file`).
+- [x] SH1-T36 Corregir `BugsInPyAdapter` para usar `docker compose -f <compose_file>` con `cwd=<project_dir>`.
+- [x] SH1-T37 Mover `capture_error_output` al contenedor (`_capture_error_output_in_container` en `BatchRunner`).
+- [x] SH1-T38 Eliminar cleanup automatico por defecto (`cleanup_paths=()` y `cleanup_workspaces: false`).
+- [x] SH1-T39 Ampliar `resolve_test_command` con `{program}`, `{test}` y `bug.metadata`.
+- [x] SH1-T40 Implementar `tooling.compile_required` en `BugsInPyAdapter`.
+- [x] SH1-T41 Actualizar tests para cubrir determinismo Docker, error capture en contenedor, y persistencia de workspaces.
 
 ### Done cuando
 - `BatchRunner` depende unicamente de `PreparedExecutionCase`, no de campos dataset-specific.

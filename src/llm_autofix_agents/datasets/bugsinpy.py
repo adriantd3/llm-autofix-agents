@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-from pathlib import Path
 
 from llm_autofix_agents.batch.config import BugEntry, DatasetConfig
 from llm_autofix_agents.datasets.base import DatasetPreparationContext, PreparedExecutionCase
@@ -33,9 +32,9 @@ class BugsInPyAdapter:
 
         try:
             self._checkout(
-                dataset, bug, host_workspace, container_workspace, project, bug_id, version
+                dataset, bug, context, container_workspace, project, bug_id, version
             )
-            self._compile(dataset, bug, host_workspace, container_workspace)
+            self._compile(dataset, bug, context, container_workspace)
         except Exception:
             shutil.rmtree(host_workspace, ignore_errors=True)
             raise
@@ -61,7 +60,7 @@ class BugsInPyAdapter:
             container_workspace=container_workspace,
             test_command=test_command,
             prompt_variables=prompt_variables,
-            cleanup_paths=(host_workspace,),
+            cleanup_paths=(),
             runner_service="bugsinpy-runner",
         )
 
@@ -69,7 +68,7 @@ class BugsInPyAdapter:
         self,
         dataset: DatasetConfig,
         bug: BugEntry,
-        host_workspace: Path,
+        context: DatasetPreparationContext,
         container_workspace: str,
         project: str,
         bug_id: str,
@@ -84,12 +83,10 @@ class BugsInPyAdapter:
             project=project,
             bug_id=bug_id,
             version=version,
-            host_workspace=str(host_workspace),
+            host_workspace=str(context.host_workspace_root / bug.id),
             container_workspace=container_workspace,
         )
-        result = self._run_in_bugsinpy_container(
-            command, cwd=container_workspace
-        )
+        result = self._run_in_bugsinpy_container(context, command, cwd=container_workspace)
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             raise RuntimeError(f"Checkout failed for '{bug.id}': {stderr}")
@@ -98,20 +95,24 @@ class BugsInPyAdapter:
         self,
         dataset: DatasetConfig,
         bug: BugEntry,
-        host_workspace: Path,
+        context: DatasetPreparationContext,
         container_workspace: str,
     ) -> None:
         compile_command = dataset.tooling.get("compile_command")
         if not compile_command:
             return
-        result = self._run_in_bugsinpy_container(
-            compile_command, cwd=container_workspace
-        )
+        result = self._run_in_bugsinpy_container(context, compile_command, cwd=container_workspace)
         if result.returncode != 0:
-            logger.warning("Compile command failed for '%s': %s", bug.id, (result.stderr or "").strip())
+            compile_required = dataset.tooling.get("compile_required", True)
+            stderr = (result.stderr or "").strip()
+            msg = f"Compile command failed for '{bug.id}': {stderr}"
+            if compile_required:
+                raise RuntimeError(msg)
+            logger.warning(msg)
 
     def _run_in_bugsinpy_container(
         self,
+        context: DatasetPreparationContext,
         command: str,
         cwd: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
@@ -122,6 +123,8 @@ class BugsInPyAdapter:
         cmd = [
             "docker",
             "compose",
+            "-f",
+            str(context.compose_file),
             "run",
             "--rm",
             "-T",
@@ -136,7 +139,13 @@ class BugsInPyAdapter:
         else:
             wrapped = command
         cmd.append(wrapped)
-        return subprocess.run(cmd, capture_output=True, text=True, check=False)
+        return subprocess.run(
+            cmd,
+            cwd=str(context.project_dir),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     def _resolve_test_command(self, dataset: DatasetConfig, bug: BugEntry) -> str:
         if bug.test_command is not None:

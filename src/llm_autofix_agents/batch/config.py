@@ -91,9 +91,17 @@ class DatasetConfig(BaseModel):
     def resolve_test_command(self, bug: BugEntry) -> str:
         if bug.test_command is not None:
             return bug.test_command
-        if self.test is None:
-            raise ValueError(f"No test_command for bug '{bug.id}' and no dataset-level test config")
-        return self.test.command_template.format(bug_id=bug.id)
+        if self.test is not None:
+            return self.test.command_template.format(
+                bug_id=bug.id,
+                program=bug.program or "",
+                test=bug.test or "",
+                **bug.metadata,
+            )
+        tooling_test = self.tooling.get("test_command")
+        if tooling_test is not None:
+            return str(tooling_test)
+        raise ValueError(f"No test_command for bug '{bug.id}' and no dataset-level test config")
 
 
 class LLMSettings(BaseModel):
@@ -132,6 +140,7 @@ class GlobalSettings(BaseModel):
     timeout_seconds: int = 300
     prompt_template: str = Field(min_length=1)
     capture_errors: bool = True
+    cleanup_workspaces: bool = False
 
     @field_validator("prompt_template")
     @classmethod

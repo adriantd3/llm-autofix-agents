@@ -26,6 +26,8 @@ class DatasetPreparationContext:
     dataset: DatasetConfig
     batch: BatchConfig
     batch_id: str
+    project_dir: Path
+    compose_file: Path
     host_workspace_root: Path
     container_workspace_root: str
 

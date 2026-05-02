@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ from llm_autofix_agents.batch.config import (
     load_batch_config,
     load_dataset_config,
 )
-from llm_autofix_agents.batch.prompt import capture_error_output, generate_prompt
+from llm_autofix_agents.batch.prompt import generate_prompt
 from llm_autofix_agents.batch.summary import BatchSummary, BugRunResult, new_batch_id
 from llm_autofix_agents.datasets.base import DatasetPreparationContext, PreparedExecutionCase
 from llm_autofix_agents.datasets.registry import get as get_adapter
@@ -62,6 +63,8 @@ class BatchRunner:
             dataset=dataset,
             batch=config,
             batch_id=batch_id,
+            project_dir=self.project_dir,
+            compose_file=self.compose_file,
             host_workspace_root=workspace_root,
             container_workspace_root=container_workspace_root,
         )
@@ -88,7 +91,7 @@ class BatchRunner:
             result = self._run_case(case, config, batch_dir, dataset)
             results.append(result)
             self._log_bug_result(bug.id, result, i, len(bugs))
-            self._cleanup_case(case)
+            self._cleanup_case(case, config)
 
         completed_at = datetime.now(UTC)
 
@@ -107,7 +110,7 @@ class BatchRunner:
 
         error_output: str | None = None
         if settings.capture_errors:
-            error_output = capture_error_output(case.host_workspace, case.test_command)
+            error_output = self._capture_error_output_in_container(case)
 
         prompt = generate_prompt(case, settings.prompt_template, error_output)
         agent_models = settings.llm.resolve_agent_models(settings.architecture)
@@ -123,6 +126,63 @@ class BatchRunner:
             self._rename_run_dir(batch_dir, result.run_id, case, settings)
 
         return result
+
+    def _capture_error_output_in_container(
+        self,
+        case: PreparedExecutionCase,
+        timeout_seconds: int = 60,
+    ) -> str | None:
+        import os
+
+        uid = os.getuid()
+        gid = os.getgid()
+        wrapped = f"cd {case.container_workspace} && {case.test_command}"
+        cmd = [
+            "docker",
+            "compose",
+            "-f",
+            str(self.compose_file),
+            "run",
+            "--rm",
+            "-T",
+            "--user",
+            f"{uid}:{gid}",
+            case.runner_service,
+            "sh",
+            "-c",
+            wrapped,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(self.project_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+            parts: list[str] = []
+            if result.stdout:
+                parts.append(result.stdout.strip())
+            if result.stderr:
+                parts.append(result.stderr.strip())
+            combined = "\n".join(parts)
+            if not combined:
+                return None
+            return combined[-4000:] if len(combined) > 4000 else combined
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "Error capture timed out in container for test command: %s",
+                case.test_command,
+            )
+            return None
+        except Exception:
+            logger.warning(
+                "Error capture failed in container for test command: %s",
+                case.test_command,
+                exc_info=True,
+            )
+            return None
 
     def _docker_build(self) -> None:
         logger.info("Building Docker images...")
@@ -370,10 +430,11 @@ class BatchRunner:
         logger.info("Batch summary saved to %s", summary_path)
         return summary_path
 
-    def _cleanup_case(self, case: PreparedExecutionCase) -> None:
+    def _cleanup_case(self, case: PreparedExecutionCase, config: BatchConfig) -> None:
+        if not config.global_settings.cleanup_workspaces:
+            return
         for path in case.cleanup_paths:
             if path.exists():
-                import shutil
                 shutil.rmtree(path, ignore_errors=True)
                 logger.debug("Cleaned up workspace: %s", path)
 

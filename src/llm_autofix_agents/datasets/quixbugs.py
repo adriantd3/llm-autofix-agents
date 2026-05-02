@@ -53,7 +53,7 @@ class QuixBugsAdapter:
             container_workspace=container_workspace,
             test_command=test_command,
             prompt_variables=prompt_variables,
-            cleanup_paths=(host_workspace,),
+            cleanup_paths=(),
             runner_service="runner",
         )
 

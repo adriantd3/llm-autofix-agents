@@ -83,6 +83,15 @@
   - `runner_service` en `PreparedExecutionCase` permite que cada dataset elija su servicio Docker.
   - Validacion real: QuixBugs `gcd` (success, 34s) y BugsInPy `youtube-dl-2` (success, 48s).
   - 162 tests pasando, lint limpio.
+- **Arquitectura de dataset adapters corregida** (refinamiento post-SPEC-005):
+  - `DatasetPreparationContext` ahora incluye `project_dir` y `compose_file` para invocacion determinista de Docker Compose.
+  - `BugsInPyAdapter` usa `docker compose -f <compose_file>` con `cwd=<project_dir>`, eliminando dependencia del `cwd` del host.
+  - Error capture pre-run movido al contenedor: `BatchRunner._capture_error_output_in_container` ejecuta tests dentro de `<case.runner_service>`.
+  - `DatasetConfig.resolve_test_command` soporta `{program}`, `{test}` y claves de `bug.metadata`.
+  - `tooling.compile_required` (default `true`) hace explicito si un fallo de compilacion es bloqueante.
+  - Cleanup de workspaces deshabilitado por defecto (`cleanup_workspaces: false`) para facilitar depuracion; `cleanup_paths=()` en adapters.
+  - Tests actualizados: determinismo Docker, error capture en contenedor, persistencia de workspaces, `compile_required`.
+  - 159 tests pasando tras el refinamiento.
 
 ## En curso
 - Spec activa: specs/004-agent-model-overrides/spec.md (propuesta)

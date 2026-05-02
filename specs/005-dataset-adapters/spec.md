@@ -35,6 +35,8 @@
 - A2: El host solo orquesta: prepara workspace, captura error output pre-run, construye env vars, lanza contenedor, parsea resultado, limpia workspace.
 - A3: Todo el trabajo del agente (git branches, file edits, tests) ocurre dentro del contenedor sobre un workspace montado por volumen.
 - A4: Un contenedor por bug garantiza aislamiento completo: sin estado residual entre bugs.
+- A5: **(Refinado)** Los comandos dataset-specific (checkout, compile, test) se ejecutan **dentro** del servicio Docker del caso, no en el host. `BatchRunner` no ejecuta `subprocess.run` directamente sobre comandos de test.
+- A6: **(Refinado)** `DatasetPreparationContext` incluye `project_dir` y `compose_file` para que los adapters invoquen Docker Compose de forma determinista (`-f <compose_file>` y `cwd=<project_dir>`), sin depender del `cwd` accidental del proceso host.
 
 ### B) Contrato PreparedExecutionCase
 - B5: Cada adapter produce un `PreparedExecutionCase` con `host_workspace` (ruta host) y `container_workspace` (ruta dentro del contenedor).
@@ -42,6 +44,7 @@
 - B7: `container_workspace` es `/benchmark-workspaces/<batch_id>/<case_id>/`.
 - B8: El adapter define `prompt_variables`; `BatchRunner` no conoce nombres de variables como `{bug_id}` o `{program}`.
 - B9: `cleanup_paths` permite al adapter registrar paths a limpiar tras el run.
+- B10: **(Refinado)** `cleanup_paths` es `()` por defecto en ambos adapters; los workspaces preparados no se borran automaticamente para facilitar depuracion y reproducibilidad. La limpieza se controla via `global_settings.cleanup_workspaces: bool` (default `false`).
 
 ### C) Esquema de configuracion
 - C10: `DatasetConfig` ahora requiere `type` (string) para dispatch al adapter.
@@ -50,6 +53,8 @@
 - C13: `DatasetConfig.tooling` es `dict[str, Any]` para comandos dataset-specific (ej. `bugsinpy-checkout`).
 - C14: `BugEntry.program` y `BugEntry.test` son opcionales.
 - C15: `BugEntry.metadata` almacena datos dataset-specific (ej. `project`, `bug_id`, `version` para BugsInPy).
+- C16: **(Refinado)** `DatasetConfig.resolve_test_command()` soporta variables `{bug_id}`, `{program}`, `{test}` y cualquier clave de `bug.metadata` en el `command_template`.
+- C17: **(Refinado)** `tooling.compile_required: bool` (default `true`) controla si un fallo de compilacion es bloqueante (`RuntimeError`) o solo un warning.
 
 ### D) Adapters implementados
 - D16: `QuixBugsAdapter`: requiere `repository.url` + `branch`; shallow clone por caso; prompt vars: `bug_id`, `program`, `test`, `test_command`, `dataset_name`.
@@ -73,6 +78,8 @@
 - G28: `BugsInPyAdapter` ejecuta `bugsinpy-checkout` y `bugsinpy-compile` dentro de contenedores `bugsinpy-runner`, no en el host.
 - G29: El contenedor `bugsinpy-runner` hereda los volumenes del servicio (`/benchmark-workspaces`, `/results`) y corre con `--user $(id -u):$(id -g)` para permisos correctos sobre el workspace montado.
 - G30: `/opt/bugsinpy` en la imagen tiene permisos `a+w` y `git config --system safe.directory` para permitir ejecucion como usuario no-root.
+- G31: **(Refinado)** `BugsInPyAdapter._run_in_bugsinpy_container` invoca `docker compose -f <compose_file> run ...` explicitamente con `cwd=<project_dir>`, eliminando dependencia del directorio de trabajo del proceso host.
+- G32: **(Refinado)** La captura de error output pre-run (`capture_error_output`) se ejecuta dentro del contenedor del caso (`docker compose run <case.runner_service> sh -c "cd <workspace> && <test_command>"`), no en el host. Esto garantiza que los comandos de test dataset-specific (como `bugsinpy-test`) funcionen sin requerir instalacion local.
 
 ## Criterios de aceptacion de la spec
 - [x] `BatchRunner` no contiene logica dataset-specific ni branches `if dataset.type == ...`.
@@ -89,6 +96,12 @@
 - [x] BugsInPy no requiere `bugsinpy-*` en el host (ejecuta dentro de `bugsinpy-runner`).
 - [x] `BatchRunner` usa `case.runner_service` para `docker compose run`.
 - [x] Validacion real end-to-end: QuixBugs `gcd` y BugsInPy `youtube-dl-2` en success.
+- [x] **(Refinado)** `DatasetPreparationContext` incluye `project_dir` y `compose_file`.
+- [x] **(Refinado)** `BugsInPyAdapter` invoca Docker Compose con `-f <compose_file>` y `cwd=<project_dir>`.
+- [x] **(Refinado)** Error capture se ejecuta dentro del contenedor del caso, no en el host.
+- [x] **(Refinado)** `resolve_test_command` soporta `{program}`, `{test}` y metadata.
+- [x] **(Refinado)** `cleanup_workspaces` default `false`; workspaces persisten tras el run.
+- [x] **(Refinado)** `tooling.compile_required` controla si fallo de compile es bloqueante.
 
 ## Relacion con specs anteriores
 - Depende de SPEC-001 (mono-agente baseline) y SPEC-003 (multi-agent handoff) para el runtime interno del contenedor.
