@@ -83,17 +83,13 @@ def restore_files(repo_root: Path, files: list[str]) -> None:
         return
     result = _run_git(repo_root, ["checkout", "--", *files])
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Failed to restore files in {repo_root}: {result.stderr.strip() or 'unknown error'}"
-        )
+        raise RuntimeError(f"Failed to restore files in {repo_root}: {result.stderr.strip() or 'unknown error'}")
 
 
 def restore_all_changes(repo_root: Path) -> None:
     result = _run_git(repo_root, ["checkout", "--", "."])
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Failed to restore working directory: {result.stderr.strip() or 'unknown error'}"
-        )
+        raise RuntimeError(f"Failed to restore working directory: {result.stderr.strip() or 'unknown error'}")
     clean_result = _run_git(repo_root, ["clean", "-fd"])
     if clean_result.returncode != 0:
         raise RuntimeError(

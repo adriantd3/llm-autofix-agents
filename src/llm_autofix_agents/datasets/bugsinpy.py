@@ -58,14 +58,10 @@ class BugsInPyAdapter:
         host_case_root.mkdir(parents=True, exist_ok=True)
 
         try:
-            self._checkout(
-                dataset, bug, context, container_case_root, project, bug_id, version
-            )
+            self._checkout(dataset, bug, context, container_case_root, project, bug_id, version)
             self._validate_checkout(host_project_workspace, bug.id)
             self._compile(dataset, bug, context, container_project_workspace)
-            self._validate_compile(
-                host_project_workspace, bug.id, dataset.tooling.get("compile_required", True)
-            )
+            self._validate_compile(host_project_workspace, bug.id, dataset.tooling.get("compile_required", True))
         except Exception:
             shutil.rmtree(host_case_root, ignore_errors=True)
             raise
@@ -107,9 +103,7 @@ class BugsInPyAdapter:
     ) -> None:
         checkout_template = dataset.tooling.get("checkout_command_template")
         if not checkout_template:
-            raise ValueError(
-                f"BugsInPy adapter requires dataset.tooling.checkout_command_template for bug '{bug.id}'"
-            )
+            raise ValueError(f"BugsInPy adapter requires dataset.tooling.checkout_command_template for bug '{bug.id}'")
         command = checkout_template.format(
             project=project,
             bug_id=bug_id,
@@ -117,9 +111,7 @@ class BugsInPyAdapter:
             host_workspace=str(context.host_workspace_root / bug.id),
             container_workspace=container_case_root,
         )
-        result = self._run_in_bugsinpy_container(
-            context, command, cwd=container_case_root
-        )
+        result = self._run_in_bugsinpy_container(context, command, cwd=container_case_root)
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             raise RuntimeError(f"Checkout failed for '{bug.id}': {stderr}")
@@ -131,8 +123,7 @@ class BugsInPyAdapter:
                 missing.append(name)
         if missing:
             raise RuntimeError(
-                f"Checkout validation failed for '{bug_id}': missing {', '.join(missing)} "
-                f"in {host_project_workspace}"
+                f"Checkout validation failed for '{bug_id}': missing {', '.join(missing)} in {host_project_workspace}"
             )
 
     def _compile(
@@ -145,9 +136,7 @@ class BugsInPyAdapter:
         compile_command = dataset.tooling.get("compile_command")
         if not compile_command:
             return
-        result = self._run_in_bugsinpy_container(
-            context, compile_command, cwd=container_project_workspace
-        )
+        result = self._run_in_bugsinpy_container(context, compile_command, cwd=container_project_workspace)
         if result.returncode != 0:
             compile_required = dataset.tooling.get("compile_required", True)
             stderr = (result.stderr or "").strip()
@@ -170,8 +159,7 @@ class BugsInPyAdapter:
                 missing.append(name)
         if missing:
             raise RuntimeError(
-                f"Compile validation failed for '{bug_id}': missing {', '.join(missing)} "
-                f"in {host_project_workspace}"
+                f"Compile validation failed for '{bug_id}': missing {', '.join(missing)} in {host_project_workspace}"
             )
 
     def _run_in_bugsinpy_container(

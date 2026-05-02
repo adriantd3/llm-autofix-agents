@@ -40,5 +40,4 @@ class DatasetAdapter(Protocol):
         self,
         context: DatasetPreparationContext,
         bug: BugEntry,
-    ) -> PreparedExecutionCase:
-        ...
+    ) -> PreparedExecutionCase: ...

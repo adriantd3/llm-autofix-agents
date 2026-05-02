@@ -117,8 +117,12 @@ def _normalize_paths(paths: list[str]) -> list[str]:
 
 def _is_test_file(path: str) -> bool:
     """Return True if the path looks like a test file."""
-    lowered = path.lower()
+    lowered = path.lower().replace("\\", "/")
     if lowered.startswith("test/") or lowered.startswith("tests/"):
         return True
     parts = lowered.split("/")
-    return any(part.startswith("test_") or part.endswith("_test") for part in parts)
+    for part in parts:
+        stem = part.rsplit(".", 1)[0] if "." in part else part
+        if stem.startswith("test_") or stem.endswith("_test"):
+            return True
+    return False

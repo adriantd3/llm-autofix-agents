@@ -569,6 +569,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
             if create_compile:
                 self._create_compile_artifacts(project_dir)
             return subprocess.CompletedProcess(args=[], returncode=checkout_rc, stdout="", stderr="")
+
         return side_effect
 
     @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
@@ -580,8 +581,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
             language="python",
             tooling={
                 "checkout_command_template": (
-                    "bugsinpy-checkout -p {project} -i {bug_id} "
-                    "-v {version} -w {container_workspace}"
+                    "bugsinpy-checkout -p {project} -i {bug_id} -v {version} -w {container_workspace}"
                 ),
                 "compile_command": "bugsinpy-compile",
                 "test_command": "bugsinpy-test",
@@ -601,9 +601,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
             compose_file.write_text("", encoding="utf-8")
             project_dir = Path(tmp_dir)
             workspace_root = Path(tmp_dir) / "workspaces"
-            mock_run.side_effect = self._make_side_effect_with_artifacts(
-                workspace_root, bug.id, "youtube-dl"
-            )
+            mock_run.side_effect = self._make_side_effect_with_artifacts(workspace_root, bug.id, "youtube-dl")
             context = DatasetPreparationContext(
                 dataset=dataset,
                 batch=GlobalSettings(
@@ -629,9 +627,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
             self.assertEqual(case.prompt_variables["project"], "youtube-dl")
             self.assertEqual(case.cleanup_paths, ())
             # Workspace must point to the project subdir, not the case root
-            self.assertEqual(
-                case.host_workspace, workspace_root / bug.id / "youtube-dl"
-            )
+            self.assertEqual(case.host_workspace, workspace_root / bug.id / "youtube-dl")
             self.assertEqual(
                 case.container_workspace,
                 "/benchmark-workspaces/batch-test/youtube-dl-2/youtube-dl",
@@ -648,15 +644,11 @@ class TestBugsInPyAdapter(unittest.TestCase):
             # Verify compile runs in the project workspace, not case root
             compile_call = mock_run.call_args_list[1]
             shell_cmd = compile_call[0][0][-1]
-            self.assertIn(
-                "/benchmark-workspaces/batch-test/youtube-dl-2/youtube-dl", shell_cmd
-            )
+            self.assertIn("/benchmark-workspaces/batch-test/youtube-dl-2/youtube-dl", shell_cmd)
 
     @patch("llm_autofix_agents.datasets.bugsinpy.subprocess.run")
     def test_prepare_case_checkout_failure(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="", stderr="checkout failed"
-        )
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="checkout failed")
 
         adapter = BugsInPyAdapter()
         dataset = DatasetConfig(
@@ -959,9 +951,7 @@ class TestPreparedExecutionCase(unittest.TestCase):
 class TestBatchRunnerErrorCapture(unittest.TestCase):
     @patch("llm_autofix_agents.batch.runner.subprocess.run")
     def test_capture_error_output_in_container(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="error output", stderr=""
-        )
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="error output", stderr="")
 
         from llm_autofix_agents.batch.runner import BatchRunner
 
@@ -994,9 +984,7 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
 
     @patch("llm_autofix_agents.batch.runner.subprocess.run")
     def test_capture_error_output_uses_shlex_quote(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="error output", stderr=""
-        )
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="error output", stderr="")
 
         from llm_autofix_agents.batch.runner import BatchRunner
 
@@ -1021,9 +1009,7 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
 
     @patch("llm_autofix_agents.batch.runner.subprocess.run")
     def test_capture_error_output_truncates(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="a" * 5000, stderr=""
-        )
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="a" * 5000, stderr="")
 
         from llm_autofix_agents.batch.runner import BatchRunner
 

@@ -138,8 +138,7 @@ class OpenAIAgentsSDKProvider:
                     proposal = AgentFixIterationRecord(
                         status="done",
                         reasoning_summary=(
-                            "Model could not produce structured output; "
-                            "assuming completion based on tool usage"
+                            "Model could not produce structured output; assuming completion based on tool usage"
                         ),
                         confidence=0.5,
                         changed_files=[],

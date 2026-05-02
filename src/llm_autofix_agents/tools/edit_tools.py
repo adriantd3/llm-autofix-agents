@@ -8,6 +8,37 @@ from llm_autofix_agents.tools.serialization import json_result
 from llm_autofix_agents.tools.text import read_text_checked
 
 
+_TEST_FILE_REJECTION = (
+    "Modifying test files is FORBIDDEN. The failing tests are CORRECT. "
+    "Fix ONLY source code files (implementation, not tests)."
+)
+
+
+def _is_test_file_path(path: str) -> bool:
+    lowered = path.lower().replace("\\", "/")
+    if lowered.startswith("test/") or lowered.startswith("tests/"):
+        return True
+    parts = lowered.split("/")
+    for part in parts:
+        stem = part.rsplit(".", 1)[0] if "." in part else part
+        if stem.startswith("test_") or stem.endswith("_test"):
+            return True
+    return False
+
+
+def _reject_if_test_file(path: str) -> str | None:
+    if _is_test_file_path(path):
+        return json_result(
+            {
+                "ok": False,
+                "error": "test_file_modification_forbidden",
+                "path": path,
+                "message": _TEST_FILE_REJECTION,
+            }
+        )
+    return None
+
+
 @function_tool
 def write_file(
     ctx: RunContextWrapper[APRToolContext],
@@ -17,6 +48,9 @@ def write_file(
     overwrite: bool = True,
 ) -> str:
     """Write a complete text file inside the workspace."""
+    rejection = _reject_if_test_file(path)
+    if rejection is not None:
+        return rejection
     cfg = get_tool_context(ctx)
     file_path = resolve_path(cfg, path)
     if file_path.exists() and file_path.is_dir():
@@ -41,6 +75,9 @@ def replace_in_file(
     expected_occurrences: int | None = None,
 ) -> str:
     """Perform an exact text replacement in a file."""
+    rejection = _reject_if_test_file(path)
+    if rejection is not None:
+        return rejection
     cfg = get_tool_context(ctx)
     file_path = resolve_path(cfg, path)
     ok, error, original = read_text_checked(cfg, file_path)
@@ -83,6 +120,9 @@ def replace_lines(
     new_lines: str,
 ) -> str:
     """Replace an inclusive line range in a text file."""
+    rejection = _reject_if_test_file(path)
+    if rejection is not None:
+        return rejection
     cfg = get_tool_context(ctx)
     file_path = resolve_path(cfg, path)
     ok, error, original = read_text_checked(cfg, file_path)

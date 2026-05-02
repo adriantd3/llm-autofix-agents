@@ -81,11 +81,13 @@ class BatchRunner:
                 case = adapter.prepare_case(context, bug)
             except Exception as exc:
                 logger.error("[%d/%d] Preparation failed for '%s': %s", i, len(bugs), bug.id, exc)
-                results.append(BugRunResult(
-                    bug_id=bug.id,
-                    status="infra_failure",
-                    error_message=str(exc),
-                ))
+                results.append(
+                    BugRunResult(
+                        bug_id=bug.id,
+                        status="infra_failure",
+                        error_message=str(exc),
+                    )
+                )
                 self._log_bug_result(bug.id, results[-1], i, len(bugs))
                 continue
 
@@ -312,9 +314,7 @@ class BatchRunner:
             exit_code=process.returncode,
         )
 
-    def _rename_run_dir(
-        self, batch_dir: Path, run_id: str, case: PreparedExecutionCase, settings: Any
-    ) -> None:
+    def _rename_run_dir(self, batch_dir: Path, run_id: str, case: PreparedExecutionCase, settings: Any) -> None:
         src = batch_dir / run_id
         if not src.exists():
             logger.warning("Run directory %s not found for renaming", src)

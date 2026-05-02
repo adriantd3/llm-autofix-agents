@@ -137,9 +137,10 @@ class MainCliTests(unittest.TestCase):
         self.assertTrue(cleanup_probe.cleaned)
 
     def test_run_fails_fast_without_runtime_contract(self) -> None:
-        with patch.dict("os.environ", {}, clear=True), patch(
-            "llm_autofix_agents.main.run_agent_baseline"
-        ) as mocked_run_agent:
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("llm_autofix_agents.main.run_agent_baseline") as mocked_run_agent,
+        ):
             exit_code = _run_run(argparse.Namespace())
 
         self.assertEqual(exit_code, 2)

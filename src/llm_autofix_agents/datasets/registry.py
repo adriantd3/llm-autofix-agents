@@ -20,8 +20,7 @@ register(BugsInPyAdapter())
 def get(dataset_type: str) -> DatasetAdapter:
     if dataset_type not in _ADAPTERS:
         raise ValueError(
-            f"Unknown dataset type '{dataset_type}'. "
-            f"Available types: {', '.join(sorted(_ADAPTERS)) or '(none)'}"
+            f"Unknown dataset type '{dataset_type}'. Available types: {', '.join(sorted(_ADAPTERS)) or '(none)'}"
         )
     return _ADAPTERS[dataset_type]
 
