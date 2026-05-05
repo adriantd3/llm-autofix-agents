@@ -249,15 +249,12 @@ class BatchRunner:
                 "RUN_TEST_COMMAND": case.test_command,
                 "LLM_PROVIDER": settings.llm.provider,
                 "LLM_MODEL": settings.llm.model,
-                "LLM_MAX_TURNS": str(settings.llm.max_turns),
                 "AUTOFIX_MAX_ITERATIONS": str(settings.max_iterations),
                 "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
                 "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
                 "AUTOFIX_INTERACTIVE": "false",
             }
         )
-        if settings.llm.ollama_base_url:
-            env["OLLAMA_BASE_URL"] = settings.llm.ollama_base_url
         return env
 
     def _parse_result(

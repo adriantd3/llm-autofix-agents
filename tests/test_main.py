@@ -1,150 +1,73 @@
 from __future__ import annotations
 
-import argparse
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from llm_autofix_agents.contracts import ContainerInstantiation, RunIdentity, RunOutput, RunStatus, StopReason
-from llm_autofix_agents.main import _run_run
+from llm_autofix_agents.batch.runner import BatchRunner
 
 
 class MainCliTests(unittest.TestCase):
-    def test_run_uses_runtime_repository_and_test_command(self) -> None:
-        with TemporaryDirectory() as tmp_dir:
-            output = RunOutput(
-                identity=RunIdentity(
-                    run_id="run-123",
-                    run_fingerprint="0123456789abcdef",
-                    iteration=1,
-                    iteration_id="run-123-it01",
-                ),
-                status=RunStatus.SUCCESS,
-                stop_reason=StopReason.COMPLETED,
-            )
-            with (
-                patch.dict(
-                    "os.environ",
-                    {
-                        "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
-                        "RUN_BRANCH": "master",
-                        "RUN_ARCHITECTURE": "mono_agent",
-                        "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
-                        "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
-                    },
-                    clear=False,
-                ),
-                patch(
-                    "llm_autofix_agents.main.ContainerInstantiation.from_env",
-                    return_value=ContainerInstantiation(
-                        repository="https://github.com/jkoppel/QuixBugs.git",
-                        branch="master",
-                        architecture="mono_agent",
-                        agent_models={"main": "llama3.1:8b"},
-                        bootstrap_prompt="Fix failing tests with minimal changes.",
-                    ),
-                ),
-                patch(
-                    "llm_autofix_agents.main.prepare_target_repository",
-                    return_value=SimpleNamespace(path=Path(tmp_dir), cleanup=lambda: None),
-                ) as mocked_prepare,
-                patch(
-                    "llm_autofix_agents.main.run_agent_baseline",
-                    return_value=output,
-                ) as mocked_run_agent,
-                patch.dict(
-                    "os.environ",
-                    {
-                        "RUN_TEST_COMMAND": "uv run --with pytest pytest python_testcases/test_gcd.py",
-                    },
-                    clear=False,
-                ),
-            ):
-                exit_code = _run_run(argparse.Namespace())
+    def test_batch_command_exists(self) -> None:
+        """Verify that 'autofix batch' is available."""
+        from llm_autofix_agents.main import _build_parser
 
-            self.assertEqual(exit_code, 0)
-            mocked_prepare.assert_called_once_with(
-                repository="https://github.com/jkoppel/QuixBugs.git",
-                branch="master",
-            )
-            run_input = mocked_run_agent.call_args[0][0]
-            self.assertEqual(run_input.target_repo, str(Path(tmp_dir)))
-            self.assertEqual(run_input.test_command, "uv run --with pytest pytest python_testcases/test_gcd.py")
+        parser = _build_parser()
+        # Should not raise when parsing batch command
+        args = parser.parse_args(["batch", "test.yaml"])
+        self.assertEqual(args.command_name, "batch")
+        self.assertEqual(args.config, Path("test.yaml"))
 
-    def test_run_fails_fast_when_runtime_contract_is_invalid(self) -> None:
-        with (
-            patch.dict(
-                "os.environ",
-                {
-                    "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
-                    "RUN_BRANCH": "master",
-                    "RUN_ARCHITECTURE": "mono_agent",
-                    "RUN_AGENT_MODELS": "not-json",
-                    "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
-                },
-                clear=False,
-            ),
-            patch("llm_autofix_agents.main.run_agent_baseline") as mocked_run_agent,
-        ):
-            exit_code = _run_run(argparse.Namespace())
+    def test_batch_requires_config_argument(self) -> None:
+        """Verify that batch command requires a config file."""
+        from llm_autofix_agents.main import _build_parser
 
-        self.assertEqual(exit_code, 2)
-        mocked_run_agent.assert_not_called()
+        parser = _build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["batch"])
 
-    def test_run_always_cleans_up_prepared_repository(self) -> None:
-        with TemporaryDirectory() as tmp_dir:
-            cleanup_probe = SimpleNamespace(cleaned=False)
+    def test_batch_accepts_optional_arguments(self) -> None:
+        """Verify that batch command accepts optional arguments."""
+        from llm_autofix_agents.main import _build_parser
 
-            def _cleanup() -> None:
-                cleanup_probe.cleaned = True
+        parser = _build_parser()
+        args = parser.parse_args(
+            [
+                "batch",
+                "config.yaml",
+                "--compose-file",
+                "custom-compose.yml",
+                "--project-dir",
+                "/some/path",
+                "--dry-run",
+            ]
+        )
+        self.assertEqual(args.command_name, "batch")
+        self.assertEqual(args.config, Path("config.yaml"))
+        self.assertEqual(args.compose_file, Path("custom-compose.yml"))
+        self.assertEqual(args.project_dir, Path("/some/path"))
+        self.assertTrue(args.dry_run)
 
-            with (
-                patch.dict(
-                    "os.environ",
-                    {
-                        "RUN_REPOSITORY": "https://github.com/jkoppel/QuixBugs.git",
-                        "RUN_BRANCH": "master",
-                        "RUN_ARCHITECTURE": "mono_agent",
-                        "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
-                        "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
-                    },
-                    clear=False,
-                ),
-                patch(
-                    "llm_autofix_agents.main.ContainerInstantiation.from_env",
-                    return_value=ContainerInstantiation(
-                        repository="https://github.com/jkoppel/QuixBugs.git",
-                        branch="master",
-                        architecture="mono_agent",
-                        agent_models={"main": "llama3.1:8b"},
-                        bootstrap_prompt="Fix failing tests with minimal changes.",
-                    ),
-                ),
-                patch(
-                    "llm_autofix_agents.main.prepare_target_repository",
-                    return_value=SimpleNamespace(path=Path(tmp_dir), cleanup=_cleanup),
-                ),
-                patch(
-                    "llm_autofix_agents.main.run_agent_baseline",
-                    side_effect=RuntimeError("boom"),
-                ),
-            ):
-                exit_code = _run_run(argparse.Namespace())
+    @patch("llm_autofix_agents.main.BatchRunner")
+    def test_run_batch_invokes_runner(self, mocked_batch_runner_class: MagicMock) -> None:
+        """Verify that _run_batch invokes BatchRunner with correct arguments."""
+        from llm_autofix_agents.main import _run_batch
 
-        self.assertEqual(exit_code, 1)
-        self.assertTrue(cleanup_probe.cleaned)
+        mocked_runner = MagicMock()
+        mocked_runner.run_batch.return_value = MagicMock(model_dump_json=lambda: "{}")
+        mocked_batch_runner_class.return_value = mocked_runner
 
-    def test_run_fails_fast_without_runtime_contract(self) -> None:
-        with (
-            patch.dict("os.environ", {}, clear=True),
-            patch("llm_autofix_agents.main.run_agent_baseline") as mocked_run_agent,
-        ):
-            exit_code = _run_run(argparse.Namespace())
+        args = MagicMock()
+        args.config = Path("/path/to/config.yaml")
+        args.project_dir = Path("/project")
+        args.compose_file = Path("docker-compose.yml")
+        args.dry_run = False
 
-        self.assertEqual(exit_code, 2)
-        mocked_run_agent.assert_not_called()
+        with patch("builtins.print"):
+            exit_code = _run_batch(args)
+
+        self.assertEqual(exit_code, 0)
+        mocked_batch_runner_class.assert_called_once()
 
 
 if __name__ == "__main__":

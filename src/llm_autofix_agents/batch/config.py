@@ -110,7 +110,6 @@ class LLMSettings(BaseModel):
     provider: str = "ollama"
     model: str = Field(min_length=1)
     max_turns: int = 20
-    ollama_base_url: str | None = None
     agent_models: dict[str, str] | None = None
 
     @field_validator("model", "provider")

@@ -48,6 +48,22 @@
 - SH6-T00 avance aplicado: seleccion de caso MVP QuixBugs Python (`gcd`) y parametrizacion de runtime para repo remoto GitHub + comando de validacion por caso.
 - SH6-T01 preparacion aplicada: `agent-smoke` ahora consume contrato `RUN_*`, resuelve/clona repositorio objetivo (path/URL/slug GitHub) y ejecuta validacion con `RUN_TEST_COMMAND`.
 - Evidencia operativa SH6 agregada en README y Compose para ejecucion reproducible del caso MVP (`python_testcases/test_gcd.py`).
+- **SPEC-007 completado**: Refactoring de configuración LLM (ver `specs/007-llm-config-refactor/`).
+  - Mapa estático `PROVIDER_DEFAULT_URLS` para desacoplar URLs de providers.
+  - Eliminada `LLM_MAX_TURNS` de env (viene exclusivamente de batch config YAML).
+  - Simplificación de `from_env()`: removidos parsers helpers, delegación a Pydantic.
+  - Eliminado acoplamiento `ollama_base_url` de batch config; estrategia por provider implementada.
+  - OCP respetado: nuevo provider requiere solo agregar entrada en map estático.
+  - Tests actualizados: `test_base_url_override` valida estrategia de providers.
+- **SPEC-008 completado**: Limpieza de ejecución legada single-run (ver `specs/008-cleanup-legacy-run/`).
+  - Eliminado comando `autofix run` (legado).
+  - Removida función `_run_run()` y helpers asociados (`_RUNTIME_CONTRACT_KEYS`, `_has_runtime_contract_env()`).
+  - Removidos imports legados: `ContainerInstantiation`, `RunInput`, `prepare_target_repository`, `run_agent_baseline`.
+  - Simplificado `main.py`: de 175 a 86 líneas.
+  - Flujo claro ahora: solo `autofix batch <config.yaml>`.
+  - Tests actualizados: 4 tests de `_run_run` removidos; nuevos tests para `batch` command.
+
+
 - Hardening de flujo aplicado: import roto en `agent_flow` corregido hacia `flow.orchestrator`, `IterationRunner` dividido en colaboradores (`iteration/context_builder`, `iteration/recorder`, `iteration/decision`), `RunInitializer` desacoplado con `RunRegistration`, ciclo de ejecucion de agente extraido a `flow/agent_execution`, `WorkspaceChangeSet` enriquecido (added/modified/deleted/untracked + `diff_complete`), clasificacion de errores de flujo incorporada y `RunOutputBuilder` reforzado con copias defensivas.
 - Validacion del refactor ejecutada: smoke de imports del flujo en verde y nueva suite unitaria focalizada (`tests/test_flow_refactor.py`) con 3 tests en verde.
 - Ajuste incremental aplicado: renombre de `model_failure` a `exception_failure`, `IterationDecision` a `IterationOutcomeHandler`, evolucion de `WorkspaceChangeSet` hacia `tracked_changed_files` y `all_changed_files`, politica explicita de untracked como `allowed_and_captured`, y encapsulado de errores git/snapshot en `WorkspaceError` en la capa workspace.

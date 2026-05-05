@@ -185,3 +185,12 @@
 - Por que estuvo mal: el agente hace un intento completo, pierde los cambios de código fuente válidos, y no recibe feedback explícito sobre qué hizo mal.
 - Alternativa recomendada: clasificar validaciones en retryable (test_file_modified, con rollback + feedback) y terminal (diff_integrity, regression). Para las retryable: restaurar workspace, inyectar feedback explícito en el prompt de la siguiente iteración, y permitir un reintento.
 - Regla preventiva para futuras specs: distinguir siempre entre violaciones corregibles (retryable) y errores estructurales (terminal); las corregibles deben incluir rollback y feedback, no solo rechazo.
+
+## 2026-05-05 (estrategias de provider vs condicionales)
+- Contexto: refactor de configuración LLM para eliminar `LLM_MAX_TURNS` como env var y desacoplar URLs de providers.
+- Anti-patron detectado: múltiples `if provider is X` en `from_env()` + atributo específico `ollama_base_url` en `LLMSettings` + funciones parsers helper para cada tipo de campo.
+- Que no hay que hacer: duplicar la misma lógica "si provider A, usa configuración X; si provider B, usa configuración Y" en muchas partes; mantener URLs provider-specific como atributos en la clase.
+- Por que estuvo mal: viola OCP (abrir/cerrado), dificulta agregar providers nuevos, y esparce configuración provider-specific en lugares incoherentes.
+- Alternativa recomendada: (1) crear un map estático `PROVIDER_DEFAULT_URLS = {"ollama": ..., "openai": ..., "gemini": ...}`, (2) usar lookups simples en `from_env()` en lugar de condicionales, (3) delegar configuración específica al map y resolver valores de forma centralizada.
+- Beneficio aplicado: OCP logrado (agregar provider solo requiere agregar entrada al map), DIP mejorado (no dependencias de provider-specific logic), SRP reforzado (cada part tiene una responsabilidad clara).
+- Regla preventiva para futuras specs: cuando detectes múltiples `if variant` en lógica compartida, prefiere un map + lookup o estrategia sobre condicionales; esta es una señal de que la configuración debería estar centralizada.

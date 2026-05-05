@@ -38,7 +38,6 @@ class LLMSettingsTests(unittest.TestCase):
                 "OPENAI_API_KEY": "openai-key",
                 "OPENAI_BASE_URL": "https://proxy.example/v1",
                 "LLM_MODEL": "gpt-4.1",
-                "LLM_MAX_TURNS": "4",
                 "LLM_TRACING_DISABLED": "false",
             }
         )
@@ -46,7 +45,7 @@ class LLMSettingsTests(unittest.TestCase):
         self.assertEqual(settings.provider, ProviderType.OPENAI)
         self.assertEqual(settings.model, "gpt-4.1")
         self.assertEqual(settings.base_url, "https://proxy.example/v1")
-        self.assertEqual(settings.max_turns, 4)
+        self.assertEqual(settings.max_turns, 3)  # max_turns always comes from batch config, not env
         self.assertFalse(settings.tracing_disabled)
 
     def test_from_env_gemini_uses_default_base_url(self) -> None:
@@ -65,10 +64,25 @@ class LLMSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid boolean value"):
             LLMSettings.from_env(
                 {
+                    "LLM_PROVIDER": "gemini",
                     "GEMINI_API_KEY": "test-key",
                     "LLM_TRACING_DISABLED": "sometimes",
                 }
             )
+
+    def test_from_env_base_url_override(self) -> None:
+        """Verify that LLM_BASE_URL can override the provider default URL."""
+        settings = LLMSettings.from_env(
+            {
+                "LLM_PROVIDER": "ollama",
+                "LLM_BASE_URL": "http://remote.example:11500/v1",
+                "LLM_MODEL": "custom-model",
+            }
+        )
+
+        self.assertEqual(settings.provider, ProviderType.OLLAMA)
+        self.assertEqual(settings.base_url, "http://remote.example:11500/v1")
+        self.assertEqual(settings.model, "custom-model")
 
     def test_load_dotenv_values_parses_supported_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

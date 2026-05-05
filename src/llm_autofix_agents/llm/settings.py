@@ -7,11 +7,20 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
+# Static provider URL map - single source of truth for default base URLs
+PROVIDER_DEFAULT_URLS = {
+    "ollama": "http://localhost:11500/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "openai": "https://api.openai.com/v1",
+}
+
+# Keep these for backward compatibility with imports and tests
 DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
-DEFAULT_OLLAMA_BASE_URL = "http://localhost:11500/v1"
+DEFAULT_OLLAMA_BASE_URL = PROVIDER_DEFAULT_URLS["ollama"]
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
-DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+DEFAULT_GEMINI_BASE_URL = PROVIDER_DEFAULT_URLS["gemini"]
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+DEFAULT_OPENAI_BASE_URL = PROVIDER_DEFAULT_URLS["openai"]
 
 
 class ProviderType(StrEnum):
@@ -33,22 +42,6 @@ class LLMSettings(BaseModel):
     api_retry_max_seconds: float = Field(default=8.0, ge=0.1, le=120.0)
     tracing_disabled: bool = True
 
-    @field_validator("model")
-    @classmethod
-    def _normalize_model(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("model cannot be empty")
-        return normalized
-
-    @field_validator("base_url")
-    @classmethod
-    def _normalize_base_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
     @field_validator("api_retry_max_seconds")
     @classmethod
     def _validate_retry_window(cls, value: float, info) -> float:
@@ -59,52 +52,71 @@ class LLMSettings(BaseModel):
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> LLMSettings:
+        """Load LLMSettings from environment.
+        
+        Note: max_turns is always set to a default value here. In batch execution,
+        max_turns comes from the batch config YAML (GlobalSettings.llm.max_turns),
+        not from the environment.
+        """
         if env is None:
             values = _load_runtime_env()
         else:
             values = dict(env)
 
-        provider_raw = values.get("LLM_PROVIDER", ProviderType.OLLAMA.value)
-        provider = _parse_provider(provider_raw)
+        # Parse and validate provider
+        provider_raw = values.get("LLM_PROVIDER", ProviderType.OLLAMA.value).strip().lower()
+        try:
+            provider = ProviderType(provider_raw)
+        except ValueError as exc:
+            raise ValueError(f"Unsupported LLM_PROVIDER: {provider_raw}") from exc
 
-        model = values.get("LLM_MODEL")
-        if model is None:
-            if provider is ProviderType.OLLAMA:
-                model = DEFAULT_OLLAMA_MODEL
-            elif provider is ProviderType.GEMINI:
-                model = DEFAULT_GEMINI_MODEL
-            else:
-                model = DEFAULT_OPENAI_MODEL
+        # Resolve model: explicit > provider default
+        model = values.get("LLM_MODEL", "").strip()
+        if not model:
+            model = _get_default_model(provider)
 
-        max_turns = _parse_int(values.get("LLM_MAX_TURNS"), default=3)
-        api_max_retries = _parse_int(values.get("LLM_API_MAX_RETRIES"), default=5)
-        api_retry_base_seconds = _parse_float(values.get("LLM_API_RETRY_BASE_SECONDS"), default=1.0)
-        api_retry_max_seconds = _parse_float(values.get("LLM_API_RETRY_MAX_SECONDS"), default=8.0)
-        tracing_disabled = _parse_bool(values.get("LLM_TRACING_DISABLED"), default=True)
+        # Resolve base_url: explicit LLM_BASE_URL > provider default from static map
+        base_url_override = values.get("LLM_BASE_URL", "").strip() or None
+        base_url = base_url_override or PROVIDER_DEFAULT_URLS[provider.value]
 
-        api_key: str | None
-        base_url: str | None
-        if provider is ProviderType.OLLAMA:
-            api_key = values.get("OLLAMA_API_KEY", "ollama")
-            base_url = values.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
-        elif provider is ProviderType.GEMINI:
-            api_key = values.get("GEMINI_API_KEY")
-            if not api_key:
-                raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
-            base_url = values.get("GEMINI_BASE_URL", DEFAULT_GEMINI_BASE_URL)
+        # Resolve api_key: provider-specific env var with provider-specific requirements
+        api_key_env_var = f"{provider.value.upper()}_API_KEY"
+        api_key_value = values.get(api_key_env_var, "").strip()
+        if not api_key_value:
+            if provider in (ProviderType.OPENAI, ProviderType.GEMINI):
+                raise ValueError(f"{api_key_env_var} is required for {provider.value} provider")
+            # Ollama has a fallback API key
+            api_key_value = "ollama"
+
+        # Parse numeric fields with basic validation
+        try:
+            api_max_retries_str = values.get("LLM_API_MAX_RETRIES", "5").strip() or "5"
+            api_max_retries = int(api_max_retries_str)
+            
+            api_retry_base_seconds_str = values.get("LLM_API_RETRY_BASE_SECONDS", "1.0").strip() or "1.0"
+            api_retry_base_seconds = float(api_retry_base_seconds_str)
+            
+            api_retry_max_seconds_str = values.get("LLM_API_RETRY_MAX_SECONDS", "8.0").strip() or "8.0"
+            api_retry_max_seconds = float(api_retry_max_seconds_str)
+        except ValueError as exc:
+            raise ValueError(f"Invalid numeric LLM configuration: {exc}") from exc
+
+        # Parse boolean field with strict validation
+        tracing_disabled_str = values.get("LLM_TRACING_DISABLED", "true").strip().lower()
+        if tracing_disabled_str in {"1", "true", "yes", "on"}:
+            tracing_disabled = True
+        elif tracing_disabled_str in {"0", "false", "no", "off"}:
+            tracing_disabled = False
         else:
-            api_key = values.get("OPENAI_API_KEY")
-            if not api_key:
-                raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
-            base_url = values.get("OPENAI_BASE_URL")
+            raise ValueError(f"Invalid boolean value for LLM_TRACING_DISABLED: {tracing_disabled_str}")
 
         try:
             return cls(
                 provider=provider,
                 model=model,
-                api_key=SecretStr(api_key) if api_key is not None else None,
+                api_key=SecretStr(api_key_value) if api_key_value else None,
                 base_url=base_url,
-                max_turns=max_turns,
+                max_turns=3,  # max_turns from env is ignored; always use batch config
                 api_max_retries=api_max_retries,
                 api_retry_base_seconds=api_retry_base_seconds,
                 api_retry_max_seconds=api_retry_max_seconds,
@@ -126,43 +138,15 @@ class LLMSettings(BaseModel):
         }
 
 
-def _parse_provider(value: str) -> ProviderType:
-    normalized = value.strip().lower()
-    try:
-        return ProviderType(normalized)
-    except ValueError as exc:
-        raise ValueError(f"Unsupported LLM_PROVIDER: {value}") from exc
 
-
-def _parse_int(value: str | None, *, default: int) -> int:
-    if value is None:
-        return default
-    normalized = value.strip()
-    if not normalized:
-        return default
-    return int(normalized)
-
-
-def _parse_float(value: str | None, *, default: float) -> float:
-    if value is None:
-        return default
-    normalized = value.strip()
-    if not normalized:
-        return default
-    return float(normalized)
-
-
-def _parse_bool(value: str | None, *, default: bool) -> bool:
-    if value is None:
-        return default
-    normalized = value.strip().lower()
-    if not normalized:
-        return default
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    raise ValueError(f"Invalid boolean value: {value}")
+def _get_default_model(provider: ProviderType) -> str:
+    """Return the default model for a given provider."""
+    defaults = {
+        ProviderType.OLLAMA: DEFAULT_OLLAMA_MODEL,
+        ProviderType.GEMINI: DEFAULT_GEMINI_MODEL,
+        ProviderType.OPENAI: DEFAULT_OPENAI_MODEL,
+    }
+    return defaults[provider]
 
 
 def _load_runtime_env() -> dict[str, str]:
