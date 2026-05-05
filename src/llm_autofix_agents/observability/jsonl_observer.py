@@ -42,7 +42,7 @@ class JsonlEventObserver:
         return self._path
 
     def _append(self, data: dict[str, Any]) -> None:
-        line = json.dumps(data, ensure_ascii=False, separators=(",",":"))
+        line = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         with self._path.open("a", encoding="utf-8") as handler:
             handler.write(f"{line}\n")
 

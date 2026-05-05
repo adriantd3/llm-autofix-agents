@@ -134,15 +134,17 @@ class ToolCallRecordTests(unittest.TestCase):
 
 class ToolSummariesTests(unittest.TestCase):
     def test_summarize_read_file_success(self) -> None:
-        result = json.dumps({
-            "ok": True,
-            "path": "gcd.py",
-            "start_line": 1,
-            "end_line": 50,
-            "line_count": 50,
-            "truncated": False,
-            "content": "x" * 200,
-        })
+        result = json.dumps(
+            {
+                "ok": True,
+                "path": "gcd.py",
+                "start_line": 1,
+                "end_line": 50,
+                "line_count": 50,
+                "truncated": False,
+                "content": "x" * 200,
+            }
+        )
         summary = summarize_tool_result("read_file", result)
         self.assertEqual(summary["ok"], True)
         self.assertEqual(summary["path"], "gcd.py")
@@ -163,15 +165,17 @@ class ToolSummariesTests(unittest.TestCase):
         self.assertEqual(summary["replaced"], 1)
 
     def test_summarize_execute_command(self) -> None:
-        result = json.dumps({
-            "ok": True,
-            "command": "pytest gcd.py",
-            "exit_code": 0,
-            "timed_out": False,
-            "stdout": "x" * 300,
-            "stderr": "",
-            "cwd": ".",
-        })
+        result = json.dumps(
+            {
+                "ok": True,
+                "command": "pytest gcd.py",
+                "exit_code": 0,
+                "timed_out": False,
+                "stdout": "x" * 300,
+                "stderr": "",
+                "cwd": ".",
+            }
+        )
         summary = summarize_tool_result("execute_command", result)
         self.assertEqual(summary["exit_code"], 0)
         self.assertIn("stdout_chars", summary)
@@ -401,9 +405,7 @@ class SQLiteSchemaV5Tests(unittest.TestCase):
                 )
             )
 
-            note_json = json.dumps(
-                {"summary": "Bug in gcd", "suspected_files": ["gcd.py"], "confidence": 0.85}
-            )
+            note_json = json.dumps({"summary": "Bug in gcd", "suspected_files": ["gcd.py"], "confidence": 0.85})
             record = AgentHandoffRecord(
                 handoff_id=make_handoff_id(run_id, 1, 1),
                 run_id=run_id,

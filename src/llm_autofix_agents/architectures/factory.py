@@ -3,6 +3,7 @@ from __future__ import annotations
 from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.architectures.handoff import build_multi_agent_handoff_architecture
 from llm_autofix_agents.architectures.mono_agent import build_mono_agent_architecture
+from llm_autofix_agents.architectures.orchestrator import build_multi_agent_orchestrator_architecture
 from llm_autofix_agents.llm.settings import LLMSettings
 
 
@@ -21,6 +22,11 @@ def build_architecture(
         )
     if strategy == "multi_agent_handoff":
         return build_multi_agent_handoff_architecture(
+            settings=settings,
+            agent_models=agent_models,
+        )
+    if strategy == "multi_agent_orchestrator":
+        return build_multi_agent_orchestrator_architecture(
             settings=settings,
             agent_models=agent_models,
         )

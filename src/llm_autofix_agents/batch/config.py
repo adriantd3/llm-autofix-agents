@@ -123,6 +123,13 @@ class LLMSettings(BaseModel):
             return self.agent_models
         if architecture == RunArchitecture.MONO_AGENT:
             return {"main": self.model}
+        if architecture == RunArchitecture.MULTI_AGENT_ORCHESTRATOR:
+            return {
+                "manager": self.model,
+                "localizer": self.model,
+                "patcher": self.model,
+                "validator": self.model,
+            }
         return {
             "triage": self.model,
             "localizer": self.model,
