@@ -7,7 +7,6 @@ from llm_autofix_agents.tools.paths import resolve_path
 from llm_autofix_agents.tools.serialization import json_result
 from llm_autofix_agents.tools.text import read_text_checked
 
-
 _TEST_FILE_REJECTION = (
     "Modifying test files is FORBIDDEN. The failing tests are CORRECT. "
     "Fix ONLY source code files (implementation, not tests)."

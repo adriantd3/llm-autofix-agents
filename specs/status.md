@@ -109,9 +109,20 @@
   - Quoting seguro con `shlex.quote()` en comandos shell generados por adapter y runner.
   - `docker/bugsinpy.Dockerfile` actualizado con `dos2unix` y comentario sobre limitaciones de version de Python.
   - 168 tests pasando, lint limpio.
+- **SPEC-006 completado**: Observability improvement (ver `specs/006-observability-improvement/`).
+  - JsonlEventObserver: fuente de verdad append-only por run en `results/<run_id>/events.jsonl`.
+  - ToolCallRecord enriquecido: run_agent_id, started_at, finished_at, duration_seconds, args_summary_json, result_summary_json, result_excerpt, error_type, error_message_short.
+  - Tool result summaries: extracción específica por tool (read_file, search_files, replace_in_file, etc.) con hashes y truncación.
+  - Tool args summaries: wrapper `make_observable(FunctionTool)` integrado en `build_apr_tools()` vía context var.
+  - IDs estables para tool calls: UUID en vez de counter secuencial.
+  - Handoff notes: `APRHandoffInput` (Pydantic) con summary, evidence, suspected_files, next_focus, confidence. Capturado vía `handoff(input_type=..., on_handoff=...)` y context var `pending_handoff_note`.
+  - SQLite migration v4→v5: 9 columnas nuevas en tool_calls + handoff_note_json en agent_handoffs.
+  - MarkdownLiveObserver enriquecido: `[agent] tool -> status (Xs)` y handoff notes con summary/suspected_files/confidence.
+  - 209 tests pasando, lint limpio.
 
 ## En curso
-- Spec activa: specs/004-agent-model-overrides/spec.md (propuesta)
+- Spec activa: specs/006-observability-improvement/spec.md (implementada)
 
 ## Siguiente
 - Spec 004: agent-model-overrides (permitir configurar modelos distintos por rol de agente).
+- Validar con una run real mono_agent y multi_agent_handoff que produce events.jsonl, live.md enriquecido y observability.db con campos nuevos.

@@ -58,7 +58,7 @@ class MultiAgentHandoffArchitectureTests(unittest.TestCase):
             build_agent_calls.append(kwargs)
             return {"name": kwargs["name"]}
 
-        def fake_handoff(agent):
+        def fake_handoff(agent, **kwargs):
             return f"handoff:{agent['name']}"
 
         with (

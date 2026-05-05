@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from agents import Agent, handoff
+from pydantic import BaseModel
 
 from llm_autofix_agents.agents.instructions import (
     HANDOFF_LOCALIZER_INSTRUCTIONS,
@@ -12,7 +13,20 @@ from llm_autofix_agents.architectures.config import BuiltArchitecture, SubAgentD
 from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.agent_models import resolve_agent_model
 from llm_autofix_agents.llm.settings import LLMSettings
+from llm_autofix_agents.observability.tool_context import pending_handoff_note
 from llm_autofix_agents.tools.profiles import build_apr_tools
+
+
+class APRHandoffInput(BaseModel):
+    summary: str
+    evidence: list[str] = []
+    suspected_files: list[str] = []
+    next_focus: str | None = None
+    confidence: float | None = None
+
+
+async def _on_handoff_with_note(ctx: object, note: APRHandoffInput) -> None:
+    pending_handoff_note.set(note.model_dump())
 
 
 def build_multi_agent_handoff_architecture(
@@ -68,7 +82,13 @@ def build_multi_agent_handoff_architecture(
             tools=patcher_tools,
             model_override=patcher_model,
             output_schema=None,
-            handoffs=[handoff(validator_agent)],
+            handoffs=[
+                handoff(
+                    validator_agent,
+                    input_type=APRHandoffInput,
+                    on_handoff=_on_handoff_with_note,
+                )
+            ],
             handoff_description="APR patcher that applies a minimal fix.",
         )
 
@@ -79,7 +99,13 @@ def build_multi_agent_handoff_architecture(
             tools=localizer_tools,
             model_override=localizer_model,
             output_schema=None,
-            handoffs=[handoff(patcher_agent)],
+            handoffs=[
+                handoff(
+                    patcher_agent,
+                    input_type=APRHandoffInput,
+                    on_handoff=_on_handoff_with_note,
+                )
+            ],
             handoff_description="APR localizer that narrows the faulty code.",
         )
 
@@ -90,7 +116,13 @@ def build_multi_agent_handoff_architecture(
             tools=triage_tools,
             model_override=triage_model,
             output_schema=None,
-            handoffs=[handoff(localizer_agent)],
+            handoffs=[
+                handoff(
+                    localizer_agent,
+                    input_type=APRHandoffInput,
+                    on_handoff=_on_handoff_with_note,
+                )
+            ],
             handoff_description="APR triage agent that gathers initial signals.",
         )
         return triage_agent

@@ -72,6 +72,33 @@ class LifecycleHooksTests(unittest.TestCase):
         self.assertEqual(len(observer.tool_calls), 1)
         self.assertEqual(observer.tool_calls[0].agent_name, "localizer")
 
+    def test_on_tool_end_captures_args_summary_from_tool_arguments(self) -> None:
+        observer = _CaptureObserver()
+        hooks = APRRunHooks(
+            observer=observer,
+            run_id="run-1",
+            iteration_id="run-1-it01",
+            agent_execution_id="run-1-it01-agent01",
+        )
+
+        class _Tool:
+            name = "read_file"
+
+        class _FakeContext:
+            tool_arguments = '{"path": "src/main.py", "start_line": 1, "end_line": 10}'
+
+        asyncio.run(hooks.on_tool_start(context=_FakeContext(), agent=_FakeAgent("localizer"), tool=_Tool()))
+        asyncio.run(
+            hooks.on_tool_end(
+                context=_FakeContext(), agent=_FakeAgent("localizer"), tool=_Tool(), result='{"ok": true}'
+            )
+        )
+
+        self.assertEqual(len(observer.tool_calls), 1)
+        record = observer.tool_calls[0]
+        self.assertIsNotNone(record.args_summary_json)
+        self.assertIn("src/main.py", record.args_summary_json)
+
     def test_on_agent_start_sets_current_agent(self) -> None:
         observer = _CaptureObserver()
         hooks = APRRunHooks(

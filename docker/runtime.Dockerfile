@@ -23,3 +23,4 @@ RUN uv sync \
     && chmod -R a+rX /workspace/.venv
 
 CMD ["uv", "run", "autofix", "run"]
+# Cache bust 1777924886

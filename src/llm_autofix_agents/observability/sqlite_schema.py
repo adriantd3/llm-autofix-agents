@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -118,6 +118,15 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   status TEXT,
   success INTEGER,
   agent_name TEXT,
+  run_agent_id TEXT,
+  started_at TEXT,
+  finished_at TEXT,
+  duration_seconds REAL,
+  args_summary_json TEXT,
+  result_summary_json TEXT,
+  result_excerpt TEXT,
+  error_type TEXT,
+  error_message_short TEXT,
   FOREIGN KEY (run_id) REFERENCES runs(run_id),
   FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id),
   FOREIGN KEY (agent_execution_id) REFERENCES agent_executions(agent_execution_id)
@@ -195,6 +204,7 @@ CREATE TABLE IF NOT EXISTS agent_handoffs (
   from_run_agent_id TEXT,
   to_run_agent_id TEXT,
   occurred_at TEXT NOT NULL,
+  handoff_note_json TEXT,
   FOREIGN KEY (run_id) REFERENCES runs(run_id),
   FOREIGN KEY (iteration_id) REFERENCES iterations(iteration_id)
 );
@@ -220,6 +230,19 @@ CREATE TABLE IF NOT EXISTS agent_handoffs (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_handoffs_run ON agent_handoffs(run_id);
 CREATE INDEX IF NOT EXISTS idx_agent_handoffs_iteration ON agent_handoffs(iteration_id);
+"""
+
+MIGRATION_V4_TO_V5 = """
+ALTER TABLE tool_calls ADD COLUMN run_agent_id TEXT;
+ALTER TABLE tool_calls ADD COLUMN started_at TEXT;
+ALTER TABLE tool_calls ADD COLUMN finished_at TEXT;
+ALTER TABLE tool_calls ADD COLUMN duration_seconds REAL;
+ALTER TABLE tool_calls ADD COLUMN args_summary_json TEXT;
+ALTER TABLE tool_calls ADD COLUMN result_summary_json TEXT;
+ALTER TABLE tool_calls ADD COLUMN result_excerpt TEXT;
+ALTER TABLE tool_calls ADD COLUMN error_type TEXT;
+ALTER TABLE tool_calls ADD COLUMN error_message_short TEXT;
+ALTER TABLE agent_handoffs ADD COLUMN handoff_note_json TEXT;
 """
 
 

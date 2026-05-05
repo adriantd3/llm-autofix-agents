@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -17,6 +18,91 @@ from llm_autofix_agents.observability.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _format_kv_pairs(data: dict[str, object], max_items: int = 6) -> str:
+    """Format a dict as compact key=value pairs, skipping None values."""
+    items = []
+    for k, v in data.items():
+        if v is None:
+            continue
+        if k in ("ok", "tool"):
+            continue
+        if isinstance(v, bool):
+            items.append(f"{k}={v}")
+        elif isinstance(v, (int, float)):
+            items.append(f"{k}={v}")
+        elif isinstance(v, str):
+            if len(v) > 60:
+                items.append(f"{k}={v[:57]}...")
+            else:
+                items.append(f"{k}={v}")
+        elif isinstance(v, list):
+            if len(v) <= 3:
+                items.append(f"{k}={v}")
+            else:
+                items.append(f"{k}=[{', '.join(str(x) for x in v[:3])}...]")
+        if len(items) >= max_items:
+            break
+    return ", ".join(items)
+
+
+def _format_tool_summary(record: ToolCallRecord) -> str:
+    """Return a concise multi-line summary for a tool call in live.md."""
+    header_parts = [f"tool {record.seq:03d}:"]
+    if record.agent_name:
+        header_parts.append(f"[{record.agent_name}]")
+    header_parts.append(record.tool_name)
+    header_parts.append("->")
+    header_parts.append(record.status or "unknown")
+    if record.duration_seconds is not None:
+        header_parts.append(f"({record.duration_seconds:.3f}s)")
+    header = " ".join(header_parts)
+
+    lines = [header]
+
+    if record.args_summary_json:
+        try:
+            args_data = json.loads(record.args_summary_json)
+            if isinstance(args_data, dict) and args_data:
+                formatted = _format_kv_pairs(args_data)
+                if formatted:
+                    lines.append(f"  args: {formatted}")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if record.result_summary_json:
+        try:
+            result_data = json.loads(record.result_summary_json)
+            if isinstance(result_data, dict) and result_data:
+                formatted = _format_kv_pairs(result_data)
+                if formatted:
+                    lines.append(f"  result: {formatted}")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return "\n".join(lines)
+
+
+def _format_handoff(record: AgentHandoffRecord) -> str:
+    lines = [f"- handoff: {record.from_agent_name} -> {record.to_agent_name} (at {record.occurred_at})"]
+    if record.handoff_note_json:
+        try:
+            note = json.loads(record.handoff_note_json)
+            if isinstance(note, dict):
+                if note.get("summary"):
+                    lines.append(f"  - summary: {note['summary']}")
+                if note.get("suspected_files"):
+                    lines.append(f"  - suspected_files: {note['suspected_files']}")
+                if note.get("confidence") is not None:
+                    lines.append(f"  - confidence: {note['confidence']}")
+                if note.get("evidence"):
+                    lines.append(f"  - evidence: {note['evidence']}")
+                if note.get("next_focus"):
+                    lines.append(f"  - next_focus: {note['next_focus']}")
+        except (json.JSONDecodeError, TypeError):
+            lines.append(f"  - note: {record.handoff_note_json[:200]}")
+    return "\n".join(lines)
 
 
 class MarkdownLiveObserver:
@@ -115,7 +201,7 @@ class MarkdownLiveObserver:
         )
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None:
-        self._append(f"- tool {record.seq:03d}: {record.tool_name} -> {record.status or 'unknown'}")
+        self._append(_format_tool_summary(record))
 
     def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
         self._append(_format_provider_call_record(record))
@@ -131,7 +217,7 @@ class MarkdownLiveObserver:
         self._append(f"- file_change: {record.path} ({record.change_type or 'modified'})")
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
-        self._append(f"- handoff: {record.from_agent_name} -> {record.to_agent_name} (at {record.occurred_at})")
+        self._append(_format_handoff(record))
 
     def _append(self, text: str) -> None:
         with self._path.open("a", encoding="utf-8") as handler:
@@ -163,7 +249,7 @@ class ConsoleObserver:
         logger.info("[agent_exec] %s finished status=%s", record.agent_execution_id, record.status)
 
     def on_tool_call(self, *, record: ToolCallRecord) -> None:
-        logger.info("[tool] %s -> %s", record.tool_name, record.status or "unknown")
+        logger.info("[tool] %s", _format_tool_summary(record).replace("\n", " | "))
 
     def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
         logger.info(_format_provider_call_record(record))

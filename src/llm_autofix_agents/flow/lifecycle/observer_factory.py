@@ -6,6 +6,7 @@ from typing import Any
 from llm_autofix_agents.observability import (
     CompositeObserver,
     ConsoleObserver,
+    JsonlEventObserver,
     MarkdownLiveObserver,
     NullObserver,
     RunObserver,
@@ -30,6 +31,8 @@ def build_observer(
         sqlite_store = SQLiteObservabilityStore(db_path=config.sqlite_db_path)
         sqlite_store.initialize()
         observers.append(SQLiteObserver(sqlite_store, architecture_name=architecture_name))
+        if getattr(config, "jsonl_enabled", True):
+            observers.append(JsonlEventObserver(config.results_dir, run_id))
         if config.live_log_enabled:
             live_observer = MarkdownLiveObserver(config.results_dir / run_id / "live.md")
             observers.append(live_observer)

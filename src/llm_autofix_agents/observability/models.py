@@ -218,6 +218,15 @@ class ToolCallRecord:
     status: str | None
     success: bool | None
     agent_name: str | None = None
+    run_agent_id: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_seconds: float | None = None
+    args_summary_json: str | None = None
+    result_summary_json: str | None = None
+    result_excerpt: str | None = None
+    error_type: str | None = None
+    error_message_short: str | None = None
 
 
 @dataclass(frozen=True)
@@ -336,6 +345,15 @@ def make_handoff_id(run_id: str, iteration_index: int, handoff_index: int) -> st
 
 
 @dataclass(frozen=True)
+class APRHandoffNote:
+    summary: str
+    evidence: list[str]
+    suspected_files: list[str]
+    next_focus: str | None = None
+    confidence: float | None = None
+
+
+@dataclass(frozen=True)
 class AgentHandoffRecord:
     handoff_id: str
     run_id: str
@@ -345,3 +363,4 @@ class AgentHandoffRecord:
     from_run_agent_id: str | None
     to_run_agent_id: str | None
     occurred_at: str
+    handoff_note_json: str | None = None

@@ -13,6 +13,7 @@ class ObservabilityConfig:
     results_dir: Path
     sqlite_db_path: Path
     live_log_enabled: bool
+    jsonl_enabled: bool = True
 
 
 def resolve_observability_config(*, repo_root: Path, metadata: dict[str, Any]) -> ObservabilityConfig:

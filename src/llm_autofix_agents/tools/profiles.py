@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from agents import FunctionTool
+
 from llm_autofix_agents.tools.command_tools import execute_command
 from llm_autofix_agents.tools.edit_tools import replace_in_file, replace_lines, write_file
 from llm_autofix_agents.tools.fs_tools import get_workspace_info, list_files, read_file, search_files
 from llm_autofix_agents.tools.git_tools import git_diff_summary, git_status_summary
+from llm_autofix_agents.tools.observable import make_observable
 from llm_autofix_agents.tools.patch_tools import apply_unified_diff
 from llm_autofix_agents.tools.test_tools import run_test_target
 
@@ -85,7 +88,7 @@ APR_VALIDATOR_TOOLS = [
 
 
 def build_apr_tools(profile: str = "full") -> list[Any]:
-    """Return a predefined APR tool profile."""
+    """Return a predefined APR tool profile with observability wrapping."""
     profiles = {
         "minimal": APR_SAFE_MINIMAL_TOOLS,
         "core": APR_CORE_TOOLS,
@@ -96,6 +99,7 @@ def build_apr_tools(profile: str = "full") -> list[Any]:
         "validator": APR_VALIDATOR_TOOLS,
     }
     try:
-        return list(profiles[profile])
+        raw = list(profiles[profile])
     except KeyError as exc:
         raise ValueError(f"Unknown APR tool profile: {profile}") from exc
+    return [make_observable(t) if isinstance(t, FunctionTool) else t for t in raw]

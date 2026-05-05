@@ -18,7 +18,12 @@ from llm_autofix_agents.observability.models import (
     TestExecutionRecord,
     ToolCallRecord,
 )
-from llm_autofix_agents.observability.sqlite_schema import MIGRATION_V3_TO_V4, SCHEMA_VERSION, schema_init_sql
+from llm_autofix_agents.observability.sqlite_schema import (
+    MIGRATION_V3_TO_V4,
+    MIGRATION_V4_TO_V5,
+    SCHEMA_VERSION,
+    schema_init_sql,
+)
 
 
 def stable_id(prefix: str, payload: str) -> str:
@@ -43,6 +48,8 @@ class SQLiteObservabilityStore:
             elif current_version < SCHEMA_VERSION:
                 if current_version < 4:
                     conn.executescript(MIGRATION_V3_TO_V4)
+                if current_version < 5:
+                    conn.executescript(MIGRATION_V4_TO_V5)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def upsert_architecture(self, name: str, description: str | None = None) -> str:
@@ -322,8 +329,17 @@ class SQLiteObservabilityStore:
                     tool_name,
                     status,
                     success,
-                    agent_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    agent_name,
+                    run_agent_id,
+                    started_at,
+                    finished_at,
+                    duration_seconds,
+                    args_summary_json,
+                    result_summary_json,
+                    result_excerpt,
+                    error_type,
+                    error_message_short
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.tool_call_id,
@@ -335,6 +351,15 @@ class SQLiteObservabilityStore:
                     record.status,
                     None if record.success is None else (1 if record.success else 0),
                     record.agent_name,
+                    record.run_agent_id,
+                    record.started_at,
+                    record.finished_at,
+                    record.duration_seconds,
+                    record.args_summary_json,
+                    record.result_summary_json,
+                    record.result_excerpt,
+                    record.error_type,
+                    record.error_message_short,
                 ),
             )
 
@@ -453,8 +478,9 @@ class SQLiteObservabilityStore:
                     to_agent_name,
                     from_run_agent_id,
                     to_run_agent_id,
-                    occurred_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    occurred_at,
+                    handoff_note_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.handoff_id,
@@ -465,6 +491,7 @@ class SQLiteObservabilityStore:
                     record.from_run_agent_id,
                     record.to_run_agent_id,
                     record.occurred_at,
+                    record.handoff_note_json,
                 ),
             )
 
