@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import io
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-from llm_autofix_agents.batch.runner import BatchRunner
 
 
 class MainCliTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class MainCliTests(unittest.TestCase):
         from llm_autofix_agents.main import _build_parser
 
         parser = _build_parser()
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
             parser.parse_args(["batch"])
 
     def test_batch_accepts_optional_arguments(self) -> None:
@@ -54,7 +54,7 @@ class MainCliTests(unittest.TestCase):
         from llm_autofix_agents.main import _run_batch
 
         mocked_runner = MagicMock()
-        mocked_runner.run_batch.return_value = MagicMock(model_dump_json=lambda: "{}")
+        mocked_runner.run_batch.return_value = MagicMock(model_dump_json=lambda **kwargs: "{}")
         mocked_batch_runner_class.return_value = mocked_runner
 
         args = MagicMock()

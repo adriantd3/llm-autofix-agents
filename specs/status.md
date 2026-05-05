@@ -55,6 +55,11 @@
   - Eliminado acoplamiento `ollama_base_url` de batch config; estrategia por provider implementada.
   - OCP respetado: nuevo provider requiere solo agregar entrada en map estático.
   - Tests actualizados: `test_base_url_override` valida estrategia de providers.
+- **Corrección arquitectónica OCP aplicada**: base URLs migradas a valores estáticos puros (`PROVIDER_DEFAULT_URLS`).
+  - Eliminados overrides `LLM_BASE_URL` y `OLLAMA_BASE_URL` de variables de entorno (rompían OCP).
+  - `LLMSettings.base_url` siempre resuelve desde el mapa estático del provider.
+  - Default de Ollama corregido a `http://host.docker.internal:11500/v1` (runtime siempre Docker).
+  - Fix de env forwarding: `OPENCODE_GO_API_KEY` ahora se propaga al contenedor en `BatchRunner._docker_run`.
 - **SPEC-008 completado**: Limpieza de ejecución legada single-run (ver `specs/008-cleanup-legacy-run/`).
   - Eliminado comando `autofix run` (legado).
   - Removida función `_run_run()` y helpers asociados (`_RUNTIME_CONTRACT_KEYS`, `_has_runtime_contract_env()`).
@@ -62,6 +67,7 @@
   - Simplificado `main.py`: de 175 a 86 líneas.
   - Flujo claro ahora: solo `autofix batch <config.yaml>`.
   - Tests actualizados: 4 tests de `_run_run` removidos; nuevos tests para `batch` command.
+  - **Corrección crítica post-SPEC-008**: los Dockerfiles aún usaban `autofix run` como CMD, causando infra_failures en batch. Se creó `batch/executor.py` como entrypoint puro para contenedores y se actualizaron ambos Dockerfiles. `BatchRunner._docker_run` ahora pasa el comando explícitamente, desacoplando el runner del CMD del Dockerfile.
 
 
 - Hardening de flujo aplicado: import roto en `agent_flow` corregido hacia `flow.orchestrator`, `IterationRunner` dividido en colaboradores (`iteration/context_builder`, `iteration/recorder`, `iteration/decision`), `RunInitializer` desacoplado con `RunRegistration`, ciclo de ejecucion de agente extraido a `flow/agent_execution`, `WorkspaceChangeSet` enriquecido (added/modified/deleted/untracked + `diff_complete`), clasificacion de errores de flujo incorporada y `RunOutputBuilder` reforzado con copias defensivas.

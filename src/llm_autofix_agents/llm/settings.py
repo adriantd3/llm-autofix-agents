@@ -9,9 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, f
 
 # Static provider URL map - single source of truth for default base URLs
 PROVIDER_DEFAULT_URLS = {
-    "ollama": "http://localhost:11500/v1",
+    "ollama": "http://host.docker.internal:11500/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "openai": "https://api.openai.com/v1",
+    "opencode_go": "https://opencode.ai/zen/go/v1",
 }
 
 # Keep these for backward compatibility with imports and tests
@@ -21,12 +22,14 @@ DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_BASE_URL = PROVIDER_DEFAULT_URLS["gemini"]
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENAI_BASE_URL = PROVIDER_DEFAULT_URLS["openai"]
+DEFAULT_OPENCODE_GO_MODEL = "deepseek-v4-flash"
 
 
 class ProviderType(StrEnum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     GEMINI = "gemini"
+    OPENCODE_GO = "opencode_go"
 
 
 class LLMSettings(BaseModel):
@@ -53,7 +56,7 @@ class LLMSettings(BaseModel):
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> LLMSettings:
         """Load LLMSettings from environment.
-        
+
         Note: max_turns is always set to a default value here. In batch execution,
         max_turns comes from the batch config YAML (GlobalSettings.llm.max_turns),
         not from the environment.
@@ -75,15 +78,15 @@ class LLMSettings(BaseModel):
         if not model:
             model = _get_default_model(provider)
 
-        # Resolve base_url: explicit LLM_BASE_URL > provider default from static map
-        base_url_override = values.get("LLM_BASE_URL", "").strip() or None
-        base_url = base_url_override or PROVIDER_DEFAULT_URLS[provider.value]
+        # Resolve base_url: static provider default only (OCP).
+        # URLs are intrinsic to the provider strategy and do not change per environment.
+        base_url = PROVIDER_DEFAULT_URLS[provider.value]
 
         # Resolve api_key: provider-specific env var with provider-specific requirements
         api_key_env_var = f"{provider.value.upper()}_API_KEY"
         api_key_value = values.get(api_key_env_var, "").strip()
         if not api_key_value:
-            if provider in (ProviderType.OPENAI, ProviderType.GEMINI):
+            if provider in (ProviderType.OPENAI, ProviderType.GEMINI, ProviderType.OPENCODE_GO  ):
                 raise ValueError(f"{api_key_env_var} is required for {provider.value} provider")
             # Ollama has a fallback API key
             api_key_value = "ollama"
@@ -92,10 +95,10 @@ class LLMSettings(BaseModel):
         try:
             api_max_retries_str = values.get("LLM_API_MAX_RETRIES", "5").strip() or "5"
             api_max_retries = int(api_max_retries_str)
-            
+
             api_retry_base_seconds_str = values.get("LLM_API_RETRY_BASE_SECONDS", "1.0").strip() or "1.0"
             api_retry_base_seconds = float(api_retry_base_seconds_str)
-            
+
             api_retry_max_seconds_str = values.get("LLM_API_RETRY_MAX_SECONDS", "8.0").strip() or "8.0"
             api_retry_max_seconds = float(api_retry_max_seconds_str)
         except ValueError as exc:
@@ -138,13 +141,13 @@ class LLMSettings(BaseModel):
         }
 
 
-
 def _get_default_model(provider: ProviderType) -> str:
     """Return the default model for a given provider."""
     defaults = {
         ProviderType.OLLAMA: DEFAULT_OLLAMA_MODEL,
         ProviderType.GEMINI: DEFAULT_GEMINI_MODEL,
         ProviderType.OPENAI: DEFAULT_OPENAI_MODEL,
+        ProviderType.OPENCODE_GO: DEFAULT_OPENCODE_GO_MODEL,
     }
     return defaults[provider]
 

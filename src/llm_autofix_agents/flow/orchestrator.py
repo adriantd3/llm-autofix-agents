@@ -66,9 +66,6 @@ class RunOrchestrator:
             cfg.baseline_test_execution = self._run_baseline_tests(run_input=run_input, cfg=cfg, state=state)
             return self._run_iterations(run_input=run_input, cfg=cfg, state=state)
         except Exception as exc:
-            import traceback
-
-            traceback.print_exc()
             output = self._output_builder.exception_failure(
                 identity=build_run_identity(
                     run_input=run_input,

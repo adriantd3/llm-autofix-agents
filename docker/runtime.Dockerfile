@@ -22,5 +22,5 @@ COPY docker /workspace/docker
 RUN uv sync \
     && chmod -R a+rX /workspace/.venv
 
-CMD ["uv", "run", "autofix", "run"]
+CMD ["uv", "run", "python", "-m", "llm_autofix_agents.batch.executor"]
 # Cache bust 1777924886

@@ -221,9 +221,20 @@ class BatchRunner:
             "-T",
         ]
         for key, value in sorted(env.items()):
-            if key.startswith(("RUN_", "LLM_", "AUTOFIX_", "OPENAI_", "GEMINI_", "OLLAMA_")):
+            if key.startswith(
+                (
+                    "RUN_",
+                    "LLM_",
+                    "AUTOFIX_",
+                    "OPENAI_",
+                    "GEMINI_",
+                    "OLLAMA_",
+                    "OPENCODE_GO_",
+                )
+            ):
                 cmd.extend(["-e", f"{key}={value}"])
         cmd.append(service)
+        cmd.extend(["uv", "run", "python", "-m", "llm_autofix_agents.batch.executor"])
         return subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=str(self.project_dir))
 
     def _build_env(

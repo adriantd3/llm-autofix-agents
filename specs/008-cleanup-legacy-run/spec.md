@@ -81,6 +81,30 @@ Mantener:
 - [ ] Tests unitarios en verde
 - [ ] Verificar que `autofix batch` aún funciona con batch config
 
+## Corrección post-implementación
+
+El comando `autofix run` fue eliminado del CLI, pero los Dockerfiles (`runtime.Dockerfile`, `bugsinpy.Dockerfile`) aún usaban `CMD ["uv", "run", "autofix", "run"]` como entrypoint del contenedor. Esto causaba que el batch runner lanzara contenedores que fallaban inmediatamente con:
+
+```
+autofix: error: argument command_name: invalid choice: 'run' (choose from batch)
+```
+
+### Solución aplicada
+
+1. **Nuevo módulo `batch/executor.py`**: encapsula la lógica de ejecución single-run (lo que antes hacía `_run_run()` en `main.py`). Es un módulo `__main__` puro, no un comando CLI.
+2. **Dockerfiles actualizados**: `CMD` ahora apunta a `uv run python -m llm_autofix_agents.batch.executor`.
+3. **`BatchRunner._docker_run` explícito**: en lugar de depender del `CMD` del Dockerfile, el runner pasa el comando directamente al contenedor, haciendo el contrato explícito y robusto.
+
+### Arquitectura resultante
+
+```
+main.py              → CLI usuario: solo `autofix batch`
+batch/runner.py      → Orquesta ejecución de múltiples bugs
+batch/executor.py    → Ejecuta un único bug dentro del contenedor
+```
+
+Esta separación es más clara: el CLI host solo orquesta batches; el runtime Docker ejecuta el módulo directamente sin pasar por argparse.
+
 ## Notas para futuro
 
 - Si se necesita ejecución ad-hoc en el futuro, usar `autofix batch` con un YAML single-case en lugar de resucitar `autofix run`.

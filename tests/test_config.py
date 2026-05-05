@@ -36,7 +36,6 @@ class LLMSettingsTests(unittest.TestCase):
             {
                 "LLM_PROVIDER": "openai",
                 "OPENAI_API_KEY": "openai-key",
-                "OPENAI_BASE_URL": "https://proxy.example/v1",
                 "LLM_MODEL": "gpt-4.1",
                 "LLM_TRACING_DISABLED": "false",
             }
@@ -44,7 +43,8 @@ class LLMSettingsTests(unittest.TestCase):
 
         self.assertEqual(settings.provider, ProviderType.OPENAI)
         self.assertEqual(settings.model, "gpt-4.1")
-        self.assertEqual(settings.base_url, "https://proxy.example/v1")
+        # Base URL is static per provider (OCP) and never overridden by env.
+        self.assertEqual(settings.base_url, "https://api.openai.com/v1")
         self.assertEqual(settings.max_turns, 3)  # max_turns always comes from batch config, not env
         self.assertFalse(settings.tracing_disabled)
 
@@ -70,8 +70,8 @@ class LLMSettingsTests(unittest.TestCase):
                 }
             )
 
-    def test_from_env_base_url_override(self) -> None:
-        """Verify that LLM_BASE_URL can override the provider default URL."""
+    def test_from_env_base_url_is_static(self) -> None:
+        """Base URL is static per provider and ignores env overrides (OCP)."""
         settings = LLMSettings.from_env(
             {
                 "LLM_PROVIDER": "ollama",
@@ -81,7 +81,8 @@ class LLMSettingsTests(unittest.TestCase):
         )
 
         self.assertEqual(settings.provider, ProviderType.OLLAMA)
-        self.assertEqual(settings.base_url, "http://remote.example:11500/v1")
+        # Static default; env override is intentionally ignored.
+        self.assertEqual(settings.base_url, DEFAULT_OLLAMA_BASE_URL)
         self.assertEqual(settings.model, "custom-model")
 
     def test_load_dotenv_values_parses_supported_lines(self) -> None:
