@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import unittest
-from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -13,6 +12,7 @@ from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentHandoffRecord,
     APRHandoffNote,
+    FacadeInputRecord,
     IterationRecord,
     ModelConfigDescriptor,
     RunDescriptor,
@@ -603,6 +603,70 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
             self.assertIn("summary: Bug in gcd calculation", content)
             self.assertIn("suspected_files: [", content)
             self.assertIn("confidence: 0.85", content)
+
+
+class FacadeInputRecordTests(unittest.TestCase):
+    def test_facade_input_record_creation(self) -> None:
+        record = FacadeInputRecord(
+            run_id="run-1",
+            iteration_id="run-1-it01",
+            iteration_index=1,
+            input_text="Fix the parser",
+            occurred_at="2026-01-01T00:00:00+00:00",
+        )
+        self.assertEqual(record.run_id, "run-1")
+        self.assertEqual(record.input_text, "Fix the parser")
+
+
+class JsonlFacadeInputTests(unittest.TestCase):
+    def test_jsonl_observer_writes_facade_input(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            results_dir = Path(tmp_dir)
+            observer = JsonlEventObserver(results_dir, "run-jsonl-input")
+
+            observer.on_facade_input(
+                record=FacadeInputRecord(
+                    run_id="run-jsonl-input",
+                    iteration_id="run-jsonl-input-it01",
+                    iteration_index=1,
+                    input_text="Fix the parser failure\n- step 1\n- step 2",
+                    occurred_at="2026-01-01T00:00:01+00:00",
+                )
+            )
+
+            content = observer.path.read_text(encoding="utf-8")
+            lines = [line for line in content.strip().split("\n") if line]
+            self.assertEqual(len(lines), 1)
+
+            event = json.loads(lines[0])
+            self.assertEqual(event["event"], "facade_input")
+            self.assertEqual(event["run_id"], "run-jsonl-input")
+            self.assertEqual(event["iteration_index"], 1)
+            self.assertIn("step 1", event["input_text"])
+
+
+class MarkdownLiveFacadeInputTests(unittest.TestCase):
+    def test_facade_input_shows_full_text_in_code_block(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            live_path = Path(tmp_dir) / "results" / "run-input" / "live.md"
+            observer = MarkdownLiveObserver(live_path)
+
+            observer.on_facade_input(
+                record=FacadeInputRecord(
+                    run_id="run-input",
+                    iteration_id="run-input-it02",
+                    iteration_index=2,
+                    input_text="line1\nline2\nline3",
+                    occurred_at="2026-01-01T00:00:00+00:00",
+                )
+            )
+
+            content = live_path.read_text(encoding="utf-8")
+            self.assertIn("### Facade input (iteration 2)", content)
+            self.assertIn("```", content)
+            self.assertIn("line1", content)
+            self.assertIn("line2", content)
+            self.assertIn("line3", content)
 
 
 if __name__ == "__main__":

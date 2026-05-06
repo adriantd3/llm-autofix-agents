@@ -8,6 +8,7 @@ from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
     AgentHandoffRecord,
+    FacadeInputRecord,
     FileChangeRecord,
     IterationRecord,
     ProviderCallRecord,
@@ -219,6 +220,19 @@ class MarkdownLiveObserver:
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         self._append(_format_handoff(record))
 
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
+        self._append(
+            "\n".join(
+                [
+                    "",
+                    f"### Facade input (iteration {record.iteration_index})",
+                    "```",
+                    record.input_text,
+                    "```",
+                ]
+            )
+        )
+
     def _append(self, text: str) -> None:
         with self._path.open("a", encoding="utf-8") as handler:
             handler.write(f"{text}\n")
@@ -262,6 +276,10 @@ class ConsoleObserver:
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         logger.info("[handoff] %s -> %s", record.from_agent_name, record.to_agent_name)
+
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
+        text = record.input_text[:200] + "..." if len(record.input_text) > 200 else record.input_text
+        logger.info("[facade_input it=%s] %s", record.iteration_index, text.replace("\n", " "))
 
 
 def _format_provider_call_record(record: ProviderCallRecord) -> str:

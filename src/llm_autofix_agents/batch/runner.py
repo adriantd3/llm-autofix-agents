@@ -117,7 +117,9 @@ class BatchRunner:
         if settings.capture_errors:
             error_output = self._capture_error_output_in_container(case)
 
-        prompt = generate_prompt(case, settings.prompt_template, error_output)
+        prompt = ""
+        if settings.prompt_template is not None:
+            prompt = generate_prompt(case, settings.prompt_template, error_output)
         agent_models = settings.llm.resolve_agent_models(settings.architecture)
         env = self._build_env(case, config, prompt, agent_models, batch_dir)
 
@@ -249,7 +251,6 @@ class BatchRunner:
             "RUN_BRANCH": "",
             "RUN_ARCHITECTURE": settings.architecture.value,
             "RUN_AGENT_MODELS": json.dumps(agent_models),
-            "RUN_BOOTSTRAP_PROMPT": prompt,
             "RUN_TEST_COMMAND": case.test_command,
             "LLM_PROVIDER": settings.llm.provider,
             "LLM_MODEL": settings.llm.model,
@@ -258,6 +259,8 @@ class BatchRunner:
             "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
             "AUTOFIX_INTERACTIVE": "false",
         }
+        if prompt:
+            env["RUN_BOOTSTRAP_PROMPT"] = prompt
         # Propagate API keys from host env + .env file (secrets only)
         dotenv_values = _load_dotenv_values(Path(".env"))
         combined_env = {**dotenv_values, **os.environ}
@@ -380,7 +383,6 @@ class BatchRunner:
         for bug in bugs:
             tc = dataset.resolve_test_command(bug)
             print(f"  - {bug.id} ({tc})")
-        print(f"\nPrompt template:\n{settings.prompt_template}")
         print(f"\nCapture errors: {settings.capture_errors}")
 
     def _log_bug_result(self, bug_id: str, result: BugRunResult, index: int, total: int) -> None:

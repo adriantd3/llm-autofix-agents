@@ -11,3 +11,4 @@
 - [x] T07: make_observable wrapper for FunctionTool + build_apr_tools
 - [x] T08: Handoff notes con input_type/on_handoff (APRHandoffInput, context var)
 - [x] T09: End-to-end integration + regression tests (209 tests pass)
+- [x] T10: Facade input event (FacadeInputRecord, on_facade_input en observers, record_facade_input en telemetry, emisión en IterationRunner, tests)

@@ -44,7 +44,7 @@ class RunArchitecture(StrEnum):
 class RunInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    prompt: str = Field(min_length=1)
+    prompt: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     target_repo: str | None = None
     test_command: str | None = None
@@ -52,10 +52,7 @@ class RunInput(BaseModel):
     @field_validator("prompt")
     @classmethod
     def _normalize_prompt(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("prompt cannot be empty")
-        return normalized
+        return value.strip()
 
 
 class TestResults(BaseModel):
@@ -127,15 +124,23 @@ class ContainerInstantiation(BaseModel):
     branch: str | None = None
     architecture: str = Field(min_length=1)
     agent_models: dict[str, str] = Field(min_length=1)
-    bootstrap_prompt: str = Field(min_length=1)
+    bootstrap_prompt: str | None = None
 
-    @field_validator("repository", "architecture", "bootstrap_prompt")
+    @field_validator("repository", "architecture")
     @classmethod
     def _normalize_non_empty(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
             raise ValueError("value cannot be empty")
         return normalized
+
+    @field_validator("bootstrap_prompt")
+    @classmethod
+    def _normalize_optional_prompt(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     @field_validator("branch")
     @classmethod
@@ -189,12 +194,13 @@ class ContainerInstantiation(BaseModel):
             normalized_agent_models[role] = model
 
         raw_branch = source_env.get("RUN_BRANCH", "").strip()
+        raw_prompt = source_env.get("RUN_BOOTSTRAP_PROMPT", "").strip()
         return cls(
             repository=source_env.get("RUN_REPOSITORY", ""),
             branch=raw_branch or None,
             architecture=source_env.get("RUN_ARCHITECTURE", ""),
             agent_models=normalized_agent_models,
-            bootstrap_prompt=source_env.get("RUN_BOOTSTRAP_PROMPT", ""),
+            bootstrap_prompt=raw_prompt or None,
         )
 
 

@@ -9,6 +9,7 @@ from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
     AgentHandoffRecord,
+    FacadeInputRecord,
     FileChangeRecord,
     IterationRecord,
     ProviderCallRecord,
@@ -87,3 +88,6 @@ class JsonlEventObserver:
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         self._append(_serialize_record(record, "agent_handoff"))
+
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
+        self._append(_serialize_record(record, "facade_input"))

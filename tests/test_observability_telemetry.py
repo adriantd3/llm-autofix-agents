@@ -8,6 +8,9 @@ class FakeObserver:
     def on_test_execution(self, *, record):
         self.test_records.append(record)
 
+    def on_facade_input(self, *, record):
+        pass
+
 
 def test_run_telemetry_records_test_execution() -> None:
     observer = FakeObserver()

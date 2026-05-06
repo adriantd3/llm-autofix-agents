@@ -74,6 +74,49 @@ class IterationRunnerTests(unittest.TestCase):
         self.assertEqual(telemetry.iteration_telemetry.test_execution_calls, 1)
         mock_write_patch.assert_called_once_with(cfg=cfg, iteration=1, diff="")
 
+    def test_run_records_facade_input(self) -> None:
+        agent_runner = _CapturingAgentRunner()
+        workspace = _StubWorkspaceManager(
+            changes=WorkspaceChangeSet(
+                modified_files=[],
+                added_files=[],
+                deleted_files=[],
+                untracked_files=[],
+                diff="",
+                diff_excludes_untracked=False,
+            )
+        )
+        telemetry = _StubRunTelemetry()
+        cfg = _build_config(telemetry=telemetry)
+        state = RunState()
+
+        test_execution = TestExecution(
+            exit_code=1,
+            timed_out=False,
+            output="FAILED (failures=1)",
+            signature="sig-1",
+        )
+
+        runner = IterationRunner(
+            agent_runner=agent_runner,
+            workspace=workspace,
+            output_builder=_StubOutputBuilder(),
+        )
+
+        with patch.object(IterationRunner, "_write_iteration_patch"):
+            with patch(
+                "llm_autofix_agents.flow.execution.tests.run_test_command",
+                return_value=test_execution,
+            ):
+                runner.run(
+                    run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
+                    cfg=cfg,
+                    state=state,
+                    iteration=1,
+                )
+
+        self.assertEqual(telemetry.iteration_telemetry.facade_input_record, "Fix parser failure")
+
     def test_run_writes_iteration_patch_file(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             repo_root = Path(tmp_dir)
@@ -228,12 +271,16 @@ class _StubIterationTelemetry:
         self.finish_called = False
         self.test_execution_calls = 0
         self.finished_result: IterationTelemetryResult | None = None
+        self.facade_input_record: Any | None = None
 
     def record_test_execution(self, **kwargs: Any) -> None:
         self.test_execution_calls += 1
 
     def record_file_changes(self, **kwargs: Any) -> None:
         return None
+
+    def record_facade_input(self, input_text: str) -> None:
+        self.facade_input_record = input_text
 
     def finish_iteration(self, *, result: IterationTelemetryResult) -> None:
         self.finish_called = True

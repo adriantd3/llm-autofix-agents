@@ -144,17 +144,17 @@ class GlobalSettings(BaseModel):
     llm: LLMSettings
     max_iterations: int = 6
     timeout_seconds: int = 300
-    prompt_template: str = Field(min_length=1)
+    prompt_template: str | None = None
     capture_errors: bool = True
     cleanup_workspaces: bool = False
 
     @field_validator("prompt_template")
     @classmethod
-    def _strip_required_text(cls, value: str) -> str:
+    def _strip_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
-        if not normalized:
-            raise ValueError("prompt_template cannot be empty")
-        return normalized
+        return normalized or None
 
 
 class BatchConfig(BaseModel):

@@ -8,6 +8,7 @@ from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
     AgentHandoffRecord,
+    FacadeInputRecord,
     FileChangeRecord,
     IterationRecord,
     ProviderCallRecord,
@@ -46,6 +47,8 @@ class RunObserver(Protocol):
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None: ...
 
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None: ...
+
 
 class NullObserver:
     def on_run_started(self, *, run: RunDescriptor, started_at: str) -> None:
@@ -83,6 +86,9 @@ class NullObserver:
         del record
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
+        del record
+
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
         del record
 
 
@@ -137,6 +143,9 @@ class CompositeObserver:
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         self._dispatch("on_agent_handoff", record=record)
+
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
+        self._dispatch("on_facade_input", record=record)
 
     def _dispatch(self, event_name: str, **kwargs: object) -> None:
         for observer in self._observers:
@@ -197,3 +206,7 @@ class SQLiteObserver:
 
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         self._store.insert_agent_handoff(record)
+
+    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
+        # Intentionally not persisted to SQLite; live.md and events.jsonl only.
+        del record

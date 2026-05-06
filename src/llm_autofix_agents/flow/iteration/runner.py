@@ -79,6 +79,7 @@ class IterationRunner:
             iteration_telemetry=iteration_telemetry,
             agent=agent,
         )
+        iteration_telemetry.record_facade_input(input_text=agent_context.user_input)
         agent_result = self.agent_runner.run_agent(
             context=agent_context,
             execution_index=1,
@@ -391,6 +392,4 @@ def render_final_message(proposal: AgentFixIterationRecord) -> str:
         f"confidence: {proposal.confidence:.3f}",
         f"changed_files: {files}",
     ]
-    if proposal.notes:
-        lines.append(f"notes: {proposal.notes}")
     return "\n".join(lines)

@@ -147,6 +147,7 @@
   - Handoff notes: `APRHandoffInput` (Pydantic) con summary, evidence, suspected_files, next_focus, confidence. Capturado vía `handoff(input_type=..., on_handoff=...)` y context var `pending_handoff_note`.
   - SQLite migration v4→v5: 9 columnas nuevas en tool_calls + handoff_note_json en agent_handoffs.
   - MarkdownLiveObserver enriquecido: `[agent] tool -> status (Xs)` y handoff notes con summary/suspected_files/confidence.
+  - Facade input event: `FacadeInputRecord` emitido por iteración tras construir `agent_context.user_input`; visible en `live.md` (bloque código completo) y `events.jsonl`; **no persistido en SQLite**.
   - 209 tests pasando, lint limpio.
 
 ## En curso

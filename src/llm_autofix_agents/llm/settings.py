@@ -86,7 +86,7 @@ class LLMSettings(BaseModel):
         api_key_env_var = f"{provider.value.upper()}_API_KEY"
         api_key_value = values.get(api_key_env_var, "").strip()
         if not api_key_value:
-            if provider in (ProviderType.OPENAI, ProviderType.GEMINI, ProviderType.OPENCODE_GO  ):
+            if provider in (ProviderType.OPENAI, ProviderType.GEMINI, ProviderType.OPENCODE_GO):
                 raise ValueError(f"{api_key_env_var} is required for {provider.value} provider")
             # Ollama has a fallback API key
             api_key_value = "ollama"

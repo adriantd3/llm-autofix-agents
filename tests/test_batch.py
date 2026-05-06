@@ -231,7 +231,7 @@ class TestGlobalSettings(unittest.TestCase):
         settings = GlobalSettings(
             architecture=RunArchitecture.MONO_AGENT,
             llm=LLMSettings(model="qwen3.5:9b"),
-            prompt_template="Fix {bug_id}",
+
         )
         self.assertEqual(settings.architecture, RunArchitecture.MONO_AGENT)
         self.assertEqual(settings.max_iterations, 6)
@@ -241,7 +241,7 @@ class TestGlobalSettings(unittest.TestCase):
         settings = GlobalSettings(
             architecture="mono_agent",
             llm={"model": "test"},
-            prompt_template="Fix {bug_id}",
+
         )
         self.assertEqual(settings.max_iterations, 6)
         self.assertEqual(settings.timeout_seconds, 300)
@@ -275,7 +275,7 @@ class TestBatchConfig(unittest.TestCase):
             "global": {
                 "architecture": "mono_agent",
                 "llm": {"model": "qwen3.5:9b"},
-                "prompt_template": "Fix {bug_id}",
+
             },
             "bugs": bugs,
         }
@@ -475,7 +475,7 @@ class TestQuixBugsAdapter(unittest.TestCase):
             defaults["batch"] = GlobalSettings(
                 architecture=RunArchitecture.MONO_AGENT,
                 llm=LLMSettings(model="test"),
-                prompt_template="Fix {bug_id}",
+    
             )
         return DatasetPreparationContext(**defaults)
 
@@ -524,7 +524,7 @@ class TestQuixBugsAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=Path("/tmp/project"),
@@ -607,7 +607,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=project_dir,
@@ -670,7 +670,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
@@ -707,7 +707,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
@@ -758,7 +758,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
@@ -801,7 +801,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
@@ -852,7 +852,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 batch=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                 ),
                 batch_id="batch-test",
                 project_dir=Path(tmp_dir),
@@ -1095,7 +1095,7 @@ class TestBatchRunnerCleanup(unittest.TestCase):
                 global_settings=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                     cleanup_workspaces=False,
                 ),
                 bugs=["gcd"],
@@ -1131,7 +1131,7 @@ class TestBatchRunnerCleanup(unittest.TestCase):
                 global_settings=GlobalSettings(
                     architecture=RunArchitecture.MONO_AGENT,
                     llm=LLMSettings(model="test"),
-                    prompt_template="Fix {bug_id}",
+        
                     cleanup_workspaces=True,
                 ),
                 bugs=["gcd"],

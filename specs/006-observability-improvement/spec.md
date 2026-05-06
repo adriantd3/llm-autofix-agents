@@ -42,6 +42,16 @@ Mejorar la observabilidad del sistema sin sobrecomplicarlo, manteniendo el dise�
 - `build_apr_tools()` en `profiles.py` envuelve todos los tools con `make_observable`.
 - `APRRunHooks.on_tool_end` lee `current_tool_args` para `args_summary_json`.
 
+### P8: Facade input event
+- Nuevo `FacadeInputRecord` (dataclass): `run_id`, `iteration_id`, `iteration_index`, `input_text`, `occurred_at`.
+- `RunObserver.on_facade_input` añadido al protocolo; implementado en `NullObserver`, `CompositeObserver`, `MarkdownLiveObserver`, `ConsoleObserver`, `JsonlEventObserver`.
+- `SQLiteObserver.on_facade_input` es no-op intencional: **no se persiste en SQLite**.
+- `IterationTelemetry.record_facade_input(input_text: str)` emite el evento.
+- `IterationRunner` emite el evento inmediatamente después de construir `agent_context.user_input`.
+- `MarkdownLiveObserver` renderiza el texto completo en un bloque de código markdown.
+- `JsonlEventObserver` escribe el JSON completo en `events.jsonl` con `"event": "facade_input"`.
+- `ConsoleObserver` loguea truncado a 200 caracteres.
+
 ## Archivos nuevos
 - `observability/jsonl_observer.py`
 - `observability/tool_summaries.py`

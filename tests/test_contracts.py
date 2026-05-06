@@ -48,13 +48,25 @@ class ContractsTests(unittest.TestCase):
                 "RUN_BRANCH": "main",
                 "RUN_ARCHITECTURE": "mono_agent",
                 "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
-                "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
             }
         )
         self.assertEqual(instantiation.repository, "quixbugs")
         self.assertEqual(instantiation.branch, "main")
         self.assertEqual(instantiation.architecture, "mono_agent")
         self.assertEqual(instantiation.agent_models, {"main": "llama3.1:8b"})
+        self.assertIsNone(instantiation.bootstrap_prompt)
+
+    def test_container_instantiation_with_optional_prompt(self) -> None:
+        instantiation = ContainerInstantiation.from_env(
+            {
+                "RUN_REPOSITORY": "quixbugs",
+                "RUN_BRANCH": "main",
+                "RUN_ARCHITECTURE": "mono_agent",
+                "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
+                "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
+            }
+        )
+        self.assertEqual(instantiation.bootstrap_prompt, "Fix failing tests with minimal changes.")
 
     def test_container_instantiation_rejects_invalid_models_json(self) -> None:
         with self.assertRaisesRegex(ValueError, "RUN_AGENT_MODELS must be valid JSON"):
@@ -64,7 +76,6 @@ class ContractsTests(unittest.TestCase):
                     "RUN_BRANCH": "main",
                     "RUN_ARCHITECTURE": "mono_agent",
                     "RUN_AGENT_MODELS": "not-json",
-                    "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                 }
             )
 
@@ -76,7 +87,6 @@ class ContractsTests(unittest.TestCase):
                     "RUN_BRANCH": "main",
                     "RUN_ARCHITECTURE": "mono-agent",
                     "RUN_AGENT_MODELS": '{"main":"llama3.1:8b"}',
-                    "RUN_BOOTSTRAP_PROMPT": "Fix failing tests with minimal changes.",
                 }
             )
 

@@ -7,6 +7,7 @@ from llm_autofix_agents.observability import APRRunHooks, RunObserver
 from llm_autofix_agents.observability.models import (
     AgentDescriptor,
     AgentExecutionRecord,
+    FacadeInputRecord,
     FileChangeRecord,
     IterationRecord,
     ModelConfigDescriptor,
@@ -271,6 +272,17 @@ class IterationTelemetry:
                     agent_execution_id=agent_execution_id,
                 )
             )
+
+    def record_facade_input(self, input_text: str) -> None:
+        self.observer.on_facade_input(
+            record=FacadeInputRecord(
+                run_id=self.run_id,
+                iteration_id=self.iteration_id,
+                iteration_index=self.iteration_index,
+                input_text=input_text,
+                occurred_at=utc_now_iso(),
+            )
+        )
 
 
 @dataclass(frozen=True)

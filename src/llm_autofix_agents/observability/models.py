@@ -354,6 +354,15 @@ class APRHandoffNote:
 
 
 @dataclass(frozen=True)
+class FacadeInputRecord:
+    run_id: str
+    iteration_id: str
+    iteration_index: int
+    input_text: str
+    occurred_at: str
+
+
+@dataclass(frozen=True)
 class AgentHandoffRecord:
     handoff_id: str
     run_id: str

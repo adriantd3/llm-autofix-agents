@@ -13,6 +13,7 @@ class FakeObserver:
         self.agent_execution_finished = []
         self.iteration_started = []
         self.provider_call_records = []
+        self.facade_input_records = []
 
     def on_test_execution(self, *, record):
         self.test_records.append(record)
@@ -31,6 +32,9 @@ class FakeObserver:
 
     def on_provider_call_event(self, *, record):
         self.provider_call_records.append(record)
+
+    def on_facade_input(self, *, record):
+        self.facade_input_records.append(record)
 
 
 def test_file_change_telemetry_set_registers_correct_types() -> None:

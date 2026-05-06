@@ -18,6 +18,9 @@ class _CaptureObserver:
     def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
         self.handoffs.append(record)
 
+    def on_facade_input(self, *, record) -> None:
+        pass
+
 
 class _FakeAgent:
     def __init__(self, name: str) -> None:

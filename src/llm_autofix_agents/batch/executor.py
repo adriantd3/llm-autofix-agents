@@ -29,11 +29,7 @@ def main() -> int:
         return 2
 
     metadata: dict[str, object] = {"source": "batch-executor"}
-    fallback_prompt = (
-        os.environ.get("RUN_BOOTSTRAP_PROMPT", _DEFAULT_AGENT_PROMPT).strip()
-        or _DEFAULT_AGENT_PROMPT
-    )
-    prompt = instantiation.bootstrap_prompt or fallback_prompt
+    prompt = instantiation.bootstrap_prompt or ""
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
     metadata.update(
         {
@@ -108,7 +104,6 @@ def _has_runtime_contract_env() -> bool:
         "RUN_BRANCH",
         "RUN_ARCHITECTURE",
         "RUN_AGENT_MODELS",
-        "RUN_BOOTSTRAP_PROMPT",
     )
     return any(_resolve_optional_text(os.environ.get(key)) is not None for key in keys)
 
