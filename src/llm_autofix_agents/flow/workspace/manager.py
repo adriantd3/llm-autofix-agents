@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from llm_autofix_agents.flow.errors import WorkspaceError
@@ -57,6 +58,11 @@ class WorkspaceManager:
 
     def restore_all_changes(self, *, cfg: RunConfig, logs: list[str]) -> None:
         try:
+            if _git._is_project_repo(cfg.repo_root) and not os.environ.get("AUTOFIX_ALLOW_RESTORE"):
+                raise RuntimeError(
+                    f"Blocked restore_all_changes in project repository: {cfg.repo_root}. "
+                    "Use an isolated workspace or set AUTOFIX_ALLOW_RESTORE=1 (only in sandboxed environments)."
+                )
             _git.restore_all_changes(cfg.repo_root)
             logs.append("workspace_restored_after_retryable_validation")
         except Exception as exc:  # noqa: BLE001

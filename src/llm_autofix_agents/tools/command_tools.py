@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 from agents import RunContextWrapper, function_tool
 
-from llm_autofix_agents.flow.execution import CommandExecutor
+from llm_autofix_agents.flow.execution.commands import CommandExecutor
 from llm_autofix_agents.tools.context import APRToolContext, get_tool_context
 from llm_autofix_agents.tools.paths import resolve_path
 from llm_autofix_agents.tools.serialization import json_result

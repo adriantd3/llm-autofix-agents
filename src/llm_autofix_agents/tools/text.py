@@ -116,20 +116,25 @@ def _collapse_repeated_lines(lines: list[str], *, max_repeats: int = 3) -> list[
 def _truncate_middle(text: str, *, max_chars: int) -> str:
     marker_template = "[truncated {count} chars]"
     marker = marker_template.format(count=len(text))
-    if max_chars <= len(marker) + 2:
+    overhead = len(marker) + 2
+    if max_chars <= overhead:
         return text[-max_chars:]
 
-    for _ in range(2):
-        head_len = max(1, (max_chars - len(marker)) // 2)
-        tail_len = max_chars - len(marker) - head_len
-        if tail_len < 1:
-            tail_len = 1
-            head_len = max_chars - len(marker) - tail_len
-        if head_len < 1:
-            head_len = 1
-            tail_len = max_chars - len(marker) - head_len
+    head_len = max(1, (max_chars - overhead) // 2)
+    tail_len = max_chars - overhead - head_len
+    if tail_len < 1:
+        tail_len = 1
+        head_len = max(1, max_chars - overhead - tail_len)
+
+    for _ in range(3):
         omitted = len(text) - head_len - tail_len
         marker = marker_template.format(count=omitted)
+        overhead = len(marker) + 2
+        available = max_chars - overhead
+        if available < 2:
+            return text[-max_chars:]
+        head_len = max(1, available // 2)
+        tail_len = max(1, available - head_len)
 
     return f"{text[:head_len]}\n{marker}\n{text[-tail_len:]}"
 

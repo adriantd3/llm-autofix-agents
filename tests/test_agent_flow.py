@@ -35,12 +35,17 @@ class AgentFlowTests(unittest.TestCase):
             "llm_autofix_agents.flow.workspace.manager._git.is_git_repository",
             return_value=False,
         )
+        self._restore_all_changes_patcher = patch(
+            "llm_autofix_agents.flow.workspace.git.restore_all_changes",
+        )
         self._observability_config_patcher.start()
         self._git_repo_patcher.start()
+        self._restore_all_changes_patcher.start()
 
     def tearDown(self) -> None:
         self._observability_config_patcher.stop()
         self._git_repo_patcher.stop()
+        self._restore_all_changes_patcher.stop()
         self._tmp_dir.cleanup()
 
     def test_run_agent_baseline_success(self) -> None:
@@ -517,10 +522,15 @@ class AgentFlowStatusTests(unittest.TestCase):
                 live_log_enabled=False,
             ),
         )
+        self._restore_all_changes_patcher = patch(
+            "llm_autofix_agents.flow.workspace.git.restore_all_changes",
+        )
         self._obs_config_patcher.start()
+        self._restore_all_changes_patcher.start()
 
     def tearDown(self) -> None:
         self._obs_config_patcher.stop()
+        self._restore_all_changes_patcher.stop()
         self._tmp_dir.cleanup()
 
     @patch("llm_autofix_agents.flow.workspace.manager._git.is_git_repository", return_value=False)

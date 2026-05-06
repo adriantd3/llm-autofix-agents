@@ -60,6 +60,17 @@ def main() -> int:
             )
             return 2
 
+    max_turns_env = _resolve_optional_text(os.environ.get("RUN_MAX_TURNS"))
+    if max_turns_env is not None:
+        try:
+            metadata["max_turns"] = int(max_turns_env)
+        except ValueError:
+            logger.error(
+                "RUN_MAX_TURNS must be an integer, got: %s",
+                max_turns_env,
+            )
+            return 2
+
     run_input = RunInput(
         prompt=prompt,
         metadata=metadata,

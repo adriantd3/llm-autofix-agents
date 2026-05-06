@@ -194,3 +194,11 @@
 - Alternativa recomendada: (1) crear un map estático `PROVIDER_DEFAULT_URLS = {"ollama": ..., "openai": ..., "gemini": ...}`, (2) usar lookups simples en `from_env()` en lugar de condicionales, (3) delegar configuración específica al map y resolver valores de forma centralizada.
 - Beneficio aplicado: OCP logrado (agregar provider solo requiere agregar entrada al map), DIP mejorado (no dependencias de provider-specific logic), SRP reforzado (cada part tiene una responsabilidad clara).
 - Regla preventiva para futuras specs: cuando detectes múltiples `if variant` en lógica compartida, prefiere un map + lookup o estrategia sobre condicionales; esta es una señal de que la configuración debería estar centralizada.
+
+## 2026-05-06 (proteger el repo de desarrollo de operaciones destructivas)
+- Contexto: `make test` ejecutaba `unittest` y en validaciones retryable el flujo llamaba a `restore_all_changes()` (git checkout + git clean -fd) sobre `cfg.repo_root`, que por defecto apuntaba al workspace local del desarrollador.
+- Anti-patron detectado: permitir que código de producción ejecute operaciones destructivas de Git en el repositorio de desarrollo sin guardrail.
+- Que no hay que hacer: (1) dejar que `repo_root` por defecto sea `Path(".")` en tests o ejecuciones locales, (2) no proteger `restore_all_changes` contra ejecución en el proyecto actual, (3) confiar únicamente en mocks para evitar daños colaterales en tests.
+- Por que estuvo mal: un solo test que llegue al flujo real puede borrar el working directory del desarrollador (archivos no commiteados, cambios en progreso, etc.), con pérdida de trabajo irreversible.
+- Alternativa recomendada: (1) **Guardrail de producción**: en `restore_all_changes`, detectar si el target es el repo del proyecto (via `__file__` del paquete) y bloquear con `RuntimeError` salvo override explícito (`AUTOFIX_ALLOW_RESTORE=1`), (2) **Aislamiento en tests**: usar `tempfile.mkdtemp()` como `repo_root` por defecto en helpers de test, (3) **Mock defensivo**: mockear `restore_all_changes` en `setUp` de cualquier test de integración que use `WorkspaceManager` real.
+- Regla preventiva para futuras specs: cualquier operación destrutiva sobre filesystem/Git debe tener (a) guardrail que bloquee el proyecto de desarrollo, (b) aislamiento por defecto en tests, y (c) mocks defensivos en la capa de integración.

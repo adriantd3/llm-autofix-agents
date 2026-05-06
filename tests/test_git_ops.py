@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from unittest.mock import patch
+
 from llm_autofix_agents.flow.workspace.git import (
     build_temp_branch_name,
     create_temp_branch,
     current_branch,
     delete_branch,
     is_git_repository,
+    restore_all_changes,
     restore_original_branch,
 )
 
@@ -75,6 +78,36 @@ class GitOpsTests(unittest.TestCase):
         if completed.returncode != 0:
             raise AssertionError(f"git {' '.join(args)} failed: {completed.stderr}")
         return completed.stdout
+
+    def test_restore_all_changes_blocks_on_project_repo(self) -> None:
+        import llm_autofix_agents
+
+        project_root = Path(llm_autofix_agents.__file__).resolve().parent.parent
+        with self.assertRaises(RuntimeError):
+            restore_all_changes(project_root)
+
+    def test_restore_all_changes_allows_override_via_env(self) -> None:
+        import llm_autofix_agents
+
+        project_root = Path(llm_autofix_agents.__file__).resolve().parent.parent
+        with patch.dict("os.environ", {"AUTOFIX_ALLOW_RESTORE": "1"}):
+            with patch("llm_autofix_agents.flow.workspace.git._run_git") as mock_run_git:
+                mock_run_git.return_value = subprocess.CompletedProcess(
+                    args=["git", "checkout", "--", "."],
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                )
+                restore_all_changes(project_root)
+                mock_run_git.assert_called()
+
+    def test_restore_all_changes_succeeds_in_isolated_repo(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            repo = Path(tmp_dir)
+            self._init_git_repo(repo)
+            (repo / "dirty.py").write_text("dirty\n", encoding="utf-8")
+            restore_all_changes(repo)
+            self.assertFalse((repo / "dirty.py").exists())
 
 
 if __name__ == "__main__":

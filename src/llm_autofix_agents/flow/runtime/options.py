@@ -28,6 +28,15 @@ def resolve_max_iterations(metadata: dict[str, Any]) -> int:
     return value
 
 
+def resolve_max_turns(metadata: dict[str, Any]) -> int:
+    value = metadata.get("max_turns")
+    if value is None:
+        return 3
+    if not isinstance(value, int) or value < 1 or value > 50:
+        raise ValueError("metadata.max_turns must be 1-50")
+    return value
+
+
 def resolve_tool_profile(metadata: dict[str, Any]) -> str:
     value = metadata.get("tool_profile")
     if value is None:

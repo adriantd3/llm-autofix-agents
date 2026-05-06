@@ -252,6 +252,7 @@ class BatchRunner:
             "RUN_ARCHITECTURE": settings.architecture.value,
             "RUN_AGENT_MODELS": json.dumps(agent_models),
             "RUN_TEST_COMMAND": case.test_command,
+            "RUN_MAX_TURNS": str(settings.llm.max_turns),
             "LLM_PROVIDER": settings.llm.provider,
             "LLM_MODEL": settings.llm.model,
             "AUTOFIX_MAX_ITERATIONS": str(settings.max_iterations),

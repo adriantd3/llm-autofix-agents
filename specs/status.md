@@ -150,6 +150,13 @@
   - MarkdownLiveObserver enriquecido: `[agent] tool -> status (Xs)` y handoff notes con summary/suspected_files/confidence.
   - Facade input event: `FacadeInputRecord` emitido por iteración tras construir `agent_context.user_input`; visible en `live.md` (bloque código completo) y `events.jsonl`; **no persistido en SQLite**.
   - 209 tests pasando, lint limpio.
+- **Guardrail crítico aplicado**: protección contra `git checkout -- .` + `git clean -fd` en el repo de desarrollo.
+  - `restore_all_changes` en `git.py` y `WorkspaceManager.restore_all_changes` en `manager.py` bloquean la operación si el target es el proyecto `llm_autofix_agents` (detectado vía `_is_project_repo`).
+  - Override explícito vía `AUTOFIX_ALLOW_RESTORE=1` para entornos sandboxed/contenedores.
+  - Tests de `test_runner.py` ahora usan `tempfile.mkdtemp()` como `repo_root` por defecto (nunca `Path(".")`).
+  - Tests de flujo (`test_agent_flow.py`) mockean `restore_all_changes` globalmente en `setUp` para aislar completamente.
+  - Tests de guardrail añadidos en `test_git_ops.py`: bloqueo en repo del proyecto, override por env, y operación normal en repo aislado.
+  - 211 tests pasando (2 fallos preexistentes no relacionados).
 
 ## En curso
 - Spec activa: specs/006-observability-improvement/spec.md (implementada)

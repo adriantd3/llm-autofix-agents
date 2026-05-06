@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -86,7 +87,30 @@ def restore_files(repo_root: Path, files: list[str]) -> None:
         raise RuntimeError(f"Failed to restore files in {repo_root}: {result.stderr.strip() or 'unknown error'}")
 
 
+def _project_root() -> Path:
+    import llm_autofix_agents
+
+    return Path(llm_autofix_agents.__file__).resolve().parent.parent
+
+
+def _is_project_repo(repo_root: Path) -> bool:
+    project = _project_root()
+    resolved = repo_root.resolve()
+    if resolved == project:
+        return True
+    try:
+        resolved.relative_to(project)
+        return True
+    except ValueError:
+        return False
+
+
 def restore_all_changes(repo_root: Path) -> None:
+    if _is_project_repo(repo_root) and not os.environ.get("AUTOFIX_ALLOW_RESTORE"):
+        raise RuntimeError(
+            f"Blocked restore_all_changes in project repository: {repo_root}. "
+            "Use an isolated workspace or set AUTOFIX_ALLOW_RESTORE=1 (only in sandboxed environments)."
+        )
     result = _run_git(repo_root, ["checkout", "--", "."])
     if result.returncode != 0:
         raise RuntimeError(f"Failed to restore working directory: {result.stderr.strip() or 'unknown error'}")

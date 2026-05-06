@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
@@ -302,7 +303,7 @@ def _build_config(
     live_observer: MarkdownLiveObserver | None = None,
 ) -> RunConfig:
     settings = LLMSettings(provider=ProviderType.OLLAMA, model="test")
-    resolved_repo_root = repo_root or Path(".")
+    resolved_repo_root = repo_root or Path(tempfile.mkdtemp())
     return RunConfig(
         run_id="run-123",
         run_agent_id="agent-123",
