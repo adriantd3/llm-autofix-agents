@@ -68,6 +68,13 @@
   - Flujo claro ahora: solo `autofix batch <config.yaml>`.
   - Tests actualizados: 4 tests de `_run_run` removidos; nuevos tests para `batch` command.
   - **Corrección crítica post-SPEC-008**: los Dockerfiles aún usaban `autofix run` como CMD, causando infra_failures en batch. Se creó `batch/executor.py` como entrypoint puro para contenedores y se actualizaron ambos Dockerfiles. `BatchRunner._docker_run` ahora pasa el comando explícitamente, desacoplando el runner del CMD del Dockerfile.
+- **Limpieza de variables de entorno aplicada**: `.env` reducido a solo secretos (API keys).
+  - Eliminado `env_file` de `docker-compose.yml`; el contenedor ya no carga `.env` silenciosamente.
+  - `BatchRunner._build_env()` construye el env dict limpio desde cero, sin `os.environ.copy()`.
+  - Solo se propagan API keys del host (`*API_KEY*`).
+  - `BatchRunner._docker_run()` eliminó el filtro de prefijos; pasa todo el env dict explícitamente (OCP compliant).
+  - Eliminadas del `.env.example`: `LLM_PROVIDER`, `LLM_MODEL`, `RUN_*`, `AUTOFIX_MAX_ITERATIONS`, `AUTOFIX_RESULTS_DIR`, `AUTOFIX_OBSERVABILITY_DB`, `AUTOFIX_INTERACTIVE`.
+  - Fuente de verdad única: batch YAML config para todo excepto secretos.
 
 
 - Hardening de flujo aplicado: import roto en `agent_flow` corregido hacia `flow.orchestrator`, `IterationRunner` dividido en colaboradores (`iteration/context_builder`, `iteration/recorder`, `iteration/decision`), `RunInitializer` desacoplado con `RunRegistration`, ciclo de ejecucion de agente extraido a `flow/agent_execution`, `WorkspaceChangeSet` enriquecido (added/modified/deleted/untracked + `diff_complete`), clasificacion de errores de flujo incorporada y `RunOutputBuilder` reforzado con copias defensivas.

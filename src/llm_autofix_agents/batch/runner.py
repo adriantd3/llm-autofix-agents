@@ -22,6 +22,7 @@ from llm_autofix_agents.batch.prompt import generate_prompt
 from llm_autofix_agents.batch.summary import BatchSummary, BugRunResult, new_batch_id
 from llm_autofix_agents.datasets.base import DatasetPreparationContext, PreparedExecutionCase
 from llm_autofix_agents.datasets.registry import get as get_adapter
+from llm_autofix_agents.llm.settings import _load_dotenv_values
 
 logger = logging.getLogger(__name__)
 
@@ -220,19 +221,9 @@ class BatchRunner:
             "--rm",
             "-T",
         ]
+        # env is already curated by _build_env(); pass everything explicitly.
         for key, value in sorted(env.items()):
-            if key.startswith(
-                (
-                    "RUN_",
-                    "LLM_",
-                    "AUTOFIX_",
-                    "OPENAI_",
-                    "GEMINI_",
-                    "OLLAMA_",
-                    "OPENCODE_GO_",
-                )
-            ):
-                cmd.extend(["-e", f"{key}={value}"])
+            cmd.extend(["-e", f"{key}={value}"])
         cmd.append(service)
         cmd.extend(["uv", "run", "python", "-m", "llm_autofix_agents.batch.executor"])
         return subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=str(self.project_dir))
@@ -245,27 +236,34 @@ class BatchRunner:
         agent_models: dict[str, str],
         batch_dir: Path,
     ) -> dict[str, str]:
+        """Build a clean, explicit environment dict for the container.
+
+        No host env pollution — only batch config + curated API keys.
+        """
         settings = config.global_settings
         batch_name = batch_dir.name
-        env = os.environ.copy()
-        env.update(
-            {
-                "HOST_UID": str(os.getuid()),
-                "HOST_GID": str(os.getgid()),
-                "RUN_REPOSITORY": case.container_workspace,
-                "RUN_BRANCH": "",
-                "RUN_ARCHITECTURE": settings.architecture.value,
-                "RUN_AGENT_MODELS": json.dumps(agent_models),
-                "RUN_BOOTSTRAP_PROMPT": prompt,
-                "RUN_TEST_COMMAND": case.test_command,
-                "LLM_PROVIDER": settings.llm.provider,
-                "LLM_MODEL": settings.llm.model,
-                "AUTOFIX_MAX_ITERATIONS": str(settings.max_iterations),
-                "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
-                "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
-                "AUTOFIX_INTERACTIVE": "false",
-            }
-        )
+        env: dict[str, str] = {
+            "HOST_UID": str(os.getuid()),
+            "HOST_GID": str(os.getgid()),
+            "RUN_REPOSITORY": case.container_workspace,
+            "RUN_BRANCH": "",
+            "RUN_ARCHITECTURE": settings.architecture.value,
+            "RUN_AGENT_MODELS": json.dumps(agent_models),
+            "RUN_BOOTSTRAP_PROMPT": prompt,
+            "RUN_TEST_COMMAND": case.test_command,
+            "LLM_PROVIDER": settings.llm.provider,
+            "LLM_MODEL": settings.llm.model,
+            "AUTOFIX_MAX_ITERATIONS": str(settings.max_iterations),
+            "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
+            "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
+            "AUTOFIX_INTERACTIVE": "false",
+        }
+        # Propagate API keys from host env + .env file (secrets only)
+        dotenv_values = _load_dotenv_values(Path(".env"))
+        combined_env = {**dotenv_values, **os.environ}
+        for key, value in combined_env.items():
+            if "API_KEY" in key and value:
+                env[key] = value
         return env
 
     def _parse_result(
