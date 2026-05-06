@@ -25,6 +25,7 @@ class IterationInputTests(unittest.TestCase):
         self.assertIn("autonomous software repair agent", user_input)
         self.assertIn("FAILED test_gcd.py::test_gcd_case", user_input)
         self.assertIn("python_testcases/test_gcd.py", user_input)
+        self.assertIn("Compact test output:", user_input)
         self.assertNotIn("legacy prompt should not be primary", user_input)
 
     def test_first_iteration_includes_critical_rules(self) -> None:

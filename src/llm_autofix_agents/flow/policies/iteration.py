@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from llm_autofix_agents.flow.models import TestExecution
+from llm_autofix_agents.tools.text import compact_test_output
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
 _FAILURE_DRIVEN_INTRO = (
@@ -16,7 +17,7 @@ _FAILURE_DRIVEN_INTRO = (
     "- Plan your next 2-3 tool calls before making any call.\n\n"
     "You must use tools for evidence; do not report edits or passing tests without tool outputs."
 )
-_MAX_BASELINE_OUTPUT_CHARS = 12_000
+_MAX_BASELINE_OUTPUT_CHARS = 4000
 
 
 _VALIDATION_FEEDBACK_TEMPLATE = (
@@ -81,7 +82,7 @@ def _build_first_iteration_input(
         return None
 
     command = (test_command or "").strip() or "<not provided>"
-    output = _truncate_text(baseline_test_execution.output, _MAX_BASELINE_OUTPUT_CHARS)
+    output = compact_test_output(baseline_test_execution.output, max_chars=_MAX_BASELINE_OUTPUT_CHARS)
 
     feedback_prefix = ""
     if validation_feedback:
@@ -95,15 +96,9 @@ def _build_first_iteration_input(
         f"- exit_code: {baseline_test_execution.exit_code}\n"
         f"- timed_out: {baseline_test_execution.timed_out}\n"
         f"- signature: {baseline_test_execution.signature}\n\n"
-        "Test output:\n"
+        "Compact test output:\n"
         f"{output}"
     )
-
-
-def _truncate_text(text: str, max_chars: int) -> str:
-    if len(text) <= max_chars:
-        return text
-    return f"{text[:max_chars]}\n\n[truncated to {max_chars} chars]"
 
 
 def is_no_progress(

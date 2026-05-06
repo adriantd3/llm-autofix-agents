@@ -27,6 +27,113 @@ def truncate(text: str, limit: int) -> tuple[str, bool]:
     return text[:limit], True
 
 
+def compact_test_output(text: str, max_chars: int = 4000) -> str:
+    if max_chars <= 0:
+        return ""
+    if not text:
+        return text
+
+    lines = text.splitlines()
+    lines = _collapse_repeated_blocks(lines)
+    lines = _collapse_repeated_lines(lines)
+    compacted = "\n".join(lines)
+    if len(compacted) <= max_chars:
+        return compacted
+
+    return _truncate_middle(compacted, max_chars=max_chars)
+
+
+def _collapse_repeated_blocks(lines: list[str], *, max_repeats: int = 3, max_block_len: int = 50) -> list[str]:
+    if len(lines) < 4:
+        return lines
+
+    result: list[str] = []
+    index = 0
+    total = len(lines)
+
+    while index < total:
+        block_len, repeats = _find_repeated_block(lines, index, max_block_len)
+        if repeats > 1:
+            keep = min(max_repeats, repeats)
+            for _ in range(keep):
+                result.extend(lines[index : index + block_len])
+            omitted = repeats - keep
+            if omitted:
+                result.append(f"[collapsed {omitted} repeated blocks]")
+            index += block_len * repeats
+            continue
+        result.append(lines[index])
+        index += 1
+
+    return result
+
+
+def _find_repeated_block(lines: list[str], start: int, max_block_len: int) -> tuple[int, int]:
+    remaining = len(lines) - start
+    max_len = min(max_block_len, remaining // 2)
+    for block_len in range(2, max_len + 1):
+        block = lines[start : start + block_len]
+        next_block = lines[start + block_len : start + 2 * block_len]
+        if block != next_block:
+            continue
+        repeats = 2
+        while start + repeats * block_len <= len(lines):
+            candidate = lines[start + (repeats - 1) * block_len : start + repeats * block_len]
+            if candidate != block:
+                break
+            repeats += 1
+        return block_len, repeats - 1
+    return 0, 1
+
+
+def _collapse_repeated_lines(lines: list[str], *, max_repeats: int = 3) -> list[str]:
+    if not lines:
+        return lines
+
+    result: list[str] = []
+    current = lines[0]
+    count = 1
+
+    for line in lines[1:]:
+        if line == current:
+            count += 1
+            continue
+        result.extend([current] * min(count, max_repeats))
+        omitted = count - max_repeats
+        if omitted > 0:
+            result.append(f"[collapsed {omitted} repeated lines]")
+        current = line
+        count = 1
+
+    result.extend([current] * min(count, max_repeats))
+    omitted = count - max_repeats
+    if omitted > 0:
+        result.append(f"[collapsed {omitted} repeated lines]")
+
+    return result
+
+
+def _truncate_middle(text: str, *, max_chars: int) -> str:
+    marker_template = "[truncated {count} chars]"
+    marker = marker_template.format(count=len(text))
+    if max_chars <= len(marker) + 2:
+        return text[-max_chars:]
+
+    for _ in range(2):
+        head_len = max(1, (max_chars - len(marker)) // 2)
+        tail_len = max_chars - len(marker) - head_len
+        if tail_len < 1:
+            tail_len = 1
+            head_len = max_chars - len(marker) - tail_len
+        if head_len < 1:
+            head_len = 1
+            tail_len = max_chars - len(marker) - head_len
+        omitted = len(text) - head_len - tail_len
+        marker = marker_template.format(count=omitted)
+
+    return f"{text[:head_len]}\n{marker}\n{text[-tail_len:]}"
+
+
 def slice_lines(lines: list[str], start_line: int | None, end_line: int | None) -> tuple[list[str], int, int]:
     start = 1 if start_line is None else max(1, start_line)
     end = len(lines) if end_line is None else min(len(lines), max(start, end_line))

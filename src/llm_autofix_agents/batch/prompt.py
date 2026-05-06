@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from llm_autofix_agents.datasets.base import PreparedExecutionCase
+from llm_autofix_agents.tools.text import compact_test_output
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def capture_error_output(
         combined = "\n".join(parts)
         if not combined:
             return None
-        return combined[-4000:] if len(combined) > 4000 else combined
+        return compact_test_output(combined, max_chars=4000)
     except subprocess.TimeoutExpired:
         logger.warning("Error capture timed out for test command: %s", test_command)
         return None

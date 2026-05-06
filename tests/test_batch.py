@@ -374,6 +374,7 @@ class TestPrompt(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             result = capture_error_output(Path(tmp_dir), "pytest test.py", timeout_seconds=30)
         self.assertTrue(len(result) <= 4000)
+        self.assertIn("[truncated", result)
 
 
 class TestSummary(unittest.TestCase):

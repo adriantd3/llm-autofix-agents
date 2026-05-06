@@ -8,6 +8,7 @@
 - Convencion de carpetas por spec adoptada: specs/<NNN-slug>/{spec.md,tasks.md}.
 - H39 cerrado con OA-001.A (versionado por run).
 - Politica de red definida: internet libre con auditoria.
+- Compactacion determinista de outputs de tests y tools en prompts con limites y marcadores claros.
 - SH1 completado: imagen base Docker, runner efimero, bind mount, limites dinamicos y smoke test con logs/timeout.
 - SH2 completado: contratos Pydantic v2 para input/output, IDs reproducibles y modelo de errores con smoke de validacion.
 - Validacion reforzada: pruebas unitarias base y pipeline local de comprobaciones para formato, tests y smokes Docker.

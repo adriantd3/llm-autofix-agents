@@ -8,6 +8,7 @@ from llm_autofix_agents.flow.execution import CommandExecutor
 from llm_autofix_agents.tools.context import APRToolContext, get_tool_context
 from llm_autofix_agents.tools.paths import resolve_path
 from llm_autofix_agents.tools.serialization import json_result
+from llm_autofix_agents.tools.text import compact_test_output
 
 
 def run_shell(cfg: APRToolContext, *, command: str, cwd: str = ".", timeout_seconds: int = 30) -> dict[str, object]:
@@ -29,6 +30,8 @@ def run_shell(cfg: APRToolContext, *, command: str, cwd: str = ".", timeout_seco
         },
     )
     payload = asdict(execution)
+    payload["stdout"] = compact_test_output(execution.stdout, max_chars=cfg.max_cmd_output_chars)
+    payload["stderr"] = compact_test_output(execution.stderr, max_chars=cfg.max_cmd_output_chars)
     payload["ok"] = execution.error is None
     payload["cwd"] = cwd
     return payload
