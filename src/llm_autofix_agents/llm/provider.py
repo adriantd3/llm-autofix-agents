@@ -257,19 +257,54 @@ def create_provider(settings: LLMSettings) -> LLMProvider:
 
 
 def _extract_token_usage(result: RunResult) -> dict[str, int]:
-    usage = getattr(result, "usage", None)
-    if not usage:
-        usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
-    if not usage:
+    if result is None:
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
+    # 1. SDK canonical: accumulated usage on the context wrapper
+    usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
+    if _has_tokens(usage):
+        return _build_usage_dict(usage)
+
+    # 2. Compatibility: direct .usage (older SDK versions, mocks, custom providers)
+    usage = getattr(result, "usage", None)
+    if _has_tokens(usage):
+        return _build_usage_dict(usage)
+
+    # 3. Fallback: sum individual raw response usages
+    raw_responses = getattr(result, "raw_responses", None) or []
+    total_input = 0
+    total_output = 0
+    total = 0
+    for resp in raw_responses:
+        resp_usage = getattr(resp, "usage", None)
+        if _has_tokens(resp_usage):
+            total_input += _usage_field(resp_usage, "input_tokens")
+            total_output += _usage_field(resp_usage, "output_tokens")
+            total += _usage_field(resp_usage, "total_tokens")
+    if total_input or total_output:
+        if total == 0:
+            total = total_input + total_output
+        return {
+            "input_tokens": total_input,
+            "output_tokens": total_output,
+            "total_tokens": total,
+        }
+
+    return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+
+def _has_tokens(usage: Any) -> bool:
+    if usage is None:
+        return False
+    return bool(_usage_field(usage, "input_tokens") or _usage_field(usage, "output_tokens"))
+
+
+def _build_usage_dict(usage: Any) -> dict[str, int]:
     input_tokens = _usage_field(usage, "input_tokens")
     output_tokens = _usage_field(usage, "output_tokens")
     total_tokens = _usage_field(usage, "total_tokens")
-
     if total_tokens == 0:
         total_tokens = input_tokens + output_tokens
-
     return {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,

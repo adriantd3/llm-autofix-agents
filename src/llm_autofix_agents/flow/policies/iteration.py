@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from llm_autofix_agents.flow.models import TestExecution
+from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.tools.text import compact_test_output
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
@@ -15,9 +15,11 @@ _FAILURE_DRIVEN_INTRO = (
     "- Do NOT re-run the failing test before making code changes. The failure output is already below.\n"
     "- Do NOT call the same tool twice with the same arguments. Every redundant call wastes a turn.\n"
     "- Plan your next 2-3 tool calls before making any call.\n\n"
+    "- In your final response, populate 'notes' with short bullets: inspected, attempted, changes, results, next.\n\n"
     "You must use tools for evidence; do not report edits or passing tests without tool outputs."
 )
 _MAX_BASELINE_OUTPUT_CHARS = 4000
+_MAX_SNAPSHOT_OUTPUT_CHARS = 2000
 
 
 _VALIDATION_FEEDBACK_TEMPLATE = (
@@ -34,6 +36,7 @@ def build_iteration_input(
     iteration: int,
     max_iterations: int,
     previous_message: str | None,
+    latest_snapshot: str | None,
     baseline_test_execution: TestExecution | None,
     test_command: str | None,
     validation_feedback: str | None = None,
@@ -53,20 +56,51 @@ def build_iteration_input(
         prompt_with_feedback = f"{feedback_prefix}{prompt}" if validation_feedback else prompt
         return prompt_with_feedback
 
-    baseline_hint = ""
-    if baseline_test_execution is not None:
-        baseline_hint = (
-            f"\nInitial failing test context: exit_code={baseline_test_execution.exit_code}, "
-            f"timed_out={baseline_test_execution.timed_out}, signature={baseline_test_execution.signature}."
-        )
+    snapshot_block = f"\n\n{latest_snapshot}" if latest_snapshot else ""
 
     return (
         f"{feedback_prefix}"
         f"[ITERATION {iteration}/{max_iterations}]\n"
-        f"Previous attempt summary:\n{previous_message}\n\n"
-        "Continue improving the repair strategy and validate with available tools."
-        f"{baseline_hint}"
+        f"Previous attempt summary (agent-reported):\n{previous_message}"
+        f"{snapshot_block}\n\n"
+        "Task:\n"
+        "Continue improving the repair strategy. Use tools to inspect and edit, then validate with the test command."
     )
+
+
+def build_continuation_snapshot(
+    *,
+    proposal: AgentFixIterationRecord,
+    changes: WorkspaceChangeSet,
+    test_execution: TestExecution,
+) -> str:
+    compact_output = compact_test_output(test_execution.output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
+    output_block = _indent_block(compact_output or "(no output)", prefix="    ")
+
+    changed_files = changes.all_changed_files
+    if changed_files:
+        changed_block = "\n".join(f"  - {path}" for path in changed_files)
+    else:
+        changed_block = "  - (none)"
+
+    notes_block = _format_notes_block(proposal.notes)
+
+    lines = [
+        "Observed continuation snapshot (runtime evidence):",
+        "- Latest test execution:",
+        f"  - exit_code: {test_execution.exit_code}",
+        f"  - timed_out: {test_execution.timed_out}",
+        f"  - signature: {test_execution.signature}",
+        "  - compact_output:",
+        output_block,
+        "- Changed files observed:",
+        changed_block,
+    ]
+    if notes_block:
+        lines.append("- Attempt notes (agent-reported, if present):")
+        lines.append(notes_block)
+
+    return "\n".join(lines)
 
 
 def _build_first_iteration_input(
@@ -157,3 +191,23 @@ def proposal_signature(proposal: AgentFixIterationRecord) -> str:
 
 def _normalize(text: str) -> str:
     return " ".join(text.split()).strip().lower()
+
+
+def _indent_block(text: str, *, prefix: str) -> str:
+    return "\n".join(f"{prefix}{line}" for line in text.splitlines())
+
+
+def _format_notes_block(notes: str | None, *, max_lines: int = 8) -> str:
+    if not notes:
+        return ""
+
+    lines = [line.strip() for line in notes.splitlines() if line.strip()]
+    if not lines:
+        return ""
+
+    trimmed = lines[:max_lines]
+    rendered = "\n".join(f"  - {line}" for line in trimmed)
+    omitted = len(lines) - len(trimmed)
+    if omitted > 0:
+        rendered = f"{rendered}\n  - [truncated {omitted} lines]"
+    return rendered

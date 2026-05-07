@@ -15,7 +15,11 @@ from llm_autofix_agents.flow.lifecycle.telemetry_mapping import (
     to_iteration_telemetry_result,
 )
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
-from llm_autofix_agents.flow.policies.iteration import build_iteration_input, proposal_signature
+from llm_autofix_agents.flow.policies.iteration import (
+    build_continuation_snapshot,
+    build_iteration_input,
+    proposal_signature,
+)
 from llm_autofix_agents.flow.policies.stop import StopPolicy
 from llm_autofix_agents.flow.policies.validation import (
     IterationValidationResult,
@@ -183,6 +187,7 @@ class IterationRunner:
                 iteration=iteration,
                 max_iterations=cfg.max_iterations,
                 previous_message=state.final_message,
+                latest_snapshot=state.latest_snapshot,
                 baseline_test_execution=cfg.baseline_test_execution,
                 test_command=run_input.test_command,
                 validation_feedback=state.validation_feedback,
@@ -216,6 +221,11 @@ class IterationRunner:
         state.final_message = render_final_message(proposal)
         state.latest_diff = observation.changes.diff
         state.latest_tests = to_test_results(observation.test_execution)
+        state.latest_snapshot = build_continuation_snapshot(
+            proposal=proposal,
+            changes=observation.changes,
+            test_execution=observation.test_execution,
+        )
         state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
         proposal.changed_files = list(observation.changes.all_changed_files)
 

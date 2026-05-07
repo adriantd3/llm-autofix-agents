@@ -157,6 +157,7 @@
   - Tests de flujo (`test_agent_flow.py`) mockean `restore_all_changes` globalmente en `setUp` para aislar completamente.
   - Tests de guardrail añadidos en `test_git_ops.py`: bloqueo en repo del proyecto, override por env, y operación normal en repo aislado.
   - 211 tests pasando (2 fallos preexistentes no relacionados).
+- **Spec 009 completado**: Continuation snapshot de iteraciones y prompt enrich (ver `specs/009-iteration-context-snapshot/`).
 
 ## En curso
 - Spec activa: specs/006-observability-improvement/spec.md (implementada)

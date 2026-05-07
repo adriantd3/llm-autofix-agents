@@ -26,6 +26,7 @@ class RunState:
     latest_tests: TestResults | None = None
     latest_diff: str = ""
     latest_artifacts: dict[str, Any] = field(default_factory=dict)
+    latest_snapshot: str | None = None
     previous_proposal_signature: str | None = None
     previous_proposal_status: str | None = None
     previous_proposal_confidence: float | None = None

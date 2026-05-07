@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from llm_autofix_agents.flow.models import TestExecution
-from llm_autofix_agents.flow.policies.iteration import build_iteration_input
+from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
+from llm_autofix_agents.flow.policies.iteration import build_continuation_snapshot, build_iteration_input
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 
 
 class IterationInputTests(unittest.TestCase):
@@ -13,6 +14,7 @@ class IterationInputTests(unittest.TestCase):
             iteration=1,
             max_iterations=3,
             previous_message=None,
+            latest_snapshot=None,
             baseline_test_execution=TestExecution(
                 exit_code=1,
                 timed_out=False,
@@ -34,6 +36,7 @@ class IterationInputTests(unittest.TestCase):
             iteration=1,
             max_iterations=3,
             previous_message=None,
+            latest_snapshot=None,
             baseline_test_execution=TestExecution(
                 exit_code=1,
                 timed_out=False,
@@ -52,30 +55,52 @@ class IterationInputTests(unittest.TestCase):
             iteration=1,
             max_iterations=3,
             previous_message=None,
+            latest_snapshot=None,
             baseline_test_execution=None,
             test_command=None,
         )
 
         self.assertEqual(user_input, "fallback prompt")
 
-    def test_followup_iteration_includes_previous_summary_and_baseline_hint(self) -> None:
+    def test_followup_iteration_includes_previous_summary_and_snapshot(self) -> None:
+        snapshot = build_continuation_snapshot(
+            proposal=AgentFixIterationRecord(
+                status="in_progress",
+                reasoning_summary="summary",
+                confidence=0.5,
+                notes="Checked gcd.py, updated loop",
+            ),
+            changes=WorkspaceChangeSet(
+                modified_files=["gcd.py"],
+                added_files=[],
+                deleted_files=[],
+                untracked_files=[],
+                diff="",
+                diff_excludes_untracked=False,
+            ),
+            test_execution=TestExecution(
+                exit_code=1,
+                timed_out=False,
+                output="FAILED",
+                signature="sig-last",
+            ),
+        )
         user_input = build_iteration_input(
             prompt="fallback prompt",
             iteration=2,
             max_iterations=3,
             previous_message="patched gcd but tests still fail",
-            baseline_test_execution=TestExecution(
-                exit_code=1,
-                timed_out=False,
-                output="FAILED",
-                signature="sig-base",
-            ),
-            test_command="uv run --with pytest pytest python_testcases/test_gcd.py",
+            latest_snapshot=snapshot,
+            baseline_test_execution=None,
+            test_command=None,
         )
 
         self.assertIn("[ITERATION 2/3]", user_input)
         self.assertIn("patched gcd but tests still fail", user_input)
-        self.assertIn("signature=sig-base", user_input)
+        self.assertIn("Observed continuation snapshot", user_input)
+        self.assertIn("Changed files observed", user_input)
+        self.assertIn("gcd.py", user_input)
+        self.assertNotIn("Initial failing test context", user_input)
 
     def test_followup_iteration_with_validation_feedback(self) -> None:
         user_input = build_iteration_input(
@@ -83,6 +108,7 @@ class IterationInputTests(unittest.TestCase):
             iteration=2,
             max_iterations=3,
             previous_message="attempted fix",
+            latest_snapshot="Observed continuation snapshot (runtime evidence):\n- Changed files observed:\n  - gcd.py",
             baseline_test_execution=None,
             test_command=None,
             validation_feedback="You modified test files (test_foo.py). DO NOT modify test files.",
@@ -99,6 +125,7 @@ class IterationInputTests(unittest.TestCase):
             iteration=1,
             max_iterations=3,
             previous_message=None,
+            latest_snapshot=None,
             baseline_test_execution=None,
             test_command=None,
             validation_feedback="You modified test files. Fix ONLY source code.",
@@ -114,6 +141,7 @@ class IterationInputTests(unittest.TestCase):
             iteration=1,
             max_iterations=3,
             previous_message=None,
+            latest_snapshot=None,
             baseline_test_execution=TestExecution(
                 exit_code=1,
                 timed_out=False,
@@ -134,6 +162,7 @@ class IterationInputTests(unittest.TestCase):
             iteration=2,
             max_iterations=3,
             previous_message="previous",
+            latest_snapshot=None,
             baseline_test_execution=None,
             test_command=None,
         )

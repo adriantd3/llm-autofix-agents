@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from agents import AgentOutputSchema
+from agents import AgentOutputSchema, Usage
 from pydantic import SecretStr
 
 from llm_autofix_agents.llm.agent_factory import build_agent
@@ -88,7 +88,9 @@ class LLMProviderTests(unittest.TestCase):
                 "confidence": 0.72,
                 "changed_files": ["a.py"],
             },
-            usage={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+            context_wrapper=SimpleNamespace(
+                usage=Usage(input_tokens=11, output_tokens=7, total_tokens=18),
+            ),
             new_items=[
                 {
                     "type": "tool_call",
@@ -96,6 +98,52 @@ class LLMProviderTests(unittest.TestCase):
                     "status": "completed",
                 }
             ],
+        )
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
+
+        self.assertEqual(result.input_tokens, 11)
+        self.assertEqual(result.output_tokens, 7)
+        self.assertEqual(result.total_tokens, 18)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_falls_back_to_raw_responses_for_usage(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(
+            final_output={
+                "status": "done",
+                "reasoning_summary": "Fix wrong literal",
+                "confidence": 0.72,
+                "changed_files": ["a.py"],
+            },
+            context_wrapper=SimpleNamespace(
+                usage=Usage(),  # empty accumulated usage
+            ),
+            raw_responses=[
+                SimpleNamespace(usage=Usage(input_tokens=5, output_tokens=3, total_tokens=8)),
+                SimpleNamespace(usage=Usage(input_tokens=6, output_tokens=4, total_tokens=10)),
+            ],
+            new_items=[],
+        )
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
+
+        self.assertEqual(result.input_tokens, 11)
+        self.assertEqual(result.output_tokens, 7)
+        self.assertEqual(result.total_tokens, 18)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_provider_reads_legacy_usage_attribute(self, runner_run: AsyncMock) -> None:
+        runner_run.return_value = SimpleNamespace(
+            final_output={
+                "status": "done",
+                "reasoning_summary": "Fix wrong literal",
+                "confidence": 0.72,
+                "changed_files": ["a.py"],
+            },
+            usage={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+            new_items=[],
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
 
