@@ -9,6 +9,7 @@ from pydantic import SecretStr
 from llm_autofix_agents.architectures.factory import build_architecture
 from llm_autofix_agents.architectures.handoff import build_multi_agent_handoff_architecture
 from llm_autofix_agents.architectures.orchestrator import build_multi_agent_orchestrator_architecture
+from llm_autofix_agents.architectures.planner_executor import build_planner_executor_architecture
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 
 
@@ -62,6 +63,29 @@ class ArchitectureFactoryTests(unittest.TestCase):
     def test_build_architecture_rejects_invalid_strategy(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported architecture strategy"):
             build_architecture(strategy="unknown", settings=_settings())
+
+    def test_build_architecture_dispatches_planner_executor(self) -> None:
+        settings = _settings()
+        sentinel_architecture = SimpleNamespace(architecture_name="planner_executor")
+
+        with (
+            patch(
+                "llm_autofix_agents.architectures.factory.build_planner_executor_architecture",
+                return_value=sentinel_architecture,
+            ) as build_pe,
+            patch(
+                "llm_autofix_agents.architectures.factory.build_mono_agent_architecture",
+            ) as build_mono,
+        ):
+            architecture = build_architecture(
+                strategy="planner_executor",
+                settings=settings,
+                agent_models={"planner": "planner-model"},
+            )
+
+        self.assertIs(architecture, sentinel_architecture)
+        build_pe.assert_called_once_with(settings=settings, agent_models={"planner": "planner-model"})
+        build_mono.assert_not_called()
 
 
 class MultiAgentHandoffArchitectureTests(unittest.TestCase):
@@ -252,6 +276,70 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         self.assertEqual(as_tool_calls[2]["tool_name"], "validate_patch")
 
         self.assertEqual(facade_agent.name, "orchestrator")
+
+
+class PlannerExecutorArchitectureTests(unittest.TestCase):
+    def test_planner_executor_architecture_wires_roles_models_and_handoff(self) -> None:
+        settings = _settings()
+        tools_by_profile = {
+            "planner": [_tool("read_file"), _tool("search_files"), _tool("execute_command")],
+            "executor": [_tool("read_file"), _tool("replace_in_file"), _tool("run_test_target")],
+        }
+        build_agent_calls: list[dict[str, object]] = []
+
+        def fake_build_agent(**kwargs):
+            build_agent_calls.append(kwargs)
+            return {"name": kwargs["name"]}
+
+        with (
+            patch(
+                "llm_autofix_agents.architectures.planner_executor.build_apr_tools",
+                side_effect=lambda profile: list(tools_by_profile[profile]),
+            ) as build_tools,
+            patch(
+                "llm_autofix_agents.architectures.planner_executor.build_agent",
+                side_effect=fake_build_agent,
+            ),
+        ):
+            architecture = build_planner_executor_architecture(
+                settings=settings,
+                agent_models={
+                    "planner": "planner-model",
+                    "executor": "executor-model",
+                },
+            )
+            # First call -> planner (iteration 1)
+            facade_agent_1 = architecture.facade_agent_builder()
+            # Second call -> executor (iteration 2)
+            facade_agent_2 = architecture.facade_agent_builder()
+
+        self.assertEqual(architecture.architecture_name, "planner_executor")
+        self.assertEqual(architecture.agent_name, "planner")
+        self.assertEqual(architecture.agent_role, "planner")
+        self.assertEqual(architecture.agent_model, "planner-model")
+        self.assertEqual(architecture.tool_profile, "planner")
+        self.assertEqual(architecture.tool_count, 5)
+
+        # Iteration 1 returns planner, iteration 2 returns executor
+        self.assertEqual(facade_agent_1, {"name": "planner"})
+        self.assertEqual(facade_agent_2, {"name": "executor"})
+
+        self.assertEqual(len(architecture.sub_agents), 1)
+        self.assertEqual(architecture.sub_agents[0].agent_name, "executor")
+        self.assertEqual(architecture.sub_agents[0].agent_role, "executor")
+        self.assertEqual(architecture.sub_agents[0].model, "executor-model")
+
+        self.assertEqual(
+            [call.args for call in build_tools.call_args_list],
+            [("planner",), ("executor",)],
+        )
+
+        # Iteration-based phasing: planner built first, then executor
+        self.assertEqual([call["name"] for call in build_agent_calls], ["planner", "executor"])
+        self.assertEqual(
+            [call["model_override"] for call in build_agent_calls],
+            ["planner-model", "executor-model"],
+        )
 
 
 def _settings() -> LLMSettings:

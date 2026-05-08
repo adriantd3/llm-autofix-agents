@@ -31,6 +31,9 @@ def main() -> int:
     metadata: dict[str, object] = {"source": "batch-executor"}
     prompt = instantiation.bootstrap_prompt or ""
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
+    dataset_type = _resolve_optional_text(os.environ.get("RUN_DATASET_TYPE"))
+    dataset_name = _resolve_optional_text(os.environ.get("RUN_DATASET_NAME"))
+    bugsinpy_compile_required = _resolve_optional_bool(os.environ.get("RUN_BUGSINPY_COMPILE_REQUIRED"))
     metadata.update(
         {
             "runtime_repository": instantiation.repository,
@@ -39,6 +42,12 @@ def main() -> int:
             "runtime_agent_models": instantiation.agent_models,
         }
     )
+    if dataset_type is not None:
+        metadata["dataset_type"] = dataset_type
+    if dataset_name is not None:
+        metadata["dataset_name"] = dataset_name
+    if bugsinpy_compile_required is not None:
+        metadata["bugsinpy_compile_required"] = bugsinpy_compile_required
 
     try:
         prepared_repo = prepare_target_repository(
@@ -107,6 +116,17 @@ def _resolve_optional_text(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _resolve_optional_bool(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "y"}:
+        return True
+    if normalized in {"0", "false", "no", "n"}:
+        return False
+    return None
 
 
 def _has_runtime_contract_env() -> bool:

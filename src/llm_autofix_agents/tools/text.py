@@ -158,6 +158,8 @@ def read_text_checked(cfg: APRToolContext, path: Path) -> tuple[bool, str | None
 
 
 def detect_test_command(root: Path) -> tuple[str, str] | None:
+    if (root / "bugsinpy_run_test.sh").exists():
+        return "bugsinpy", "bugsinpy-test"
     if (root / "pytest.ini").exists() or (root / "conftest.py").exists() or list(root.glob("tests/test_*.py")):
         return "pytest", "pytest -q"
     if (root / "pyproject.toml").exists():

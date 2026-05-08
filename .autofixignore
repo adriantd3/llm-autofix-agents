@@ -17,3 +17,5 @@ htmlcov/
 *.pyo
 *.so
 *.o
+bugsinpy_*
+env/

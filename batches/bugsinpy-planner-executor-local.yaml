@@ -1,10 +1,10 @@
-name: bugsinpy-handoff-local
-description: Multi-agent handoff on BugsInPy with local Qwen3-coder
+name: bugsinpy-planner-executor-local
+description: Planner-Executor on BugsInPy with local Qwen3-coder
 
 dataset: ../datasets/bugsinpy.yaml
 
 global:
-  architecture: multi_agent_handoff
+  architecture: planner_executor
   llm:
     provider: ollama
     model: qwen3-coder:30b

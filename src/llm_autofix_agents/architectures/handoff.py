@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 from agents import Agent, handoff
+from agents.handoffs import HandoffInputData
+from agents.items import ItemHelpers, TResponseInputItem
 from pydantic import BaseModel
 
 from llm_autofix_agents.agents.instructions import (
@@ -25,8 +29,60 @@ class APRHandoffInput(BaseModel):
     confidence: float | None = None
 
 
+_pending_handoff_prompt: ContextVar[APRHandoffInput | None] = ContextVar(
+    "pending_handoff_prompt",
+    default=None,
+)
+
+
 async def _on_handoff_with_note(ctx: object, note: APRHandoffInput) -> None:
     pending_handoff_note.set(note.model_dump())
+    _pending_handoff_prompt.set(note)
+
+
+def _format_handoff_note(note: APRHandoffInput) -> str:
+    lines = ["Handoff summary (from previous agent):", f"- summary: {note.summary}"]
+    if note.suspected_files:
+        files = ", ".join(note.suspected_files)
+        lines.append(f"- suspected_files: {files}")
+    if note.evidence:
+        evidence = "; ".join(note.evidence)
+        lines.append(f"- evidence: {evidence}")
+    if note.next_focus:
+        lines.append(f"- next_focus: {note.next_focus}")
+    if note.confidence is not None:
+        lines.append(f"- confidence: {note.confidence:.2f}")
+    return "\n".join(lines)
+
+
+def _normalize_input_history(
+    input_history: str | tuple[TResponseInputItem, ...],
+) -> list[TResponseInputItem]:
+    if isinstance(input_history, str):
+        return ItemHelpers.input_to_new_input_list(input_history)
+    return list(input_history)
+
+
+def _handoff_input_filter(handoff_input_data: HandoffInputData) -> HandoffInputData:
+    note = _pending_handoff_prompt.get()
+    _pending_handoff_prompt.set(None)
+    if note is None:
+        return handoff_input_data
+
+    # Preserve the original user prompt (first item) and append the handoff note
+    history_items: list[TResponseInputItem] = []
+    raw_history = _normalize_input_history(handoff_input_data.input_history)
+    if raw_history:
+        first = raw_history[0]
+        if isinstance(first, dict) and first.get("role") == "user":
+            history_items.append(first)
+
+    history_items.append({"role": "user", "content": _format_handoff_note(note)})
+    return handoff_input_data.clone(
+        input_history=tuple(history_items),
+        pre_handoff_items=(),
+        new_items=(),
+    )
 
 
 def build_multi_agent_handoff_architecture(
@@ -87,6 +143,7 @@ def build_multi_agent_handoff_architecture(
                     validator_agent,
                     input_type=APRHandoffInput,
                     on_handoff=_on_handoff_with_note,
+                    input_filter=_handoff_input_filter,
                 )
             ],
             handoff_description="APR patcher that applies a minimal fix.",
@@ -104,6 +161,7 @@ def build_multi_agent_handoff_architecture(
                     patcher_agent,
                     input_type=APRHandoffInput,
                     on_handoff=_on_handoff_with_note,
+                    input_filter=_handoff_input_filter,
                 )
             ],
             handoff_description="APR localizer that narrows the faulty code.",
@@ -121,6 +179,7 @@ def build_multi_agent_handoff_architecture(
                     localizer_agent,
                     input_type=APRHandoffInput,
                     on_handoff=_on_handoff_with_note,
+                    input_filter=_handoff_input_filter,
                 )
             ],
             handoff_description="APR triage agent that gathers initial signals.",

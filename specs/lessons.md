@@ -201,4 +201,31 @@
 - Que no hay que hacer: (1) dejar que `repo_root` por defecto sea `Path(".")` en tests o ejecuciones locales, (2) no proteger `restore_all_changes` contra ejecución en el proyecto actual, (3) confiar únicamente en mocks para evitar daños colaterales en tests.
 - Por que estuvo mal: un solo test que llegue al flujo real puede borrar el working directory del desarrollador (archivos no commiteados, cambios en progreso, etc.), con pérdida de trabajo irreversible.
 - Alternativa recomendada: (1) **Guardrail de producción**: en `restore_all_changes`, detectar si el target es el repo del proyecto (via `__file__` del paquete) y bloquear con `RuntimeError` salvo override explícito (`AUTOFIX_ALLOW_RESTORE=1`), (2) **Aislamiento en tests**: usar `tempfile.mkdtemp()` como `repo_root` por defecto en helpers de test, (3) **Mock defensivo**: mockear `restore_all_changes` en `setUp` de cualquier test de integración que use `WorkspaceManager` real.
+
+## 2026-05-07 (output_schema como escape hatch para modelos locales)
+- Contexto: planner-executor con qwen3-coder:30b hacia 0 tool calls en todas las iteraciones; el modelo inmediatamente llamaba al tool `final_output` (inyectado por AgentOutputSchema del SDK) en vez de tools de investigación/edición.
+- Anti-patron detectado: usar `output_type=AgentOutputSchema(...)` con modelos locales que priorizan el path de menor resistencia (producir structured output inmediatamente sin investigar).
+- Que no hay que hacer: dar a modelos locales la opción `final_output` como tool cuando se espera que primero usen tools para investigar/editar.
+- Por que estuvo mal: el modelo trataba `final_output` como la acción por defecto, produciendo reasoning_summary en JSON sin nunca llamar read_file, search_files, replace_in_file, etc.
+- Alternativa recomendada: para modelos locales, usar `output_schema=None` en `build_agent()` — el modelo solo puede producir texto o llamar tools; el provider ya parsea texto libre a `AgentFixIterationRecord` como fallback.
+- Resultado: de 0 tool calls → 45 tool calls (20 planner + 25 executor) con output_schema=None.
+- Regla preventiva para futuras specs: evaluar si `output_type` del SDK actúa como "escape hatch" para cada modelo; con modelos locales, preferir no restringir output format para forzar tool engagement.
+
+## 2026-05-07 (handoff del SDK inoperante con modelos locales post-transfer)
+- Contexto: en planner-executor con handoff SDK, tras la transferencia planner→executor, el agente receptor (executor) producía JSON/text output sin llamar tools; `tool_choice="required"` no resolvía el problema vía Ollama.
+- Anti-patron detectado: usar handoffs del SDK (transfer_to_*) con modelos locales (Ollama) que no mantienen coherencia de tool-use post-handoff.
+- Que no hay que hacer: depender del mecanismo de handoff del SDK para transferir control entre agentes cuando el modelo local no sigue el contrato post-handoff.
+- Por que estuvo mal: tras el handoff, el SDK asigna control al executor pero éste produce output inmediato sin tools; incluso con `ModelSettings(tool_choice="required")` el modelo local no obedece.
+- Alternativa recomendada: **iteration-based phasing** — usar el mecanismo de iteraciones del sistema para alternar agentes (iteration 1=planner, iteration 2+=executor); cada agente arranca fresh con su propio prompt y tools, sin dependencia del handoff SDK.
+- Resultado: executor pasa de 0 tool calls (con handoff) a 25 tool calls (con iteration-based phasing).
+- Regla preventiva para futuras specs: para modelos locales, NO usar handoffs SDK; preferir phasing por iteración donde cada agente tiene un ciclo completo de ejecución independiente.
+
+## 2026-05-07 (limitación de razonamiento del modelo: bool(v) vs v is not False)
+- Contexto: bug youtube-dl-1 requiere `lambda v: v is not None and v is not False` en UNARY_OPERATORS; el modelo intenta `bool(v)` repetidamente.
+- Anti-patron detectado: asumir que un modelo local (qwen3-coder:30b) puede razonar sobre la diferencia semántica entre `bool(v)` y `v is not False` incluso con instrucciones explícitas.
+- Que no hay que hacer: esperar que el modelo siga una instrucción literal que dice "consider `v is not None and v is not False`" cuando su inferencia semántica no distingue ambas expresiones.
+- Por que estuvo mal: 77 tool calls en handoff y 45 en planner-executor; el modelo encuentra el archivo correcto, la función correcta, pero aplica `bool(v)` que rompe assertions de x=0 y title=''.
+- Impacto: este es un **bloqueante de modelo** — no un problema de arquitectura. La mejora de instrucciones y la mejora arquitectónica son correctas pero insuficientes para este modelo en este bug.
+- Alternativa recomendada: (1) escalar a un modelo con mejor razonamiento (GPT-4, Claude, Gemini), (2) para modelos locales más grandes (70B+), re-evaluar capacidad de razonamiento semántico, (3) considerar few-shot examples en el prompt con el patrón correcto.
+- Regla preventiva para futuras specs: al evaluar éxito de arquitecturas, separar siempre "la arquitectura funciona" de "el modelo puede resolver el bug"; usar benchmarks con distintos niveles de dificultad de razonamiento.
 - Regla preventiva para futuras specs: cualquier operación destrutiva sobre filesystem/Git debe tener (a) guardrail que bloquee el proyecto de desarrollo, (b) aislamiento por defecto en tests, y (c) mocks defensivos en la capa de integración.

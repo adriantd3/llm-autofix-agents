@@ -4,8 +4,10 @@ import time
 from dataclasses import dataclass, field
 
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
+from llm_autofix_agents.datasets import bugsinpy as _bugsinpy
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.agent_execution.runner import AgentExecutionContext
+from llm_autofix_agents.flow.errors import WorkspaceError
 from llm_autofix_agents.flow.execution import tests as _execution_tests
 from llm_autofix_agents.flow.execution.tests import to_test_results
 from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs, record_validation_logs
@@ -99,6 +101,7 @@ class IterationRunner:
 
         changes = self.workspace.inspect_changes(cfg=cfg, before_snapshot=before_snapshot)
         self._write_iteration_patch(cfg=cfg, iteration=iteration, diff=changes.diff)
+        self._validate_bugsinpy_workspace(run_input=run_input, cfg=cfg, state=state, phase="iteration")
         test_execution = _execution_tests.run_test_command(
             run_input.test_command,
             cwd=cfg.repo_root,
@@ -191,8 +194,29 @@ class IterationRunner:
                 baseline_test_execution=cfg.baseline_test_execution,
                 test_command=run_input.test_command,
                 validation_feedback=state.validation_feedback,
+                repo_root=cfg.repo_root,
             ),
             max_turns=cfg.settings.max_turns,
+        )
+
+    def _validate_bugsinpy_workspace(
+        self,
+        *,
+        run_input: RunInput,
+        cfg: RunConfig,
+        state: RunState,
+        phase: str,
+    ) -> None:
+        if not _bugsinpy.is_bugsinpy_metadata(run_input.metadata):
+            return
+        compile_required = _bugsinpy.compile_required_from_metadata(run_input.metadata)
+        missing = _bugsinpy.missing_workspace_artifacts(cfg.repo_root, compile_required=compile_required)
+        if not missing:
+            return
+        missing_str = ", ".join(missing)
+        state.accumulated_logs.append(f"bugsinpy_missing_files={missing_str}")
+        raise WorkspaceError(
+            f"BugsInPy workspace missing required artifacts before {phase} tests: {missing_str}"
         )
 
     def _record_observation(

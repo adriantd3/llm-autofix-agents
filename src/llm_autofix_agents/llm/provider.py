@@ -28,6 +28,7 @@ class AgentFixIterationRecord(AgentFixIterationResult):
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     total_tokens: int = Field(default=0, ge=0)
+    last_agent_name: str | None = None
 
 
 class LLMProvider(Protocol):
@@ -208,6 +209,14 @@ class OpenAIAgentsSDKProvider:
                 cause=unknown_cause,
             ) from unknown_cause
 
+        last_agent_name = None
+        try:
+            last_agent = getattr(result, "last_agent", None)
+            if last_agent is not None:
+                last_agent_name = getattr(last_agent, "name", None)
+        except Exception:
+            pass
+
         output = result.final_output
 
         try:
@@ -248,6 +257,7 @@ class OpenAIAgentsSDKProvider:
         proposal.input_tokens = usage["input_tokens"]
         proposal.output_tokens = usage["output_tokens"]
         proposal.total_tokens = usage["total_tokens"]
+        proposal.last_agent_name = last_agent_name
 
         return proposal
 

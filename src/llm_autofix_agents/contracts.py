@@ -39,6 +39,7 @@ class RunArchitecture(StrEnum):
     MONO_AGENT = "mono_agent"
     MULTI_AGENT_HANDOFF = "multi_agent_handoff"
     MULTI_AGENT_ORCHESTRATOR = "multi_agent_orchestrator"
+    PLANNER_EXECUTOR = "planner_executor"
 
 
 class RunInput(BaseModel):

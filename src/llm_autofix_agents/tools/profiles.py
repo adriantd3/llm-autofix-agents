@@ -86,6 +86,30 @@ APR_VALIDATOR_TOOLS = [
     git_diff_summary,
 ]
 
+# Planner-Executor architecture tool profiles
+APR_PLANNER_TOOLS = [
+    get_workspace_info,
+    list_files,
+    read_file,
+    search_files,
+    execute_command,
+    run_test_target,
+]
+
+APR_EXECUTOR_TOOLS = [
+    get_workspace_info,
+    list_files,
+    read_file,
+    search_files,
+    write_file,
+    replace_in_file,
+    replace_lines,
+    execute_command,
+    run_test_target,
+    git_status_summary,
+    git_diff_summary,
+]
+
 
 def build_apr_tools(profile: str = "full") -> list[Any]:
     """Return a predefined APR tool profile with observability wrapping."""
@@ -97,6 +121,8 @@ def build_apr_tools(profile: str = "full") -> list[Any]:
         "localizer": APR_LOCALIZER_TOOLS,
         "patcher": APR_PATCHER_TOOLS,
         "validator": APR_VALIDATOR_TOOLS,
+        "planner": APR_PLANNER_TOOLS,
+        "executor": APR_EXECUTOR_TOOLS,
     }
     try:
         raw = list(profiles[profile])

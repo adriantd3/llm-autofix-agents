@@ -3,7 +3,8 @@ from __future__ import annotations
 from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
-from llm_autofix_agents.flow.errors import error_category_from_exception
+from llm_autofix_agents.datasets import bugsinpy as _bugsinpy
+from llm_autofix_agents.flow.errors import WorkspaceError, error_category_from_exception
 from llm_autofix_agents.flow.execution import tests as _execution_tests
 from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds
 from llm_autofix_agents.flow.iteration_runner import IterationRunner
@@ -100,6 +101,8 @@ class RunOrchestrator:
         if run_input.test_command is None:
             return None
 
+        self._validate_bugsinpy_workspace(run_input=run_input, cfg=cfg, state=state, phase="baseline")
+
         execution = _execution_tests.run_test_command(
             run_input.test_command,
             cwd=cfg.repo_root,
@@ -120,6 +123,26 @@ class RunOrchestrator:
             ]
         )
         return execution
+
+    def _validate_bugsinpy_workspace(
+        self,
+        *,
+        run_input: RunInput,
+        cfg: RunConfig,
+        state: RunState,
+        phase: str,
+    ) -> None:
+        if not _bugsinpy.is_bugsinpy_metadata(run_input.metadata):
+            return
+        compile_required = _bugsinpy.compile_required_from_metadata(run_input.metadata)
+        missing = _bugsinpy.missing_workspace_artifacts(cfg.repo_root, compile_required=compile_required)
+        if not missing:
+            return
+        missing_str = ", ".join(missing)
+        state.accumulated_logs.append(f"bugsinpy_missing_files={missing_str}")
+        raise WorkspaceError(
+            f"BugsInPy workspace missing required artifacts before {phase} tests: {missing_str}"
+        )
 
     def _run_iterations(self, *, run_input: RunInput, cfg: RunConfig, state: RunState) -> RunOutput:
         for iteration in range(1, cfg.max_iterations + 1):

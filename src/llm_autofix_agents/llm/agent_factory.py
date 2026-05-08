@@ -23,6 +23,7 @@ def build_agent(
     output_schema: AgentOutputSchema | None | object = _DEFAULT_OUTPUT_SCHEMA,
     handoffs: Sequence[object] | None = None,
     handoff_description: str | None = None,
+    model_settings: object | None = None,
 ) -> Agent[Any]:
     resolved_tools = cast(list[Tool], list(tools))
     resolved_model = _build_model(settings, model_override=model_override)
@@ -52,6 +53,8 @@ def build_agent(
         agent_kwargs["handoffs"] = list(handoffs)
     if handoff_description:
         agent_kwargs["handoff_description"] = handoff_description
+    if model_settings is not None:
+        agent_kwargs["model_settings"] = model_settings
     return Agent(**agent_kwargs)
 
 

@@ -135,6 +135,7 @@
   - Validacion explicita post-checkout: falla si faltan `.git`, `bugsinpy_bug.info`, `bugsinpy_requirements.txt` o `bugsinpy_run_test.sh`.
   - Validacion explicita post-compile: falla si faltan `bugsinpy_compile_flag` o `env/` cuando `compile_required=true`.
   - Wrapper de test por defecto para BugsInPy: verifica archivos requeridos, limpia `bugsinpy_fail.txt`, ejecuta `bugsinpy-test` y propaga errores desde `bugsinpy_fail.txt` como exit code no cero.
+  - Validacion runtime de artefactos BugsInPy antes de baseline/iteracion: aborta con fallo infra si faltan archivos requeridos.
   - `BatchRunner._docker_build` construye solo el servicio necesario (`runner` vs `bugsinpy-runner`), no todos.
   - Quoting seguro con `shlex.quote()` en comandos shell generados por adapter y runner.
   - `docker/bugsinpy.Dockerfile` actualizado con `dos2unix` y comentario sobre limitaciones de version de Python.
@@ -150,6 +151,7 @@
   - MarkdownLiveObserver enriquecido: `[agent] tool -> status (Xs)` y handoff notes con summary/suspected_files/confidence.
   - Facade input event: `FacadeInputRecord` emitido por iteración tras construir `agent_context.user_input`; visible en `live.md` (bloque código completo) y `events.jsonl`; **no persistido en SQLite**.
   - 209 tests pasando, lint limpio.
+- Handoff pipeline reforzado: input_filter en todos los handoffs para remover tool noise e inyectar el resumen del handoff en el prompt del siguiente agente; instrucciones por rol ahora listan nombres exactos de tools y payload requerido para transfer_to_*.
 - **Guardrail crítico aplicado**: protección contra `git checkout -- .` + `git clean -fd` en el repo de desarrollo.
   - `restore_all_changes` en `git.py` y `WorkspaceManager.restore_all_changes` en `manager.py` bloquean la operación si el target es el proyecto `llm_autofix_agents` (detectado vía `_is_project_repo`).
   - Override explícito vía `AUTOFIX_ALLOW_RESTORE=1` para entornos sandboxed/contenedores.
@@ -158,10 +160,25 @@
   - Tests de guardrail añadidos en `test_git_ops.py`: bloqueo en repo del proyecto, override por env, y operación normal en repo aislado.
   - 211 tests pasando (2 fallos preexistentes no relacionados).
 - **Spec 009 completado**: Continuation snapshot de iteraciones y prompt enrich (ver `specs/009-iteration-context-snapshot/`).
+- **SPEC-010 en curso**: Arquitectura Planner-Executor (ver `specs/010-planner-executor/`).
+  - Nueva arquitectura de 2 agentes: planner (investiga + planifica) → executor (aplica + valida).
+  - Filosofia: separacion de razonamiento y accion; un solo handoff boundary.
+  - Instrucciones genericas sin overfitting a bugs concretos.
+  - Reversion de overfitting del handoff: patcher tools restaurados, instrucciones simplificadas, batch config normalizado.
+  - Fix de circular import en `batch/__init__.py` (lazy imports).
+  - 7 tests de arquitectura pasando (2 nuevos).
+  - **Pivot de iteration-based phasing**: handoffs SDK inoperantes con modelos locales post-transfer; reemplazado por phasing via iteraciones (it1=planner, it2+=executor).
+  - **Fix output_schema**: `output_schema=None` para ambos agentes elimina `final_output` tool que causaba 0 tool calls con modelos locales.
+  - Resultado: planner-executor pasa de 0 tool calls → 45 tool calls (20 planner + 25 executor).
+  - **Bloqueante de modelo identificado**: qwen3-coder:30b no puede resolver youtube-dl-1 (requiere `v is not None and v is not False`, modelo produce `bool(v)` repetidamente).
+  - Mejoras de prompt (constraint enumeration, baseline reminder) implementadas y validadas.
+  - 15 tests pasando (test_architectures + test_iteration_input).
 
 ## En curso
-- Spec activa: specs/006-observability-improvement/spec.md (implementada)
+- Spec activa: specs/010-planner-executor/spec.md
+- **Bloqueante**: modelo qwen3-coder:30b no resuelve bugs que requieren razonamiento semántico fino (distinción `bool(v)` vs `v is not False`). Para validar la arquitectura completamente se requiere un modelo con mejor capacidad de razonamiento.
 
 ## Siguiente
 - Spec 004: agent-model-overrides (permitir configurar modelos distintos por rol de agente).
+- Validacion end-to-end de planner-executor vs handoff vs mono_agent.
 - Validar con una run real mono_agent y multi_agent_handoff que produce events.jsonl, live.md enriquecido y observability.db con campos nuevos.

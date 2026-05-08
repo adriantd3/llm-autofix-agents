@@ -213,3 +213,31 @@ class BugsInPyAdapter:
             "if [ -s bugsinpy_fail.txt ]; then cat bugsinpy_fail.txt; exit 1; fi; "
             "exit $status"
         )
+
+
+def is_bugsinpy_metadata(metadata: dict[str, object]) -> bool:
+    return metadata.get("dataset_type") == "bugsinpy"
+
+
+def compile_required_from_metadata(metadata: dict[str, object]) -> bool:
+    raw = metadata.get("bugsinpy_compile_required")
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
+    return True
+
+
+def missing_workspace_artifacts(repo_root: Path, *, compile_required: bool) -> list[str]:
+    required = list(BugsInPyAdapter._CHECKOUT_REQUIRED_FILES)
+    if compile_required:
+        required.extend(BugsInPyAdapter._COMPILE_REQUIRED_FILES)
+    missing: list[str] = []
+    for name in required:
+        if not (repo_root / name).exists():
+            missing.append(name)
+    return missing

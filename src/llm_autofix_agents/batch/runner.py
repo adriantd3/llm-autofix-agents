@@ -121,7 +121,7 @@ class BatchRunner:
         if settings.prompt_template is not None:
             prompt = generate_prompt(case, settings.prompt_template, error_output)
         agent_models = settings.llm.resolve_agent_models(settings.architecture)
-        env = self._build_env(case, config, prompt, agent_models, batch_dir)
+        env = self._build_env(case, config, prompt, agent_models, batch_dir, dataset)
 
         started = datetime.now(UTC)
         process = self._docker_run(env, settings.timeout_seconds, case.runner_service)
@@ -237,6 +237,7 @@ class BatchRunner:
         prompt: str,
         agent_models: dict[str, str],
         batch_dir: Path,
+        dataset: DatasetConfig,
     ) -> dict[str, str]:
         """Build a clean, explicit environment dict for the container.
 
@@ -252,6 +253,8 @@ class BatchRunner:
             "RUN_ARCHITECTURE": settings.architecture.value,
             "RUN_AGENT_MODELS": json.dumps(agent_models),
             "RUN_TEST_COMMAND": case.test_command,
+            "RUN_DATASET_TYPE": case.dataset_type,
+            "RUN_DATASET_NAME": case.dataset_name,
             "RUN_MAX_TURNS": str(settings.llm.max_turns),
             "LLM_PROVIDER": settings.llm.provider,
             "LLM_MODEL": settings.llm.model,
@@ -260,6 +263,9 @@ class BatchRunner:
             "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
             "AUTOFIX_INTERACTIVE": "false",
         }
+        if case.dataset_type == "bugsinpy":
+            compile_required = dataset.tooling.get("compile_required", True)
+            env["RUN_BUGSINPY_COMPILE_REQUIRED"] = "true" if compile_required else "false"
         if prompt:
             env["RUN_BOOTSTRAP_PROMPT"] = prompt
         # Propagate API keys from host env + .env file (secrets only)

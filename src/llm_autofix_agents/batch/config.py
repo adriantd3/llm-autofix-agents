@@ -129,6 +129,11 @@ class LLMSettings(BaseModel):
                 "patcher": self.model,
                 "validator": self.model,
             }
+        if architecture == RunArchitecture.PLANNER_EXECUTOR:
+            return {
+                "planner": self.model,
+                "executor": self.model,
+            }
         return {
             "triage": self.model,
             "localizer": self.model,

@@ -25,6 +25,8 @@ _DEFAULT_IGNORE_PATTERNS = [
     "*.pyo",
     "*.so",
     "*.o",
+    "bugsinpy_*",
+    "env/",
 ]
 
 
@@ -86,7 +88,8 @@ def detect_workspace_change_set(
         if path not in before:
             added_files.append(path)
 
-    diff = collect_repo_diff(repo_root)
+    tracked_files = sorted({*modified_files, *added_files, *deleted_files})
+    diff = collect_repo_diff_for_paths(repo_root, tracked_files)
 
     # `git diff` does not include untracked files, so mark when diff is incomplete.
     diff_excludes_untracked = bool(untracked_files)
@@ -104,6 +107,24 @@ def collect_repo_diff(repo_root: Path) -> str:
     try:
         result = subprocess.run(
             ["git", "diff", "--no-color"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise WorkspaceError(f"failed to collect repository diff: {exc}") from exc
+    if result.returncode != 0:
+        return ""
+    return filter_diff_by_ignore_rules(result.stdout.strip(), load_ignore_rules(repo_root)).strip()
+
+
+def collect_repo_diff_for_paths(repo_root: Path, paths: list[str]) -> str:
+    if not paths:
+        return ""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--no-color", "--", *paths],
             cwd=str(repo_root),
             capture_output=True,
             text=True,
