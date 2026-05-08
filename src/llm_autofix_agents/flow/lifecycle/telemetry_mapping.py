@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
 
-from llm_autofix_agents.flow.models import WorkspaceChangeSet
+from llm_autofix_agents.flow.models import IterationObservation, WorkspaceChangeSet
 from llm_autofix_agents.observability.telemetry_models import (
     FileChangeTelemetrySet,
     IterationTelemetryResult,
 )
-
-if TYPE_CHECKING:
-    from llm_autofix_agents.flow.iteration.runner import IterationObservation
 
 
 def to_file_change_telemetry_set(changes: WorkspaceChangeSet) -> FileChangeTelemetrySet:

@@ -1,4 +1,3 @@
-from llm_autofix_agents.flow.lifecycle.telemetry_mapping import to_file_change_telemetry_set
 from llm_autofix_agents.flow.models import WorkspaceChangeSet
 from llm_autofix_agents.llm.provider_events import ProviderCallEvent
 from llm_autofix_agents.observability.telemetry import RunTelemetry
@@ -46,7 +45,7 @@ def test_file_change_telemetry_set_registers_correct_types() -> None:
         diff="",
         diff_excludes_untracked=False,
     )
-    telemetry_set = to_file_change_telemetry_set(changes)
+    telemetry_set = FileChangeTelemetrySet.from_workspace_changes(changes)
 
     assert telemetry_set.modified_files == ["a.py", "b.py"]
     assert telemetry_set.added_files == ["c.py"]

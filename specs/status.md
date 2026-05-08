@@ -8,6 +8,18 @@
   - `flow/__init__.py` vaciado (sin consumidores externos de sus re-exports).
   - `tests/test_agent_flow.py` actualizado para importar `_run` de `batch.executor` y parchear en ese namespace.
   - Sin regresiones: 221 passing, 8 fallos todos pre-existentes.
+- **Refactor Fase 3 completado**: Descomposición de IterationRunner y limpieza de módulos.
+  - `execute_iteration()` descompuesto en 5 fases semánticas (~40 líneas narrativas vs ~150 original).
+  - `_decide_outcome()` como función pura que retorna `IterationDecision` VO (sin side effects).
+  - `_act_on_decision()` ejecuta efectos según la decisión.
+  - `IterationObservation` y `render_final_message` movidos a `flow/models.py`.
+  - `IterationDecision` value object creado en `flow/models.py`.
+  - `telemetry_mapping.py` eliminado — lógica absorbida como factory classmethods en DTOs target.
+  - Validación BugsInPy deduplicada en `flow/workspace/validators.py` e inyectada como callable.
+  - `lifecycle/__init__.py` completado con exports públicos.
+  - Imports de `execution.tests` unificados (via `__init__.py`, sin double-import).
+  - Parámetros internos tipados (`RunIdentity`, `IterationTelemetry`, `AgentExecutionResult`).
+  - Sin regresiones: 221 passing, 8 fallos pre-existentes, 0 errores lint nuevos.
 - Skill de elicitacion actualizado para exigir opciones recomendadas en cada pregunta.
 - Registro completo de decisiones en SPEC-001.
 - Lista de tasks por subhitos creada para SPEC-001.

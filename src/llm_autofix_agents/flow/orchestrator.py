@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
-from llm_autofix_agents.datasets import bugsinpy as _bugsinpy
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
-from llm_autofix_agents.flow.errors import WorkspaceError, error_category_from_exception
-from llm_autofix_agents.flow.execution import tests as _execution_tests
-from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds
+from llm_autofix_agents.flow.errors import error_category_from_exception
+from llm_autofix_agents.flow.execution import resolve_test_timeout_seconds, run_test_command
 from llm_autofix_agents.flow.iteration.runner import IterationRunner
 from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
@@ -16,6 +14,7 @@ from llm_autofix_agents.flow.runtime.initializer import RunInitializer
 from llm_autofix_agents.flow.runtime.options import resolve_max_iterations
 from llm_autofix_agents.flow.strategy import IterationStrategy, StandardIterationStrategy
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
+from llm_autofix_agents.flow.workspace.validators import validate_bugsinpy_workspace
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
 
@@ -54,6 +53,7 @@ class RunOrchestrator:
             workspace=self._workspace,
             output_builder=self._output_builder,
             stop_policy=resolved_stop_policy,
+            pre_test_validator=self._pre_test_validator,
         )
         self._strategy: IterationStrategy = self._build_strategy(
             architecture=architecture,
@@ -114,7 +114,7 @@ class RunOrchestrator:
 
         self._validate_bugsinpy_workspace(run_input=run_input, cfg=cfg, state=state, phase="baseline")
 
-        execution = _execution_tests.run_test_command(
+        execution = run_test_command(
             run_input.test_command,
             cwd=cfg.repo_root,
             timeout_seconds=cfg.test_timeout_seconds,
@@ -135,6 +135,11 @@ class RunOrchestrator:
         )
         return execution
 
+    @staticmethod
+    def _pre_test_validator(run_input: RunInput, repo_root, logs: list[str], phase: str) -> None:
+        """Adapter for the pre_test_validator callable signature."""
+        validate_bugsinpy_workspace(run_input=run_input, repo_root=repo_root, logs=logs, phase=phase)
+
     def _validate_bugsinpy_workspace(
         self,
         *,
@@ -143,16 +148,8 @@ class RunOrchestrator:
         state: RunState,
         phase: str,
     ) -> None:
-        if not _bugsinpy.is_bugsinpy_metadata(run_input.metadata):
-            return
-        compile_required = _bugsinpy.compile_required_from_metadata(run_input.metadata)
-        missing = _bugsinpy.missing_workspace_artifacts(cfg.repo_root, compile_required=compile_required)
-        if not missing:
-            return
-        missing_str = ", ".join(missing)
-        state.accumulated_logs.append(f"bugsinpy_missing_files={missing_str}")
-        raise WorkspaceError(
-            f"BugsInPy workspace missing required artifacts before {phase} tests: {missing_str}"
+        validate_bugsinpy_workspace(
+            run_input=run_input, repo_root=cfg.repo_root, logs=state.accumulated_logs, phase=phase
         )
 
     def _run_iterations(self, *, run_input: RunInput, cfg: RunConfig, state: RunState) -> RunOutput:
