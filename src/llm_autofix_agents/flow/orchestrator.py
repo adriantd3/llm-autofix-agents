@@ -5,6 +5,7 @@ from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.errors import error_category_from_exception
 from llm_autofix_agents.flow.execution import resolve_test_timeout_seconds, run_test_command
+from llm_autofix_agents.flow.iteration.decision_enactor import IterationDecisionEnactor
 from llm_autofix_agents.flow.iteration.runner import IterationRunner
 from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
@@ -48,10 +49,15 @@ class RunOrchestrator:
         self._output_builder = output_builder or RunOutputBuilder()
         self._finalizer = finalizer or RunFinalizer()
         resolved_stop_policy = stop_policy or StopPolicy()
+        _outcome_enactor = IterationDecisionEnactor(
+            workspace=self._workspace,
+            output_builder=self._output_builder,
+        )
         self._iteration_runner = iteration_runner or IterationRunner(
             agent_runner=AgentExecutionRunner(),
             workspace=self._workspace,
-            output_builder=self._output_builder,
+            outcome_enactor=_outcome_enactor,
+            agent_factory=architecture.facade_agent_builder,
             stop_policy=resolved_stop_policy,
             pre_test_validator=self._pre_test_validator,
         )
@@ -136,8 +142,8 @@ class RunOrchestrator:
         return execution
 
     @staticmethod
-    def _pre_test_validator(run_input: RunInput, repo_root, logs: list[str], phase: str) -> None:
-        """Adapter for the pre_test_validator callable signature."""
+    def _pre_test_validator(*, run_input: RunInput, repo_root, logs: list[str], phase: str) -> None:
+        """Adapter for the PreTestValidator protocol."""
         validate_bugsinpy_workspace(run_input=run_input, repo_root=repo_root, logs=logs, phase=phase)
 
     def _validate_bugsinpy_workspace(
@@ -163,11 +169,11 @@ class RunOrchestrator:
     ) -> IterationStrategy:
         if architecture.iteration_strategy_factory is not None:
             return architecture.iteration_strategy_factory(
-                self._iteration_runner,
-                self._workspace,
-                self._output_builder,
-                self._finalizer,
-                stop_policy,
+                iteration_runner=self._iteration_runner,
+                workspace=self._workspace,
+                output_builder=self._output_builder,
+                finalizer=self._finalizer,
+                stop_policy=stop_policy,
             )
         return StandardIterationStrategy(
             iteration_runner=self._iteration_runner,

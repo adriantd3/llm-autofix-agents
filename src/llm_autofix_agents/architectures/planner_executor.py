@@ -86,6 +86,7 @@ def build_planner_executor_architecture(
         )
 
     def _build_phased_strategy(
+        *,
         iteration_runner: IterationRunner,
         workspace: WorkspaceManager,
         output_builder: RunOutputBuilder,
@@ -97,8 +98,10 @@ def build_planner_executor_architecture(
         planner_runner = _IR(
             agent_runner=iteration_runner.agent_runner,
             workspace=workspace,
-            output_builder=output_builder,
+            outcome_enactor=iteration_runner.outcome_enactor,
+            agent_factory=build_planner_agent,
             stop_policy=PlannerStopPolicy(),
+            pre_test_validator=iteration_runner.pre_test_validator,
         )
         return PhasedIterationStrategy(
             planner_runner=planner_runner,
@@ -106,8 +109,6 @@ def build_planner_executor_architecture(
             workspace=workspace,
             output_builder=output_builder,
             finalizer=finalizer,
-            planner_agent_builder=build_planner_agent,
-            executor_agent_builder=build_executor_agent,
         )
 
     return BuiltArchitecture(

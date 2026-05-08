@@ -11,16 +11,13 @@ used by mono_agent, multi_agent_handoff, and multi_agent_orchestrator.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
 from llm_autofix_agents.flow.policies.stop import StopPolicy
 
 if TYPE_CHECKING:
-    from agents import Agent
-
     from llm_autofix_agents.flow.iteration.runner import IterationRunner
     from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
     from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
@@ -115,6 +112,10 @@ class PhasedIterationStrategy:
     The planner investigates and produces a repair plan. Its output
     flows to the executor via RunState (final_message, latest_snapshot).
     The executor applies the fix and is subject to normal stop logic.
+
+    Each runner owns its own agent_factory, so no agent_builder_override
+    is needed — the planner_runner builds planner agents, the executor_runner
+    builds executor agents.
     """
 
     planner_runner: IterationRunner
@@ -122,8 +123,6 @@ class PhasedIterationStrategy:
     workspace: WorkspaceManager
     output_builder: RunOutputBuilder
     finalizer: RunFinalizer
-    planner_agent_builder: Callable[[], Agent[Any]]
-    executor_agent_builder: Callable[[], Agent[Any]]
 
     def run_iterations(
         self,
@@ -139,7 +138,6 @@ class PhasedIterationStrategy:
             cfg=cfg,
             state=state,
             iteration=1,
-            agent_builder_override=self.planner_agent_builder,
         )
         if planner_output is not None:
             # Only validation failures can stop the planner phase.
@@ -152,7 +150,6 @@ class PhasedIterationStrategy:
                 cfg=cfg,
                 state=state,
                 iteration=iteration,
-                agent_builder_override=self.executor_agent_builder,
             )
             if output is not None:
                 return self.finalizer.finalize(output=output, state=state, cfg=cfg)
@@ -179,9 +176,15 @@ class PhasedIterationStrategy:
         )
 
 
-# Type alias for strategy factory functions used in BuiltArchitecture.
-# Defined after IterationStrategy to avoid forward-reference issues.
-IterationStrategyFactory = Callable[
-    ["IterationRunner", "WorkspaceManager", "RunOutputBuilder", "RunFinalizer", StopPolicy],
-    IterationStrategy,
-]
+class IterationStrategyFactory(Protocol):
+    """Factory that builds an architecture-specific iteration strategy."""
+
+    def __call__(
+        self,
+        *,
+        iteration_runner: IterationRunner,
+        workspace: WorkspaceManager,
+        output_builder: RunOutputBuilder,
+        finalizer: RunFinalizer,
+        stop_policy: StopPolicy,
+    ) -> IterationStrategy: ...

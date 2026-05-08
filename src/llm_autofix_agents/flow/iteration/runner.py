@@ -1,35 +1,27 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
-from llm_autofix_agents.contracts import RunIdentity, RunInput, RunOutput, RunStatus, StopReason, build_run_identity
+from llm_autofix_agents.architectures.config import AgentFactory
+from llm_autofix_agents.contracts import RunIdentity, RunInput, RunOutput, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.agent_execution.runner import AgentExecutionContext, AgentExecutionResult
 from llm_autofix_agents.flow.execution import run_test_command, to_test_results
-from llm_autofix_agents.flow.lifecycle.logs import build_iteration_logs, record_validation_logs
-from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
-from llm_autofix_agents.flow.models import (
-    IterationDecision,
-    IterationObservation,
-    render_final_message,
-)
+from llm_autofix_agents.flow.iteration.decision_enactor import IterationDecisionEnactor
+from llm_autofix_agents.flow.lifecycle.logs import record_validation_logs
+from llm_autofix_agents.flow.models import IterationObservation, render_final_message
+from llm_autofix_agents.flow.policies.decision import decide_iteration_outcome
 from llm_autofix_agents.flow.policies.iteration import (
     build_continuation_snapshot,
     build_iteration_input,
-    proposal_signature,
 )
 from llm_autofix_agents.flow.policies.stop import StopPolicy
-from llm_autofix_agents.flow.policies.validation import (
-    IterationValidationResult,
-    build_validation_feedback,
-    validate_iteration,
-)
+from llm_autofix_agents.flow.policies.validation import validate_iteration
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.observability import utc_now_iso
 from llm_autofix_agents.observability.telemetry import IterationTelemetry
 from llm_autofix_agents.observability.telemetry_models import (
@@ -37,12 +29,15 @@ from llm_autofix_agents.observability.telemetry_models import (
     IterationTelemetryResult,
 )
 
-# Callable that validates workspace state before running tests.
-# Signature: (run_input, repo_root, logs, phase) -> None. Raises WorkspaceError if invalid.
-PreTestValidator = Callable[[RunInput, Path, list[str], str], None]
+
+@runtime_checkable
+class PreTestValidator(Protocol):
+    """Validates workspace state before running tests. Raises WorkspaceError if invalid."""
+
+    def __call__(self, *, run_input: RunInput, repo_root: Path, logs: list[str], phase: str) -> None: ...
 
 
-def _noop_validator(run_input: RunInput, repo_root: Path, logs: list[str], phase: str) -> None:
+def _noop_validator(*, run_input: RunInput, repo_root: Path, logs: list[str], phase: str) -> None:
     """Default no-op validator when no dataset-specific validation is needed."""
 
 
@@ -63,7 +58,8 @@ class IterationRunner:
 
     agent_runner: AgentExecutionRunner
     workspace: WorkspaceManager
-    output_builder: RunOutputBuilder
+    outcome_enactor: IterationDecisionEnactor
+    agent_factory: AgentFactory
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
     pre_test_validator: PreTestValidator = _noop_validator
 
@@ -78,15 +74,8 @@ class IterationRunner:
         cfg: RunConfig,
         state: RunState,
         iteration: int,
-        agent_builder_override: Callable[[], object] | None = None,
     ) -> RunOutput | None:
-        """Execute one APR iteration.
-
-        Args:
-            agent_builder_override: When provided, use this factory to build the agent
-                instead of cfg.facade_agent_builder. Used by PhasedIterationStrategy to
-                swap agents between phases without mutating cfg.
-        """
+        """Execute one APR iteration."""
         # Phase 1: Prepare
         prep = self._prepare(run_input=run_input, cfg=cfg, state=state, iteration=iteration)
 
@@ -97,7 +86,6 @@ class IterationRunner:
             state=state,
             iteration=iteration,
             prep=prep,
-            agent_builder_override=agent_builder_override,
         )
 
         # Phase 3: Observe results (changes, tests, telemetry)
@@ -120,15 +108,16 @@ class IterationRunner:
         state.latest_artifacts["validation"] = validation.details
         record_validation_logs(state=state, validation=validation)
 
-        decision = self._decide_outcome(
-            run_input=run_input,
-            state=state,
+        decision = decide_iteration_outcome(
             observation=observation,
             validation=validation,
+            state=state,
+            run_input=run_input,
+            stop_policy=self.stop_policy,
         )
 
-        # Phase 5: Act on decision
-        return self._act_on_decision(
+        # Phase 5: Enact decision
+        return self.outcome_enactor.enact(
             decision=decision,
             identity=prep.identity,
             run_input=run_input,
@@ -198,10 +187,8 @@ class IterationRunner:
         state: RunState,
         iteration: int,
         prep: _IterationPrep,
-        agent_builder_override: Callable[[], object] | None,
     ) -> AgentExecutionResult:
-        agent_builder = agent_builder_override or cfg.facade_agent_builder
-        agent = agent_builder()
+        agent = self.agent_factory()
         agent_context = AgentExecutionContext(
             run_agent_id=cfg.run_agent_id,
             run_agent_ids=cfg.run_agent_ids,
@@ -224,14 +211,8 @@ class IterationRunner:
         return self.agent_runner.invoke_agent(
             context=agent_context,
             execution_index=1,
-            provider_call=lambda hooks, event_callback: cfg.provider.run_agent(
-                agent=agent,
-                user_input=agent_context.user_input,
-                max_turns=agent_context.max_turns,
-                context=agent_context.agent_context,
-                hooks=hooks,
-                event_callback=event_callback,
-            ),
+            provider=cfg.provider,
+            agent=agent,
         )
 
     # ──────────────────────────────────────────────────────────────────────
@@ -252,7 +233,9 @@ class IterationRunner:
             repo_root=cfg.repo_root, before_snapshot=prep.before_snapshot
         )
         self._write_iteration_patch(cfg=cfg, iteration=iteration, diff=changes.diff)
-        self.pre_test_validator(run_input, cfg.repo_root, state.accumulated_logs, "iteration")
+        self.pre_test_validator(
+            run_input=run_input, repo_root=cfg.repo_root, logs=state.accumulated_logs, phase="iteration"
+        )
 
         test_execution = run_test_command(
             run_input.test_command,
@@ -286,155 +269,6 @@ class IterationRunner:
             observation=observation,
         )
         return observation
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Phase 4: Decide outcome (pure — no side effects)
-    # ──────────────────────────────────────────────────────────────────────
-
-    def _decide_outcome(
-        self,
-        *,
-        run_input: RunInput,
-        state: RunState,
-        observation: IterationObservation,
-        validation: IterationValidationResult,
-    ) -> IterationDecision:
-        proposal = observation.proposal
-        test_execution = observation.test_execution
-        changed_files = observation.changes.tracked_changed_files
-
-        if not validation.ok:
-            if validation.retryable and state.validation_retries < 1:
-                return IterationDecision(
-                    action="retry",
-                    log_suffix=f"validation_result={validation.failure_type}_retryable",
-                )
-            return IterationDecision(
-                action="stop_validation_failure",
-                log_suffix=f"validation_result={validation.failure_type}",
-            )
-
-        if self.stop_policy.no_progress(
-            state=state,
-            proposal=proposal,
-            test_execution=test_execution,
-            changed_files=changed_files,
-        ):
-            return IterationDecision(action="stop_no_progress")
-
-        if self.stop_policy.success(
-            run_input=run_input,
-            proposal=proposal,
-            test_execution=test_execution,
-            changed_files=changed_files,
-        ):
-            return IterationDecision(action="stop_success")
-
-        if self.stop_policy.agent_reported_stuck(proposal):
-            return IterationDecision(
-                action="stop_agent_stuck",
-                log_suffix="iteration_result=agent_reported_stuck",
-            )
-
-        return IterationDecision(action="continue")
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Phase 5: Act on decision
-    # ──────────────────────────────────────────────────────────────────────
-
-    def _act_on_decision(
-        self,
-        *,
-        decision: IterationDecision,
-        identity: RunIdentity,
-        run_input: RunInput,
-        cfg: RunConfig,
-        state: RunState,
-        observation: IterationObservation,
-        validation: IterationValidationResult,
-    ) -> RunOutput | None:
-        proposal = observation.proposal
-
-        if decision.action == "retry":
-            self.workspace.restore_all_changes(
-                repo_root=cfg.repo_root,
-                logs=state.accumulated_logs,
-            )
-            state.validation_feedback = build_validation_feedback(validation)
-            state.validation_retries += 1
-            self._append_iteration_logs(cfg=cfg, state=state, observation=observation)
-            if decision.log_suffix:
-                state.accumulated_logs.append(decision.log_suffix)
-            return None
-
-        if decision.action == "stop_validation_failure":
-            self._append_iteration_logs(cfg=cfg, state=state, observation=observation)
-            self.workspace.restore_temp_branch_for_debug(
-                repo_root=cfg.repo_root,
-                temp_branch=state.temp_branch,
-                logs=state.accumulated_logs,
-            )
-            if decision.log_suffix:
-                state.accumulated_logs.append(decision.log_suffix)
-            return self.output_builder.validation_failure(
-                identity=identity,
-                validation=validation,
-                state=state,
-            )
-
-        if decision.action == "stop_no_progress":
-            self._append_iteration_logs(cfg=cfg, state=state, observation=observation)
-            self.workspace.restore_temp_branch_for_debug(
-                repo_root=cfg.repo_root,
-                temp_branch=state.temp_branch,
-                logs=state.accumulated_logs,
-            )
-            return self.output_builder.build(
-                identity=identity,
-                status=RunStatus.PARTIAL,
-                stop_reason=StopReason.NO_PROGRESS,
-                state=state,
-            )
-
-        if decision.action == "stop_success":
-            self._append_iteration_logs(cfg=cfg, state=state, observation=observation)
-            cleanup_error = self.workspace.cleanup_temp_branch_after_success(
-                repo_root=cfg.repo_root,
-                temp_branch=state.temp_branch,
-            )
-            if cleanup_error:
-                return self.output_builder.branch_cleanup_failed(
-                    identity=identity,
-                    state=state,
-                    cleanup_error=cleanup_error,
-                )
-            return self.output_builder.build(
-                identity=identity,
-                status=RunStatus.SUCCESS,
-                stop_reason=StopReason.COMPLETED,
-                state=state,
-            )
-
-        if decision.action == "stop_agent_stuck":
-            self._append_iteration_logs(cfg=cfg, state=state, observation=observation)
-            self.workspace.restore_temp_branch_for_debug(
-                repo_root=cfg.repo_root,
-                temp_branch=state.temp_branch,
-                logs=state.accumulated_logs,
-            )
-            if decision.log_suffix:
-                state.accumulated_logs.append(decision.log_suffix)
-            return self.output_builder.build(
-                identity=identity,
-                status=RunStatus.PARTIAL,
-                stop_reason=StopReason.NO_PROGRESS,
-                state=state,
-            )
-
-        # action == "continue"
-        self._remember_progress(state=state, proposal=proposal, test_signature=observation.test_execution.signature)
-        self._append_iteration_logs(cfg=cfg, state=state, observation=observation)
-        return None
 
     # ──────────────────────────────────────────────────────────────────────
     # Private helpers
@@ -480,32 +314,4 @@ class IterationRunner:
         patch_path = cfg.results_dir / f"it{iteration}.patch"
         patch_path.parent.mkdir(parents=True, exist_ok=True)
         patch_path.write_text(diff, encoding="utf-8")
-
-    def _remember_progress(self, *, state: RunState, proposal: AgentFixIterationRecord, test_signature: str) -> None:
-        state.previous_proposal_signature = proposal_signature(proposal)
-        state.previous_proposal_status = proposal.status
-        state.previous_proposal_confidence = proposal.confidence
-        state.previous_test_signature = test_signature
-
-    def _append_iteration_logs(
-        self,
-        *,
-        cfg: RunConfig,
-        state: RunState,
-        observation: IterationObservation,
-    ) -> None:
-        state.accumulated_logs.extend(
-            build_iteration_logs(
-                architecture_name=cfg.architecture_name,
-                iteration=observation.iteration,
-                max_iterations=cfg.max_iterations,
-                changed_files=observation.changes.all_changed_files,
-                test_execution=observation.test_execution,
-                confidence=observation.proposal.confidence,
-                tool_profile=cfg.tool_profile,
-                tool_count=cfg.tool_count,
-                provider=cfg.settings.provider.value,
-                model=cfg.settings.model,
-            )
-        )
 

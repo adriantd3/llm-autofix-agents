@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable, Coroutine
+from collections.abc import Coroutine
 from dataclasses import dataclass
+from typing import Any
 
 from llm_autofix_agents.flow.errors import ProviderExecutionError
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
-from llm_autofix_agents.llm.provider_events import ProviderCallEvent
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
 from llm_autofix_agents.observability.telemetry import IterationTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
 
@@ -38,10 +38,8 @@ class AgentExecutionRunner:
         *,
         context: AgentExecutionContext,
         execution_index: int,
-        provider_call: Callable[
-            [object, Callable[[ProviderCallEvent], None] | None],
-            Coroutine[object, object, AgentFixIterationRecord],
-        ],
+        provider: LLMProvider,
+        agent: Any,
     ) -> AgentExecutionResult:
         agent_telemetry = context.iteration_telemetry.start_agent_execution(
             run_agent_id=context.run_agent_id,
@@ -52,7 +50,16 @@ class AgentExecutionRunner:
         started_monotonic = time.perf_counter()
 
         try:
-            proposal = _run_sync(provider_call(hooks, agent_telemetry.handle_provider_call_event))
+            proposal = _run_sync(
+                provider.run_agent(
+                    agent=agent,
+                    user_input=context.user_input,
+                    max_turns=context.max_turns,
+                    context=context.agent_context,
+                    hooks=hooks,
+                    event_callback=agent_telemetry.handle_provider_call_event,
+                )
+            )
         except Exception as exc:  # noqa: BLE001
             duration_seconds = time.perf_counter() - started_monotonic
             agent_telemetry.finish_failed(

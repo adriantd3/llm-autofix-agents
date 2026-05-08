@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -72,8 +71,7 @@ class RunConfig:
     settings: LLMSettings
     provider: LLMProvider
 
-    # Agent factory and tool configuration
-    facade_agent_builder: Callable[[], object]
+    # Tool configuration
     agent_context: APRToolContext
     tool_profile: str
     tool_count: int

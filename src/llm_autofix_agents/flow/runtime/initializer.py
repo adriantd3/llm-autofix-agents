@@ -57,7 +57,6 @@ class RunInitializer:
             architecture_name=self.architecture.architecture_name,
             settings=settings,
             provider=provider,
-            facade_agent_builder=self.architecture.facade_agent_builder,
             agent_context=APRToolContext(root_dir=str(repo_root)),
             tool_profile=self.architecture.tool_profile,
             tool_count=self.architecture.tool_count,

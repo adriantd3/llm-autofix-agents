@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from llm_autofix_agents.contracts import RunInput
 from llm_autofix_agents.flow.agent_execution import AgentExecutionResult
+from llm_autofix_agents.flow.iteration.decision_enactor import IterationDecisionEnactor
 from llm_autofix_agents.flow.iteration.runner import IterationRunner
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
@@ -47,7 +48,8 @@ class IterationRunnerTests(unittest.TestCase):
         runner = IterationRunner(
             agent_runner=agent_runner,
             workspace=workspace,
-            output_builder=_StubOutputBuilder(),
+            outcome_enactor=IterationDecisionEnactor(workspace=workspace, output_builder=_StubOutputBuilder()),
+            agent_factory=lambda: object(),
         )
 
         with patch.object(IterationRunner, "_write_iteration_patch") as mock_write_patch:
@@ -101,7 +103,8 @@ class IterationRunnerTests(unittest.TestCase):
         runner = IterationRunner(
             agent_runner=agent_runner,
             workspace=workspace,
-            output_builder=_StubOutputBuilder(),
+            outcome_enactor=IterationDecisionEnactor(workspace=workspace, output_builder=_StubOutputBuilder()),
+            agent_factory=lambda: object(),
         )
 
         with patch.object(IterationRunner, "_write_iteration_patch"):
@@ -149,7 +152,8 @@ class IterationRunnerTests(unittest.TestCase):
             runner = IterationRunner(
                 agent_runner=_CapturingAgentRunner(),
                 workspace=workspace,
-                output_builder=_StubOutputBuilder(),
+                outcome_enactor=IterationDecisionEnactor(workspace=workspace, output_builder=_StubOutputBuilder()),
+                agent_factory=lambda: object(),
             )
 
             with patch(
@@ -196,7 +200,8 @@ class IterationRunnerTests(unittest.TestCase):
             runner = IterationRunner(
                 agent_runner=_CapturingAgentRunner(),
                 workspace=workspace,
-                output_builder=_StubOutputBuilder(),
+                outcome_enactor=IterationDecisionEnactor(workspace=workspace, output_builder=_StubOutputBuilder()),
+                agent_factory=lambda: object(),
             )
 
             with patch(
@@ -232,8 +237,8 @@ class _CapturingAgentRunner:
     def __init__(self) -> None:
         self.last_context = None
 
-    def invoke_agent(self, *, context, execution_index, provider_call):
-        del execution_index, provider_call
+    def invoke_agent(self, *, context, execution_index, provider, agent):
+        del execution_index, provider, agent
         self.last_context = context
         proposal = AgentFixIterationRecord(
             status="in_progress",
@@ -306,7 +311,6 @@ def _build_config(
     live_observer: MarkdownLiveObserver | None = None,
 ) -> RunConfig:
     from llm_autofix_agents.flow.lifecycle.observer_factory import ObservabilityStack
-    from llm_autofix_agents.observability.telemetry import RunTelemetry
 
     settings = LLMSettings(provider=ProviderType.OLLAMA, model="test")
     resolved_repo_root = repo_root or Path(tempfile.mkdtemp())
@@ -324,7 +328,6 @@ def _build_config(
         architecture_name="mono_agent",
         settings=settings,
         provider=_StubProvider(),
-        facade_agent_builder=lambda: object(),
         agent_context=APRToolContext(root_dir=str(resolved_repo_root.resolve())),
         tool_profile="full",
         tool_count=0,

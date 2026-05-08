@@ -9,6 +9,14 @@ from agents import Agent
 if TYPE_CHECKING:
     from llm_autofix_agents.flow.strategy import IterationStrategyFactory
 
+# Lazy factory that creates a fresh Agent instance per iteration.
+#
+# MUST be a factory (not a pre-built Agent) because the OpenAI Agents SDK
+# accumulates mutable state inside Agent objects (ContextVars for handoff
+# notes, hook counters, etc.). Reusing a single Agent across iterations
+# would cause state contamination between runs.
+AgentFactory = Callable[[], Agent[Any]]
+
 
 @dataclass(frozen=True)
 class SubAgentDescriptor:
@@ -22,14 +30,7 @@ class SubAgentDescriptor:
 @dataclass(frozen=True)
 class BuiltArchitecture:
     architecture_name: str
-    facade_agent_builder: Callable[[], Agent[Any]]
-    """Lazy factory that creates a fresh Agent instance per iteration.
-
-    MUST be a factory (not a pre-built Agent) because the OpenAI Agents SDK
-    accumulates mutable state inside Agent objects (ContextVars for handoff
-    notes, hook counters, etc.). Reusing a single Agent across iterations
-    would cause state contamination between runs.
-    """
+    facade_agent_builder: AgentFactory
     agent_name: str
     agent_role: str
     instructions: str
