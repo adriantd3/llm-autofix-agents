@@ -33,7 +33,7 @@ class AgentExecutionResult:
 class AgentExecutionRunner:
     """Reusable single-agent execution lifecycle runner."""
 
-    def run_agent(
+    def invoke_agent(
         self,
         *,
         context: AgentExecutionContext,

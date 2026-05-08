@@ -43,7 +43,7 @@ class IterationRunner:
     output_builder: RunOutputBuilder
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
 
-    def run(
+    def execute_iteration(
         self,
         *,
         run_input: RunInput,
@@ -86,7 +86,7 @@ class IterationRunner:
             agent=agent,
         )
         iteration_telemetry.record_facade_input(input_text=agent_context.user_input)
-        agent_result = self.agent_runner.run_agent(
+        agent_result = self.agent_runner.invoke_agent(
             context=agent_context,
             execution_index=1,
             provider_call=lambda hooks, event_callback: cfg.provider.run_agent(

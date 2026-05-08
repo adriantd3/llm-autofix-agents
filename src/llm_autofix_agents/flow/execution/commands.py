@@ -18,7 +18,7 @@ class CommandExecution:
 class CommandExecutor:
     max_output_chars: int = 12_000
 
-    def run(
+    def execute_command(
         self,
         *,
         command: str,

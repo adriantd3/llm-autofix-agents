@@ -16,7 +16,7 @@ def run_shell(cfg: APRToolContext, *, command: str, cwd: str = ".", timeout_seco
     if not workdir.exists() or not workdir.is_dir():
         return {"ok": False, "error": "invalid_cwd", "cwd": cwd}
 
-    execution = CommandExecutor(max_output_chars=cfg.max_cmd_output_chars).run(
+    execution = CommandExecutor(max_output_chars=cfg.max_cmd_output_chars).execute_command(
         command=command,
         cwd=workdir,
         timeout_seconds=timeout_seconds,

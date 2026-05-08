@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from llm_autofix_agents.architectures.config import BuiltArchitecture
-from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
-from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
+from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
 from llm_autofix_agents.datasets import bugsinpy as _bugsinpy
+from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.errors import WorkspaceError, error_category_from_exception
 from llm_autofix_agents.flow.execution import tests as _execution_tests
 from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds
@@ -14,6 +14,7 @@ from llm_autofix_agents.flow.policies.stop import StopPolicy
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.runtime.initializer import RunInitializer
 from llm_autofix_agents.flow.runtime.options import resolve_max_iterations
+from llm_autofix_agents.flow.strategy import IterationStrategy, StandardIterationStrategy
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
@@ -47,11 +48,16 @@ class RunOrchestrator:
         self._workspace = workspace or WorkspaceManager()
         self._output_builder = output_builder or RunOutputBuilder()
         self._finalizer = finalizer or RunFinalizer()
+        resolved_stop_policy = stop_policy or StopPolicy()
         self._iteration_runner = iteration_runner or IterationRunner(
             agent_runner=AgentExecutionRunner(),
             workspace=self._workspace,
             output_builder=self._output_builder,
-            stop_policy=stop_policy or StopPolicy(),
+            stop_policy=resolved_stop_policy,
+        )
+        self._strategy: IterationStrategy = self._build_strategy(
+            architecture=architecture,
+            stop_policy=resolved_stop_policy,
         )
 
     def run(
@@ -145,30 +151,25 @@ class RunOrchestrator:
         )
 
     def _run_iterations(self, *, run_input: RunInput, cfg: RunConfig, state: RunState) -> RunOutput:
-        for iteration in range(1, cfg.max_iterations + 1):
-            output = self._iteration_runner.run(
-                run_input=run_input,
-                cfg=cfg,
-                state=state,
-                iteration=iteration,
-            )
-            if output is not None:
-                return self._finalizer.finalize(output=output, state=state, cfg=cfg)
+        return self._strategy.run_iterations(run_input=run_input, cfg=cfg, state=state)
 
-        self._workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
-        return self._finalizer.finalize(
-            output=self._output_builder.build(
-                identity=build_run_identity(
-                    run_input=run_input,
-                    agent_config=cfg.agent_config,
-                    iteration=cfg.max_iterations,
-                    run_id=cfg.run_id,
-                ),
-                status=RunStatus.PARTIAL,
-                stop_reason=StopReason.MAX_ITERATIONS,
-                state=state,
-                cfg=cfg,
-            ),
-            state=state,
-            cfg=cfg,
+    def _build_strategy(
+        self,
+        *,
+        architecture: BuiltArchitecture,
+        stop_policy: StopPolicy,
+    ) -> IterationStrategy:
+        if architecture.iteration_strategy_factory is not None:
+            return architecture.iteration_strategy_factory(
+                self._iteration_runner,
+                self._workspace,
+                self._output_builder,
+                self._finalizer,
+                stop_policy,
+            )
+        return StandardIterationStrategy(
+            iteration_runner=self._iteration_runner,
+            workspace=self._workspace,
+            output_builder=self._output_builder,
+            finalizer=self._finalizer,
         )

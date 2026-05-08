@@ -55,7 +55,7 @@ class IterationRunnerTests(unittest.TestCase):
                 "llm_autofix_agents.flow.execution.tests.run_test_command",
                 return_value=test_execution,
             ):
-                output = runner.run(
+                output = runner.execute_iteration(
                     run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
                     cfg=cfg,
                     state=state,
@@ -109,7 +109,7 @@ class IterationRunnerTests(unittest.TestCase):
                 "llm_autofix_agents.flow.execution.tests.run_test_command",
                 return_value=test_execution,
             ):
-                runner.run(
+                runner.execute_iteration(
                     run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
                     cfg=cfg,
                     state=state,
@@ -156,7 +156,7 @@ class IterationRunnerTests(unittest.TestCase):
                 "llm_autofix_agents.flow.execution.tests.run_test_command",
                 return_value=test_execution,
             ):
-                output = runner.run(
+                output = runner.execute_iteration(
                     run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
                     cfg=cfg,
                     state=state,
@@ -203,7 +203,7 @@ class IterationRunnerTests(unittest.TestCase):
                 "llm_autofix_agents.flow.execution.tests.run_test_command",
                 return_value=test_execution,
             ):
-                output = runner.run(
+                output = runner.execute_iteration(
                     run_input=RunInput(prompt="Fix parser failure", test_command="pytest"),
                     cfg=cfg,
                     state=state,
@@ -232,7 +232,7 @@ class _CapturingAgentRunner:
     def __init__(self) -> None:
         self.last_context = None
 
-    def run_agent(self, *, context, execution_index, provider_call):
+    def invoke_agent(self, *, context, execution_index, provider_call):
         del execution_index, provider_call
         self.last_context = context
         proposal = AgentFixIterationRecord(

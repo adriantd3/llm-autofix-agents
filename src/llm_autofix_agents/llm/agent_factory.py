@@ -10,7 +10,12 @@ from openai import AsyncOpenAI
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.settings import LLMSettings
 
-_DEFAULT_OUTPUT_SCHEMA = object()
+
+class _Missing:
+    """Sentinel to distinguish 'not provided' from None."""
+
+
+_DEFAULT_OUTPUT_SCHEMA = _Missing()
 
 
 def build_agent(
@@ -20,7 +25,7 @@ def build_agent(
     instructions: str,
     tools: Sequence[object],
     model_override: str | None = None,
-    output_schema: AgentOutputSchema | None | object = _DEFAULT_OUTPUT_SCHEMA,
+    output_schema: AgentOutputSchema | None | _Missing = _DEFAULT_OUTPUT_SCHEMA,
     handoffs: Sequence[object] | None = None,
     handoff_description: str | None = None,
     model_settings: object | None = None,
@@ -45,7 +50,7 @@ def build_agent(
         "model": resolved_model,
         "tools": resolved_tools,
     }
-    if output_schema is _DEFAULT_OUTPUT_SCHEMA:
+    if isinstance(output_schema, _Missing):
         agent_kwargs["output_type"] = AgentOutputSchema(AgentFixIterationRecord, strict_json_schema=False)
     elif output_schema is not None:
         agent_kwargs["output_type"] = output_schema

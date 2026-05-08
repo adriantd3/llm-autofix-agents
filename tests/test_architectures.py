@@ -308,10 +308,8 @@ class PlannerExecutorArchitectureTests(unittest.TestCase):
                     "executor": "executor-model",
                 },
             )
-            # First call -> planner (iteration 1)
-            facade_agent_1 = architecture.facade_agent_builder()
-            # Second call -> executor (iteration 2)
-            facade_agent_2 = architecture.facade_agent_builder()
+            # facade_agent_builder always returns executor (the main/terminal agent)
+            facade_agent = architecture.facade_agent_builder()
 
         self.assertEqual(architecture.architecture_name, "planner_executor")
         self.assertEqual(architecture.agent_name, "planner")
@@ -320,9 +318,11 @@ class PlannerExecutorArchitectureTests(unittest.TestCase):
         self.assertEqual(architecture.tool_profile, "planner")
         self.assertEqual(architecture.tool_count, 5)
 
-        # Iteration 1 returns planner, iteration 2 returns executor
-        self.assertEqual(facade_agent_1, {"name": "planner"})
-        self.assertEqual(facade_agent_2, {"name": "executor"})
+        # facade_agent_builder now always builds executor (strategy handles planner)
+        self.assertEqual(facade_agent, {"name": "executor"})
+
+        # Strategy factory is provided for phased iteration control
+        self.assertIsNotNone(architecture.iteration_strategy_factory)
 
         self.assertEqual(len(architecture.sub_agents), 1)
         self.assertEqual(architecture.sub_agents[0].agent_name, "executor")
@@ -332,13 +332,6 @@ class PlannerExecutorArchitectureTests(unittest.TestCase):
         self.assertEqual(
             [call.args for call in build_tools.call_args_list],
             [("planner",), ("executor",)],
-        )
-
-        # Iteration-based phasing: planner built first, then executor
-        self.assertEqual([call["name"] for call in build_agent_calls], ["planner", "executor"])
-        self.assertEqual(
-            [call["model_override"] for call in build_agent_calls],
-            ["planner-model", "executor-model"],
         )
 
 

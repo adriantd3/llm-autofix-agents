@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 
@@ -76,8 +77,10 @@ class WorkspaceManager:
             _git.restore_original_branch(cfg.repo_root, original_branch=cfg.temp_branch.original_branch)
             logs.append(f"git_branch_cleanup=kept_for_debug:{cfg.temp_branch.branch_name}")
         except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).warning(
+                "Failed to restore branch after debug: %s", exc
+            )
             logs.append(f"git_branch_cleanup_error={exc}")
-            pass
 
     def cleanup_temp_branch_after_success(self, cfg: RunConfig) -> str | None:
         if cfg.temp_branch is None:

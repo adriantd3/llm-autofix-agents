@@ -29,6 +29,11 @@ class APRHandoffInput(BaseModel):
     confidence: float | None = None
 
 
+# Lifecycle: set in _on_handoff_with_note() when an agent transfers control,
+# consumed and reset to None in _handoff_input_filter() when the SDK invokes
+# the input filter for the receiving agent. If the SDK does not invoke the
+# filter (e.g. an error occurs mid-handoff), the value persists until the
+# next iteration where a fresh Agent is built via facade_agent_builder.
 _pending_handoff_prompt: ContextVar[APRHandoffInput | None] = ContextVar(
     "pending_handoff_prompt",
     default=None,
@@ -36,6 +41,12 @@ _pending_handoff_prompt: ContextVar[APRHandoffInput | None] = ContextVar(
 
 
 async def _on_handoff_with_note(ctx: object, note: APRHandoffInput) -> None:
+    """Store handoff payload for the next agent in the chain.
+
+    Both `pending_handoff_note` (observability) and `_pending_handoff_prompt`
+    (prompt construction) are set here. They serve different downstream
+    consumers but carry the same data.
+    """
     pending_handoff_note.set(note.model_dump())
     _pending_handoff_prompt.set(note)
 
@@ -94,11 +105,8 @@ def build_multi_agent_handoff_architecture(
     localizer_tools = build_apr_tools("localizer")
     patcher_tools = build_apr_tools("patcher")
     validator_tools = build_apr_tools("validator")
-    tool_names = {
-        tool.__name__
-        for tool in (triage_tools + localizer_tools + patcher_tools + validator_tools)
-        if hasattr(tool, "__name__")
-    }
+    _all_tools = triage_tools + localizer_tools + patcher_tools + validator_tools
+    unique_tool_count = len({t.__name__ for t in _all_tools if hasattr(t, "__name__")})
 
     triage_model = resolve_agent_model(
         agent_models,
@@ -194,7 +202,7 @@ def build_multi_agent_handoff_architecture(
         agent_model=triage_model,
         instructions=HANDOFF_TRIAGE_INSTRUCTIONS,
         tool_profile="triage",
-        tool_count=len(tool_names),
+        tool_count=unique_tool_count,
         sub_agents=(
             SubAgentDescriptor(
                 agent_name="localizer",

@@ -181,10 +181,19 @@
   - 15 tests pasando (test_architectures + test_iteration_input).
 
 ## En curso
-- Spec activa: specs/010-planner-executor/spec.md
+- **Refactor arquitectural Fase 1 completada (Architecture Strategy Pattern)**:
+  - Nuevo módulo `src/llm_autofix_agents/flow/strategy.py` con `IterationStrategy` (Protocol), `StandardIterationStrategy`, `PhasedIterationStrategy`, `PlannerStopPolicy`.
+  - `RunOrchestrator._run_iterations()` delegado a strategy (zero behavioral change para mono/handoff/orchestrator).
+  - `BuiltArchitecture` extendido con campo opcional `iteration_strategy_factory`.
+  - `planner_executor.py` refactorizado: eliminado hack `_iteration_counter` mutable, reemplazado por `PhasedIterationStrategy`.
+  - `factory.py` ahora usa `RunArchitecture` enum para dispatch (A6 resuelto).
+  - Fase 4 (corrección/legibilidad) también completada: D1-D8 aplicados.
+  - 221 tests passing, 0 regresiones, 8 fallos pre-existentes.
+- **Pendiente**: Fases 2 y 3 del refactor (God Objects y IterationRunner decomposition).
 - **Bloqueante**: modelo qwen3-coder:30b no resuelve bugs que requieren razonamiento semántico fino (distinción `bool(v)` vs `v is not False`). Para validar la arquitectura completamente se requiere un modelo con mejor capacidad de razonamiento.
 
 ## Siguiente
-- Spec 004: agent-model-overrides (permitir configurar modelos distintos por rol de agente).
+- Fase 2: Descomponer God Objects (RunConfig/RunState segregation).
+- Fase 3: Descomponer IterationRunner + estructura de directorios.
 - Validacion end-to-end de planner-executor vs handoff vs mono_agent.
 - Validar con una run real mono_agent y multi_agent_handoff que produce events.jsonl, live.md enriquecido y observability.db con campos nuevos.

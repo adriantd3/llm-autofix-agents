@@ -24,7 +24,7 @@ def run_test_command(test_command: str | None, *, cwd: Path, timeout_seconds: in
     if test_command is None:
         return TestExecution(exit_code=0, timed_out=False, output="", signature="no-tests")
 
-    execution = CommandExecutor(max_output_chars=200_000).run(
+    execution = CommandExecutor(max_output_chars=200_000).execute_command(
         command=test_command,
         cwd=cwd,
         timeout_seconds=timeout_seconds,

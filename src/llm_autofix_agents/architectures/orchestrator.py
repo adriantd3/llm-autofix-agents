@@ -23,9 +23,8 @@ def build_multi_agent_orchestrator_architecture(
     localizer_tools = build_apr_tools("localizer")
     patcher_tools = build_apr_tools("patcher")
     validator_tools = build_apr_tools("validator")
-    tool_names = {
-        tool.__name__ for tool in (localizer_tools + patcher_tools + validator_tools) if hasattr(tool, "__name__")
-    }
+    _all_tools = localizer_tools + patcher_tools + validator_tools
+    unique_tool_count = len({t.__name__ for t in _all_tools if hasattr(t, "__name__")})
 
     localizer_model = resolve_agent_model(
         agent_models,
@@ -108,7 +107,7 @@ def build_multi_agent_orchestrator_architecture(
         agent_model=manager_model,
         instructions=ORCHESTRATOR_MANAGER_INSTRUCTIONS,
         tool_profile="manager",
-        tool_count=len(tool_names),
+        tool_count=unique_tool_count,
         sub_agents=(
             SubAgentDescriptor(
                 agent_name="localizer",
