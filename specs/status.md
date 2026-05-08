@@ -2,6 +2,12 @@
 
 ## Hecho
 - Estructura base del proyecto disponible (uv, Makefile, lint, typecheck, entrypoint).
+- **Refactor prompt 01 completado**: eliminados tres ficheros de ruido estructural (`agent_flow.py`, `flow/iteration_runner.py`, re-exports de `flow/__init__.py`).
+  - `run_agent_baseline` inlineada como `_run` en `batch/executor.py` (único consumidor real).
+  - `flow/orchestrator.py` apunta directamente a `flow/iteration/runner.py`.
+  - `flow/__init__.py` vaciado (sin consumidores externos de sus re-exports).
+  - `tests/test_agent_flow.py` actualizado para importar `_run` de `batch.executor` y parchear en ese namespace.
+  - Sin regresiones: 221 passing, 8 fallos todos pre-existentes.
 - Skill de elicitacion actualizado para exigir opciones recomendadas en cada pregunta.
 - Registro completo de decisiones en SPEC-001.
 - Lista de tasks por subhitos creada para SPEC-001.

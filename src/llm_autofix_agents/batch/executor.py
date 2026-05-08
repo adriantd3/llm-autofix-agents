@@ -5,8 +5,19 @@ import logging
 import os
 import sys
 
-from llm_autofix_agents.agent_flow import run_agent_baseline
-from llm_autofix_agents.contracts import ContainerInstantiation, RunInput, RunStatus
+from llm_autofix_agents.architectures import build_architecture
+from llm_autofix_agents.contracts import ContainerInstantiation, RunInput, RunOutput, RunStatus
+from llm_autofix_agents.flow.orchestrator import RunOrchestrator
+from llm_autofix_agents.flow.runtime.options import (
+    resolve_agent_models,
+    resolve_architecture,
+    resolve_max_turns,
+    resolve_tool_profile,
+)
+from llm_autofix_agents.flow.workspace.state import resolve_repo_root
+from llm_autofix_agents.llm.provider import LLMProvider, create_provider
+from llm_autofix_agents.llm.settings import LLMSettings
+from llm_autofix_agents.observability import resolve_observability_config
 from llm_autofix_agents.repo_source import prepare_target_repository
 
 _DEFAULT_AGENT_PROMPT = "Analyze a failing test and suggest a minimal fix strategy."
@@ -87,7 +98,7 @@ def main() -> int:
         test_command=test_command,
     )
     try:
-        run_output = run_agent_baseline(run_input)
+        run_output = _run(run_input)
     except ValueError as exc:
         logger.error("Invalid runtime configuration: %s", exc)
         return 2
@@ -103,6 +114,44 @@ def main() -> int:
     }
     print(json.dumps(payload, indent=2, ensure_ascii=True))
     return 0 if run_output.status == RunStatus.SUCCESS else 1
+
+
+def _run(
+    run_input: RunInput,
+    *,
+    settings: LLMSettings | None = None,
+    provider: LLMProvider | None = None,
+    architecture: str | None = None,
+    tool_profile: str | None = None,
+) -> RunOutput:
+    resolved_settings = settings if settings is not None else LLMSettings.from_env()
+    observability_config = resolve_observability_config(
+        repo_root=resolve_repo_root(run_input.target_repo),
+        metadata=run_input.metadata,
+    )
+    run_input.metadata = {
+        **run_input.metadata,
+        "observability_enabled": observability_config.enabled,
+        "live_log_enabled": observability_config.live_log_enabled,
+        "interactive": observability_config.interactive,
+        "results_dir": str(observability_config.results_dir),
+        "observability_db": str(observability_config.sqlite_db_path),
+    }
+    resolved_settings = resolved_settings.model_copy(update={"max_turns": resolve_max_turns(run_input.metadata)})
+    resolved_provider = provider if provider is not None else create_provider(resolved_settings)
+    resolved_architecture = build_architecture(
+        strategy=resolve_architecture(run_input.metadata, explicit=architecture),
+        settings=resolved_settings,
+        agent_models=resolve_agent_models(run_input.metadata),
+        tool_profile=tool_profile or resolve_tool_profile(run_input.metadata),
+    )
+    return RunOrchestrator(
+        architecture=resolved_architecture,
+    ).run(
+        run_input=run_input,
+        settings=resolved_settings,
+        provider=resolved_provider,
+    )
 
 
 def _configure_logging() -> None:

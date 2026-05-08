@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from pydantic import SecretStr
 
-from llm_autofix_agents.agent_flow import run_agent_baseline
+from llm_autofix_agents.batch.executor import _run as _run_agent_baseline
 from llm_autofix_agents.contracts import ErrorCategory, RunInput, RunStatus, StopReason
 from llm_autofix_agents.flow.workspace.git import TempBranchContext
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
@@ -22,7 +22,7 @@ class AgentFlowTests(unittest.TestCase):
         self._tmp_dir = tempfile.TemporaryDirectory()
         tmp_path = Path(self._tmp_dir.name)
         self._observability_config_patcher = patch(
-            "llm_autofix_agents.agent_flow.resolve_observability_config",
+            "llm_autofix_agents.batch.executor.resolve_observability_config",
             return_value=ObservabilityConfig(
                 enabled=False,
                 interactive=False,
@@ -64,7 +64,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value=[],
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(prompt="Fix parser failure"),
                 settings=_settings(),
                 provider=provider,
@@ -96,13 +96,13 @@ class AgentFlowTests(unittest.TestCase):
 
         with (
             patch(
-                "llm_autofix_agents.agent_flow.build_architecture",
+                "llm_autofix_agents.batch.executor.build_architecture",
                 return_value=sentinel_architecture,
             ) as build_architecture,
-            patch("llm_autofix_agents.agent_flow.RunOrchestrator") as orchestrator_cls,
+            patch("llm_autofix_agents.batch.executor.RunOrchestrator") as orchestrator_cls,
         ):
             orchestrator_cls.return_value.run.return_value = SimpleNamespace(status=RunStatus.SUCCESS)
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     metadata={
@@ -148,7 +148,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value="",
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     test_command="uv run python -m unittest",
@@ -196,7 +196,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     test_command="uv run python -m unittest",
@@ -210,7 +210,7 @@ class AgentFlowTests(unittest.TestCase):
         self.assertEqual(output.identity.iteration, 3)
 
     def test_run_agent_baseline_maps_provider_error(self) -> None:
-        output = run_agent_baseline(
+        output = _run_agent_baseline(
             RunInput(prompt="Fix parser failure"),
             settings=_settings(),
             provider=_FailingProvider(),
@@ -243,7 +243,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     test_command="uv run python -m unittest",
@@ -285,7 +285,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     test_command="uv run python -m unittest",
@@ -331,7 +331,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value=[],
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(prompt="Fix parser failure"),
                 settings=_settings(),
                 provider=provider,
@@ -382,7 +382,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     test_command="uv run python -m unittest",
@@ -431,7 +431,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value=[],
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(prompt="Fix parser failure"),
                 settings=_settings(),
                 provider=provider,
@@ -513,7 +513,7 @@ class AgentFlowStatusTests(unittest.TestCase):
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._tmp_path = Path(self._tmp_dir.name)
         self._obs_config_patcher = patch(
-            "llm_autofix_agents.agent_flow.resolve_observability_config",
+            "llm_autofix_agents.batch.executor.resolve_observability_config",
             return_value=ObservabilityConfig(
                 enabled=False,
                 interactive=False,
@@ -560,7 +560,7 @@ class AgentFlowStatusTests(unittest.TestCase):
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
-            output = run_agent_baseline(
+            output = _run_agent_baseline(
                 RunInput(
                     prompt="Fix parser failure",
                     test_command="uv run python -m unittest",

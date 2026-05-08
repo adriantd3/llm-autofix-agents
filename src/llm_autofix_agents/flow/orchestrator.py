@@ -7,7 +7,7 @@ from llm_autofix_agents.datasets import bugsinpy as _bugsinpy
 from llm_autofix_agents.flow.errors import WorkspaceError, error_category_from_exception
 from llm_autofix_agents.flow.execution import tests as _execution_tests
 from llm_autofix_agents.flow.execution.tests import resolve_test_timeout_seconds
-from llm_autofix_agents.flow.iteration_runner import IterationRunner
+from llm_autofix_agents.flow.iteration.runner import IterationRunner
 from llm_autofix_agents.flow.lifecycle.finalizer import RunFinalizer
 from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.policies.stop import StopPolicy
