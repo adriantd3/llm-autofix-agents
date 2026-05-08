@@ -69,7 +69,11 @@ class StandardIterationStrategy:
             if output is not None:
                 return self.finalizer.finalize(output=output, state=state, cfg=cfg)
 
-        self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+        self.workspace.restore_temp_branch_for_debug(
+            repo_root=cfg.repo_root,
+            temp_branch=state.temp_branch,
+            logs=state.accumulated_logs,
+        )
         return self.finalizer.finalize(
             output=self.output_builder.build(
                 identity=build_run_identity(
@@ -81,7 +85,6 @@ class StandardIterationStrategy:
                 status=RunStatus.PARTIAL,
                 stop_reason=StopReason.MAX_ITERATIONS,
                 state=state,
-                cfg=cfg,
             ),
             state=state,
             cfg=cfg,
@@ -131,32 +134,34 @@ class PhasedIterationStrategy:
     ) -> RunOutput:
         # Phase 1: Planner — investigate and produce repair plan.
         # PlannerStopPolicy ensures this never terminates early.
-        original_builder = cfg.facade_agent_builder
-        cfg.facade_agent_builder = self.planner_agent_builder
         planner_output = self.planner_runner.execute_iteration(
             run_input=run_input,
             cfg=cfg,
             state=state,
             iteration=1,
+            agent_builder_override=self.planner_agent_builder,
         )
         if planner_output is not None:
             # Only validation failures can stop the planner phase.
-            cfg.facade_agent_builder = original_builder
             return self.finalizer.finalize(output=planner_output, state=state, cfg=cfg)
 
         # Phase 2+: Executor — apply the fix using the planner's output.
-        cfg.facade_agent_builder = self.executor_agent_builder
         for iteration in range(2, cfg.max_iterations + 1):
             output = self.executor_runner.execute_iteration(
                 run_input=run_input,
                 cfg=cfg,
                 state=state,
                 iteration=iteration,
+                agent_builder_override=self.executor_agent_builder,
             )
             if output is not None:
                 return self.finalizer.finalize(output=output, state=state, cfg=cfg)
 
-        self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+        self.workspace.restore_temp_branch_for_debug(
+            repo_root=cfg.repo_root,
+            temp_branch=state.temp_branch,
+            logs=state.accumulated_logs,
+        )
         return self.finalizer.finalize(
             output=self.output_builder.build(
                 identity=build_run_identity(
@@ -168,7 +173,6 @@ class PhasedIterationStrategy:
                 status=RunStatus.PARTIAL,
                 stop_reason=StopReason.MAX_ITERATIONS,
                 state=state,
-                cfg=cfg,
             ),
             state=state,
             cfg=cfg,

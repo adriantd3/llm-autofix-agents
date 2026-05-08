@@ -156,7 +156,6 @@ class FlowRefactorTests(unittest.TestCase):
             status=RunStatus.PARTIAL,
             stop_reason=StopReason.NO_PROGRESS,
             state=state,
-            cfg=object(),
         )
 
         output.logs.append("mutated")
@@ -183,7 +182,6 @@ class FlowRefactorTests(unittest.TestCase):
         output = builder.exception_failure(
             identity=identity,
             state=state,
-            cfg=object(),
             message="provider execution failed",
             category=ErrorCategory.MODEL,
         )

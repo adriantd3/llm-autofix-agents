@@ -14,7 +14,6 @@ from llm_autofix_agents.llm.settings import LLMSettings
 from llm_autofix_agents.observability import (
     resolve_observability_config,
 )
-from llm_autofix_agents.observability.telemetry import RunTelemetry
 from llm_autofix_agents.tools.context import APRToolContext
 
 
@@ -38,16 +37,15 @@ class RunInitializer:
         agent_config = self._build_agent_config(settings=settings, resolved_model=resolved_model)
         identity = build_run_identity(run_input=run_input, agent_config=agent_config, iteration=1)
 
-        observer, sqlite_store, live_observer = build_observer(
+        observability = build_observer(
             config=resolve_observability_config(repo_root=repo_root, metadata=run_input.metadata),
             repo_root=repo_root,
             run_id=identity.run_id,
             architecture_name=self.architecture.architecture_name,
         )
-        telemetry = RunTelemetry(observer=observer, run_id=identity.run_id)
-        self._emit_run_started(telemetry=telemetry, run_input=run_input, identity=identity)
+        self._emit_run_started(observability=observability, run_input=run_input, identity=identity)
         run_agent_ids = self._register_agents(
-            telemetry=telemetry,
+            observability=observability,
             settings=settings,
             resolved_model=resolved_model,
         )
@@ -66,15 +64,12 @@ class RunInitializer:
             max_iterations=max_iterations,
             test_timeout_seconds=test_timeout_seconds,
             repo_root=repo_root,
-            telemetry=telemetry,
-            sqlite_store=sqlite_store,
-            live_observer=live_observer,
+            observability=observability,
             run_input_metadata=run_input.metadata,
             agent_config=agent_config,
-            run_started_monotonic=time.perf_counter(),
         )
-
-        return cfg, RunState()
+        state = RunState(run_started_monotonic=time.perf_counter())
+        return cfg, state
 
     def _build_agent_config(self, *, settings: LLMSettings, resolved_model: str) -> dict:
         agent_config = {
@@ -88,8 +83,8 @@ class RunInitializer:
         }
         return agent_config
 
-    def _emit_run_started(self, *, telemetry: RunTelemetry, run_input: RunInput, identity) -> None:
-        telemetry.start_run(
+    def _emit_run_started(self, *, observability, run_input: RunInput, identity) -> None:
+        observability.telemetry.start_run(
             architecture=self.architecture.architecture_name,
             target_repo=run_input.target_repo,
             target_branch=metadata_text(run_input.metadata, "runtime_branch"),
@@ -102,12 +97,12 @@ class RunInitializer:
     def _register_agents(
         self,
         *,
-        telemetry: RunTelemetry,
+        observability,
         settings: LLMSettings,
         resolved_model: str,
     ) -> dict[str, str]:
         """Register facade agent and all sub-agents in telemetry, return id mapping."""
-        run_agent_id = telemetry.register_agent(
+        run_agent_id = observability.telemetry.register_agent(
             agent_name=self.architecture.agent_name,
             agent_role=self.architecture.agent_role,
             provider=settings.provider.value,
@@ -123,7 +118,7 @@ class RunInitializer:
 
         for order, sub in enumerate(self.architecture.sub_agents, start=2):
             sub_model = sub.model or resolved_model
-            sub_run_agent_id = telemetry.register_agent(
+            sub_run_agent_id = observability.telemetry.register_agent(
                 agent_name=sub.agent_name,
                 agent_role=sub.agent_role,
                 provider=settings.provider.value,
@@ -138,3 +133,4 @@ class RunInitializer:
             run_agent_ids[sub.agent_name] = sub_run_agent_id
 
         return run_agent_ids
+

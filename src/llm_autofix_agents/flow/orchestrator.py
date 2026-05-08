@@ -70,7 +70,9 @@ class RunOrchestrator:
         cfg, state = self._start_run(run_input=run_input, settings=settings, provider=provider)
 
         try:
-            cfg.baseline_test_execution = self._run_baseline_tests(run_input=run_input, cfg=cfg, state=state)
+            state.baseline_test_execution = self._run_baseline_tests(
+                run_input=run_input, cfg=cfg, state=state
+            )
             return self._run_iterations(run_input=run_input, cfg=cfg, state=state)
         except Exception as exc:
             output = self._output_builder.exception_failure(
@@ -81,11 +83,14 @@ class RunOrchestrator:
                     run_id=cfg.run_id,
                 ),
                 state=state,
-                cfg=cfg,
                 message=str(exc),
                 category=error_category_from_exception(exc),
             )
-            self._workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            self._workspace.restore_temp_branch_for_debug(
+                repo_root=cfg.repo_root,
+                temp_branch=state.temp_branch,
+                logs=state.accumulated_logs,
+            )
             return self._finalizer.finalize(output=output, state=state, cfg=cfg)
 
     def _start_run(
@@ -114,7 +119,7 @@ class RunOrchestrator:
             cwd=cfg.repo_root,
             timeout_seconds=cfg.test_timeout_seconds,
         )
-        cfg.telemetry.record_test_execution(
+        cfg.observability.telemetry.record_test_execution(
             phase="baseline",
             command=run_input.test_command,
             exit_code=execution.exit_code,
@@ -173,3 +178,5 @@ class RunOrchestrator:
             output_builder=self._output_builder,
             finalizer=self._finalizer,
         )
+
+

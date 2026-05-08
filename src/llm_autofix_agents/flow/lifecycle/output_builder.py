@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from llm_autofix_agents.contracts import ErrorCategory, RunError, RunIdentity, RunOutput, RunStatus, StopReason
 from llm_autofix_agents.flow.policies.validation import IterationValidationResult
-from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
+from llm_autofix_agents.flow.runtime.context import RunState
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,6 @@ class RunOutputBuilder:
         status: RunStatus,
         stop_reason: StopReason,
         state: RunState,
-        cfg: RunConfig,
         errors: list[RunError] | None = None,
     ) -> RunOutput:
         artifacts = dict(state.latest_artifacts)
@@ -38,14 +37,12 @@ class RunOutputBuilder:
         identity: RunIdentity,
         validation: IterationValidationResult,
         state: RunState,
-        cfg: RunConfig,
     ) -> RunOutput:
         return self.build(
             identity=identity,
             status=RunStatus.FAILED,
             stop_reason=StopReason.VALIDATION_FAILURE,
             state=state,
-            cfg=cfg,
             errors=validation.to_errors(),
         )
 
@@ -54,7 +51,6 @@ class RunOutputBuilder:
         *,
         identity: RunIdentity,
         state: RunState,
-        cfg: RunConfig,
         cleanup_error: str,
     ) -> RunOutput:
         return self.build(
@@ -62,7 +58,6 @@ class RunOutputBuilder:
             status=RunStatus.FAILED,
             stop_reason=StopReason.INFRA_FAILURE,
             state=state,
-            cfg=cfg,
             errors=[
                 RunError(
                     category=ErrorCategory.INFRA,
@@ -78,7 +73,6 @@ class RunOutputBuilder:
         *,
         identity: RunIdentity,
         state: RunState,
-        cfg: RunConfig,
         message: str,
         category: ErrorCategory = ErrorCategory.MODEL,
     ) -> RunOutput:
@@ -87,7 +81,6 @@ class RunOutputBuilder:
             status=RunStatus.FAILED,
             stop_reason=_stop_reason_for_category(category),
             state=state,
-            cfg=cfg,
             errors=[RunError(category=category, message=message, retryable=False)],
         )
 
@@ -98,3 +91,4 @@ def _stop_reason_for_category(category: ErrorCategory) -> StopReason:
     if category in {ErrorCategory.MODEL, ErrorCategory.TOOL}:
         return StopReason.TOOL_FAILURE
     return StopReason.INFRA_FAILURE
+

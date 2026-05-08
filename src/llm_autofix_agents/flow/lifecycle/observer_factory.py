@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from llm_autofix_agents.flow.observability_stack import ObservabilityStack
 from llm_autofix_agents.observability import (
     CompositeObserver,
     ConsoleObserver,
@@ -12,6 +13,9 @@ from llm_autofix_agents.observability import (
     RunObserver,
     SQLiteObservabilityStore,
 )
+from llm_autofix_agents.observability.telemetry import RunTelemetry
+
+__all__ = ["ObservabilityStack", "build_observer"]
 
 
 def build_observer(
@@ -20,7 +24,7 @@ def build_observer(
     repo_root: Path,
     run_id: str,
     architecture_name: str,
-) -> tuple[RunObserver, SQLiteObservabilityStore | None, MarkdownLiveObserver | None]:
+) -> ObservabilityStack:
     from llm_autofix_agents.observability import SQLiteObserver
 
     observers: list[RunObserver] = []
@@ -39,4 +43,10 @@ def build_observer(
         if config.interactive:
             observers.append(ConsoleObserver())
 
-    return (CompositeObserver(observers) if observers else NullObserver()), sqlite_store, live_observer
+    observer = CompositeObserver(observers) if observers else NullObserver()
+    telemetry = RunTelemetry(observer=observer, run_id=run_id)
+    return ObservabilityStack(
+        telemetry=telemetry,
+        sqlite_store=sqlite_store,
+        live_observer=live_observer,
+    )

@@ -251,19 +251,22 @@ class _StubWorkspaceManager:
     def __init__(self, *, changes: WorkspaceChangeSet) -> None:
         self._changes = changes
 
-    def snapshot(self, cfg: RunConfig) -> dict[str, str]:
+    def snapshot(self, repo_root) -> dict[str, str]:
         return {}
 
-    def ensure_temp_branch_for_first_iteration(self, *, cfg: RunConfig, iteration: int, logs: list[str]) -> None:
+    def ensure_temp_branch(self, *, repo_root, run_id, run_input_metadata, iteration, current_branch, logs):
         return None
 
-    def inspect_changes(self, *, cfg: RunConfig, before_snapshot: dict[str, str]) -> WorkspaceChangeSet:
+    def inspect_changes(self, *, repo_root, before_snapshot: dict[str, str]) -> WorkspaceChangeSet:
         return self._changes
 
-    def restore_temp_branch_for_debug(self, *, cfg: RunConfig, logs: list[str]) -> None:
+    def restore_temp_branch_for_debug(self, *, repo_root, temp_branch, logs: list[str]) -> None:
         return None
 
-    def cleanup_temp_branch_after_success(self, cfg: RunConfig) -> str | None:
+    def cleanup_temp_branch_after_success(self, *, repo_root, temp_branch) -> str | None:
+        return None
+
+    def restore_all_changes(self, *, repo_root, logs: list[str]) -> None:
         return None
 
 
@@ -302,8 +305,18 @@ def _build_config(
     repo_root: Path | None = None,
     live_observer: MarkdownLiveObserver | None = None,
 ) -> RunConfig:
+    from llm_autofix_agents.flow.lifecycle.observer_factory import ObservabilityStack
+    from llm_autofix_agents.observability.telemetry import RunTelemetry
+
     settings = LLMSettings(provider=ProviderType.OLLAMA, model="test")
     resolved_repo_root = repo_root or Path(tempfile.mkdtemp())
+    # Wrap the stub telemetry in the real RunTelemetry interface expected by RunConfig
+    # For tests, we use the stub directly cast as RunTelemetry via the stack.
+    observability = ObservabilityStack(
+        telemetry=telemetry,  # type: ignore[arg-type]
+        sqlite_store=None,
+        live_observer=live_observer,
+    )
     return RunConfig(
         run_id="run-123",
         run_agent_id="agent-123",
@@ -318,14 +331,9 @@ def _build_config(
         max_iterations=3,
         test_timeout_seconds=120,
         repo_root=resolved_repo_root,
-        telemetry=telemetry,
-        sqlite_store=None,
-        live_observer=live_observer,
+        observability=observability,
         run_input_metadata={},
         agent_config={},
-        run_started_monotonic=0.0,
-        baseline_test_execution=None,
-        temp_branch=None,
     )
 
 

@@ -24,7 +24,7 @@ class RunFinalizer:
     """Owns final summary, final observability event, and final output enrichment."""
 
     def finalize(self, *, output: RunOutput, state: RunState, cfg: RunConfig) -> RunOutput:
-        duration_seconds = self._duration_seconds(cfg)
+        duration_seconds = self._duration_seconds(state)
         paths = self._paths(cfg)
 
         self._write_summary(output=output, state=state, cfg=cfg, paths=paths, duration_seconds=duration_seconds)
@@ -35,24 +35,17 @@ class RunFinalizer:
         logger.info("completed run_id=%s status=%s", cfg.run_id, output.status.value)
         return output
 
-    def _duration_seconds(self, cfg: RunConfig) -> float:
-        return max(0.0, time.perf_counter() - cfg.run_started_monotonic)
+    def _duration_seconds(self, state: RunState) -> float:
+        return max(0.0, time.perf_counter() - state.run_started_monotonic)
 
     def _paths(self, cfg: RunConfig) -> FinalizedRunPaths:
+        obs = cfg.observability
         summary_path = cfg.results_dir / "summary.json"
         return FinalizedRunPaths(
             summary_path=summary_path,
-            live_log_path=self._display_path(cfg.live_observer.path, cfg.repo_root) if cfg.live_observer else None,
-            observability_db_path=self._display_path(cfg.sqlite_store.db_path, cfg.repo_root)
-            if cfg.sqlite_store
-            else "disabled",
+            live_log_path=obs.live_log_display_path(repo_root=cfg.repo_root),
+            observability_db_path=obs.db_display_path(repo_root=cfg.repo_root),
         )
-
-    def _display_path(self, path: Path, repo_root: Path) -> str:
-        try:
-            return path.relative_to(repo_root).as_posix()
-        except ValueError:
-            return path.as_posix()
 
     def _write_summary(
         self,
@@ -87,7 +80,7 @@ class RunFinalizer:
         paths: FinalizedRunPaths,
         duration_seconds: float,
     ) -> None:
-        cfg.telemetry.finish_run(
+        cfg.observability.telemetry.finish_run(
             final_status=output.status.value,
             stop_reason=output.stop_reason.value,
             duration_seconds=duration_seconds,
@@ -98,7 +91,7 @@ class RunFinalizer:
             files_changed_count=state.max_changed_files_count,
             resolved=output.status == RunStatus.SUCCESS,
             live_log_path=paths.live_log_path,
-            summary_path=self._display_path(paths.summary_path, cfg.repo_root),
+            summary_path=_display_path(paths.summary_path, cfg.repo_root),
         )
 
     def _attach_observability_artifacts(
@@ -111,7 +104,7 @@ class RunFinalizer:
         output.artifacts = {
             **output.artifacts,
             "observability": {
-                "backend": "sqlite" if cfg.sqlite_store else "disabled",
+                "backend": "sqlite" if cfg.observability.sqlite_store else "disabled",
                 "db_path": paths.observability_db_path,
             },
         }
@@ -127,8 +120,16 @@ class RunFinalizer:
         output.logs.extend(
             [
                 "stage=observability",
-                f"observability_backend={'sqlite' if cfg.sqlite_store else 'disabled'}",
+                f"observability_backend={'sqlite' if cfg.observability.sqlite_store else 'disabled'}",
                 f"observability_duration_seconds={duration_seconds:.3f}",
                 f"observability_total_tokens={state.total_tokens}",
             ]
         )
+
+
+def _display_path(path: Path, repo_root: Path) -> str:
+    try:
+        return path.relative_to(repo_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+

@@ -181,6 +181,9 @@
   - 15 tests pasando (test_architectures + test_iteration_input).
 
 ## En curso
+- **Bloqueante**: modelo qwen3-coder:30b no resuelve bugs que requieren razonamiento semántico fino (distinción `bool(v)` vs `v is not False`). Para validar la arquitectura completamente se requiere un modelo con mejor capacidad de razonamiento.
+
+## Hecho (reciente)
 - **Refactor arquitectural Fase 1 completada (Architecture Strategy Pattern)**:
   - Nuevo módulo `src/llm_autofix_agents/flow/strategy.py` con `IterationStrategy` (Protocol), `StandardIterationStrategy`, `PhasedIterationStrategy`, `PlannerStopPolicy`.
   - `RunOrchestrator._run_iterations()` delegado a strategy (zero behavioral change para mono/handoff/orchestrator).
@@ -189,11 +192,18 @@
   - `factory.py` ahora usa `RunArchitecture` enum para dispatch (A6 resuelto).
   - Fase 4 (corrección/legibilidad) también completada: D1-D8 aplicados.
   - 221 tests passing, 0 regresiones, 8 fallos pre-existentes.
-- **Pendiente**: Fases 2 y 3 del refactor (God Objects y IterationRunner decomposition).
-- **Bloqueante**: modelo qwen3-coder:30b no resuelve bugs que requieren razonamiento semántico fino (distinción `bool(v)` vs `v is not False`). Para validar la arquitectura completamente se requiere un modelo con mejor capacidad de razonamiento.
+- **Refactor arquitectural Fase 2 completada (God Objects RunConfig/RunState)**:
+  - `ObservabilityStack` creado como value object frozen en `flow/observability_stack.py` (evita circular import).
+  - `RunConfig` refactorizado a `frozen=True`: campo `observability: ObservabilityStack` sustituye `telemetry`, `sqlite_store`, `live_observer`; eliminados `baseline_test_execution`, `temp_branch`, `run_started_monotonic` (ya no mutables via cfg).
+  - `RunState` enriquecido con `run_started_monotonic`, `baseline_test_execution`, `temp_branch`, `latest_observed_files`.
+  - `RunOutputBuilder` desacoplado de `RunConfig` (interfaz completamente limpia, sin cfg).
+  - `WorkspaceManager` desacoplado de `RunConfig` (todos los métodos usan parámetros explícitos).
+  - `build_iteration_logs()` desacoplado de `RunConfig` (parámetros explícitos).
+  - `PhasedIterationStrategy` corregida: ya no muta `cfg.facade_agent_builder`; usa `agent_builder_override` en `execute_iteration()`.
+  - `RunInitializer`, `RunOrchestrator`, `RunFinalizer`, `IterationRunner` actualizados coherentemente.
+  - 221 tests passing, 8 fallos pre-existentes sin cambio, lint limpio (0 errores nuevos).
 
 ## Siguiente
-- Fase 2: Descomponer God Objects (RunConfig/RunState segregation).
 - Fase 3: Descomponer IterationRunner + estructura de directorios.
 - Validacion end-to-end de planner-executor vs handoff vs mono_agent.
 - Validar con una run real mono_agent y multi_agent_handoff que produce events.jsonl, live.md enriquecido y observability.db con campos nuevos.

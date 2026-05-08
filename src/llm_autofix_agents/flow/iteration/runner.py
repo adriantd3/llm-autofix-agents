@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
@@ -50,7 +51,15 @@ class IterationRunner:
         cfg: RunConfig,
         state: RunState,
         iteration: int,
+        agent_builder_override: Callable[[], object] | None = None,
     ) -> RunOutput | None:
+        """Execute one APR iteration.
+
+        Args:
+            agent_builder_override: When provided, use this factory to build the agent
+                instead of cfg.facade_agent_builder. Used by PhasedIterationStrategy to
+                swap agents between phases without mutating cfg.
+        """
         identity = build_run_identity(
             run_input=run_input,
             agent_config=cfg.agent_config,
@@ -60,22 +69,29 @@ class IterationRunner:
         started_at = utc_now_iso()
         started_monotonic = time.perf_counter()
 
-        iteration_telemetry = cfg.telemetry.start_iteration(
+        iteration_telemetry = cfg.observability.telemetry.start_iteration(
             iteration_id=identity.iteration_id,
             iteration_index=iteration,
         )
-        self.workspace.ensure_temp_branch_for_first_iteration(
-            cfg=cfg,
+
+        new_branch = self.workspace.ensure_temp_branch(
+            repo_root=cfg.repo_root,
+            run_id=cfg.run_id,
+            run_input_metadata=cfg.run_input_metadata,
             iteration=iteration,
+            current_branch=state.temp_branch,
             logs=state.accumulated_logs,
         )
+        if new_branch is not None:
+            state.temp_branch = new_branch
 
-        before_snapshot = self.workspace.snapshot(cfg)
+        before_snapshot = self.workspace.snapshot(cfg.repo_root)
 
         state.validation_feedback = None
 
         # Run the iteration and get the proposed fix from the facade agent
-        agent = cfg.facade_agent_builder()
+        agent_builder = agent_builder_override or cfg.facade_agent_builder
+        agent = agent_builder()
         agent_context = self._build_context(
             run_input=run_input,
             cfg=cfg,
@@ -99,7 +115,7 @@ class IterationRunner:
             ),
         )
 
-        changes = self.workspace.inspect_changes(cfg=cfg, before_snapshot=before_snapshot)
+        changes = self.workspace.inspect_changes(repo_root=cfg.repo_root, before_snapshot=before_snapshot)
         self._write_iteration_patch(cfg=cfg, iteration=iteration, diff=changes.diff)
         self._validate_bugsinpy_workspace(run_input=run_input, cfg=cfg, state=state, phase="iteration")
         test_execution = _execution_tests.run_test_command(
@@ -138,7 +154,7 @@ class IterationRunner:
             proposal=agent_result.proposal,
             changes=changes,
             current_test_execution=test_execution,
-            baseline_test_execution=cfg.baseline_test_execution,
+            baseline_test_execution=state.baseline_test_execution,
         )
         state.latest_artifacts["validation"] = validation.details
         record_validation_logs(state=state, validation=validation)
@@ -191,7 +207,7 @@ class IterationRunner:
                 max_iterations=cfg.max_iterations,
                 previous_message=state.final_message,
                 latest_snapshot=state.latest_snapshot,
-                baseline_test_execution=cfg.baseline_test_execution,
+                baseline_test_execution=state.baseline_test_execution,
                 test_command=run_input.test_command,
                 validation_feedback=state.validation_feedback,
                 repo_root=cfg.repo_root,
@@ -239,10 +255,12 @@ class IterationRunner:
 
     def _record_state(self, *, state: RunState, observation: IterationObservation) -> None:
         proposal = observation.proposal
+        observed_files = list(observation.changes.all_changed_files)
+
         state.total_input_tokens += proposal.input_tokens
         state.total_output_tokens += proposal.output_tokens
         state.total_tokens += proposal.total_tokens
-        state.final_message = render_final_message(proposal)
+        state.final_message = render_final_message(proposal, observed_files=observed_files)
         state.latest_diff = observation.changes.diff
         state.latest_tests = to_test_results(observation.test_execution)
         state.latest_snapshot = build_continuation_snapshot(
@@ -250,8 +268,8 @@ class IterationRunner:
             changes=observation.changes,
             test_execution=observation.test_execution,
         )
-        state.max_changed_files_count = max(state.max_changed_files_count, len(observation.changes.all_changed_files))
-        proposal.changed_files = list(observation.changes.all_changed_files)
+        state.latest_observed_files = observed_files
+        state.max_changed_files_count = max(state.max_changed_files_count, len(observed_files))
 
     def _evaluate_outcome(
         self,
@@ -269,7 +287,10 @@ class IterationRunner:
 
         if not validation.ok:
             if validation.retryable and state.validation_retries < 1:
-                self.workspace.restore_all_changes(cfg=cfg, logs=state.accumulated_logs)
+                self.workspace.restore_all_changes(
+                    repo_root=cfg.repo_root,
+                    logs=state.accumulated_logs,
+                )
                 state.validation_feedback = build_validation_feedback(validation)
                 state.validation_retries += 1
                 self._append_iteration_logs(
@@ -290,13 +311,16 @@ class IterationRunner:
                 test_execution=test_execution,
                 confidence=proposal.confidence,
             )
-            self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            self.workspace.restore_temp_branch_for_debug(
+                repo_root=cfg.repo_root,
+                temp_branch=state.temp_branch,
+                logs=state.accumulated_logs,
+            )
             state.accumulated_logs.append(f"validation_result={validation.failure_type}")
             return self.output_builder.validation_failure(
                 identity=identity,
                 validation=validation,
                 state=state,
-                cfg=cfg,
             )
 
         if self.stop_policy.no_progress(
@@ -313,13 +337,16 @@ class IterationRunner:
                 test_execution=test_execution,
                 confidence=proposal.confidence,
             )
-            self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            self.workspace.restore_temp_branch_for_debug(
+                repo_root=cfg.repo_root,
+                temp_branch=state.temp_branch,
+                logs=state.accumulated_logs,
+            )
             return self.output_builder.build(
                 identity=identity,
                 status=RunStatus.PARTIAL,
                 stop_reason=StopReason.NO_PROGRESS,
                 state=state,
-                cfg=cfg,
             )
 
         if self.stop_policy.success(
@@ -336,12 +363,14 @@ class IterationRunner:
                 test_execution=test_execution,
                 confidence=proposal.confidence,
             )
-            cleanup_error = self.workspace.cleanup_temp_branch_after_success(cfg)
+            cleanup_error = self.workspace.cleanup_temp_branch_after_success(
+                repo_root=cfg.repo_root,
+                temp_branch=state.temp_branch,
+            )
             if cleanup_error:
                 return self.output_builder.branch_cleanup_failed(
                     identity=identity,
                     state=state,
-                    cfg=cfg,
                     cleanup_error=cleanup_error,
                 )
             return self.output_builder.build(
@@ -349,7 +378,6 @@ class IterationRunner:
                 status=RunStatus.SUCCESS,
                 stop_reason=StopReason.COMPLETED,
                 state=state,
-                cfg=cfg,
             )
 
         if self.stop_policy.agent_reported_stuck(proposal):
@@ -361,14 +389,17 @@ class IterationRunner:
                 test_execution=test_execution,
                 confidence=proposal.confidence,
             )
-            self.workspace.restore_temp_branch_for_debug(cfg=cfg, logs=state.accumulated_logs)
+            self.workspace.restore_temp_branch_for_debug(
+                repo_root=cfg.repo_root,
+                temp_branch=state.temp_branch,
+                logs=state.accumulated_logs,
+            )
             state.accumulated_logs.append("iteration_result=agent_reported_stuck")
             return self.output_builder.build(
                 identity=identity,
                 status=RunStatus.PARTIAL,
                 stop_reason=StopReason.NO_PROGRESS,
                 state=state,
-                cfg=cfg,
             )
 
         return None
@@ -396,11 +427,16 @@ class IterationRunner:
     ) -> None:
         state.accumulated_logs.extend(
             build_iteration_logs(
-                cfg=cfg,
+                architecture_name=cfg.architecture_name,
                 iteration=iteration,
+                max_iterations=cfg.max_iterations,
                 changed_files=changes.all_changed_files,
                 test_execution=test_execution,
                 confidence=confidence,
+                tool_profile=cfg.tool_profile,
+                tool_count=cfg.tool_count,
+                provider=cfg.settings.provider.value,
+                model=cfg.settings.model,
             )
         )
 
@@ -418,8 +454,8 @@ class IterationObservation:
     test_execution: TestExecution
 
 
-def render_final_message(proposal: AgentFixIterationRecord) -> str:
-    files = ", ".join(proposal.changed_files) if proposal.changed_files else "(unspecified)"
+def render_final_message(proposal: AgentFixIterationRecord, *, observed_files: list[str]) -> str:
+    files = ", ".join(observed_files) if observed_files else "(none observed)"
     lines = [
         f"status: {proposal.status}",
         f"reasoning_summary: {proposal.reasoning_summary}",
@@ -427,3 +463,4 @@ def render_final_message(proposal: AgentFixIterationRecord) -> str:
         f"changed_files: {files}",
     ]
     return "\n".join(lines)
+
