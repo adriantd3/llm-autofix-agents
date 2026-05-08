@@ -1,6 +1,21 @@
 # Estado
 
 ## Hecho
+- **E2E Validation post-refactors completada (2026-05-08)**:
+  - Triage de 8 tests fallando: 4 ERRORs en `test_repo_state.py` + 4 FAILs en `test_agent_flow.py`.
+  - Causa raíz: mock stale. Código refactorizado de `collect_repo_diff` a `collect_repo_diff_for_paths` y `_patch_run_test_command` apuntaba a `flow.execution.tests` en lugar de los namespaces donde `orchestrator.py` y `runner.py` importan la función.
+  - Fixes: (1) sed sobre 13 mocks para actualizar target; (2) `_patch_run_test_command` ahora parchea `flow.orchestrator.run_test_command` + `flow.iteration.runner.run_test_command` y divide el side_effect (baseline → orchestrator, iterations → runner).
+  - Suite: **217 passing, 0 failures**.
+  - Creado `batches/quixbugs-planner-executor-local-sample.yaml` (nuevo).
+  - Resultados batch:
+    | Batch | Arquitectura | Dataset | Bugs | Resultado |
+    |---|---|---|---|---|
+    | quixbugs-mono-local-sample | mono_agent | quixbugs | gcd, flatten, mergesort | **3/3 success** |
+    | quixbugs-handoff-local-sample | multi_agent_handoff | quixbugs | gcd, flatten, mergesort | **3/3 success** |
+    | bugsinpy-youtube-dl-1-test | mono_agent | bugsinpy | youtube-dl-1 | **partial** (max_iter) |
+    | bugsinpy-planner-executor-local | planner_executor | bugsinpy | youtube-dl-1 | **1/1 success** |
+  - 0 infra_failures en los 4 batches. Pipeline infra 100% estable.
+  - El resultado partial en BugsInPy+mono_agent es un blocker de modelo (qwen3.5:9b no converge en boolean logic fix). Ver `specs/lessons.md`.
 - Estructura base del proyecto disponible (uv, Makefile, lint, typecheck, entrypoint).
 - **Refactor prompt 01 completado**: eliminados tres ficheros de ruido estructural (`agent_flow.py`, `flow/iteration_runner.py`, re-exports de `flow/__init__.py`).
   - `run_agent_baseline` inlineada como `_run` en `batch/executor.py` (único consumidor real).

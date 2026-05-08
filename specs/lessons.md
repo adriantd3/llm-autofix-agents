@@ -9,6 +9,23 @@
 - Alternativa recomendada:
 - Regla preventiva para futuras specs:
 
+## 2026-05-08 (tests con mocks stale tras refactor)
+- Contexto: Tras multiples refactors acumulados, la suite tenia 8 fallos clasificados como "pre-existentes".
+- Anti-patron detectado: Mocks apuntando a nombre antiguo de funcion (`collect_repo_diff`) cuando el codigo usa ya `collect_repo_diff_for_paths`. Y `_patch_run_test_command` apuntando al modulo fuente (`flow.execution.tests`) en lugar de los namespaces donde `orchestrator.py` y `runner.py` tienen su binding local.
+- Que no hay que hacer: Asumir que un mock en el modulo fuente intercept llamadas desde modulos que importaron la funcion con `from module import func` (binding local en import time, no referencia viva).
+- Por que estuvo mal: Python `from module import func` crea un binding local al objeto. Parchear `module.func` cambia el dict del modulo fuente pero NO afecta los bindings ya creados en otros modulos. Los tests pasaban por casualidad (real command exitcode=5, no 0 ni 1, mascara el comportamiento esperado).
+- Alternativa recomendada: Parchear `"target_module.symbol_name"` donde `target_module` es el modulo que LLAMA a la funcion, no el que la define. Dividir side_effect cuando hay N consumidores (orchestrator baseline vs iteration runner).
+- Regla preventiva: Cuando un refactor renombra una funcion o cambia su modulo de origen, buscar todos los mocks en tests y actualizar el target. Verificar con `grep "old_name"` en `tests/`.
+
+## 2026-05-08 (model blocker BugsInPy qwen3.5:9b)
+- Contexto: BugsInPy youtube-dl-1 con mono_agent + qwen3.5:9b → partial/max_iterations.
+- Anti-patron detectado: Evaluar capacidad del sistema solo en QuixBugs (bugs simples, 1 archivo, fix trivial). BugsInPy tiene bugs mas complejos (logica boolean en utils multifuncion).
+- Que no hay que hacer: Concluir que el sistema falla por infra cuando el problema es capacidad del modelo.
+- Por que estuvo mal: El modelo identifica el root cause correctamente pero no produce un fix valido tras 3 iteraciones. Con qwen3-coder:30b (planner_executor) el mismo bug se resuelve en 1 iteracion con exito.
+- Alternativa recomendada: Para benchmarks complejos (BugsInPy), usar modelos mas potentes o arquitectura planner_executor. qwen3.5:9b es suficiente para QuixBugs.
+- Regla preventiva: Cuando un run termina en `partial/max_iterations` con file_changes>0, revisar `live.md` iteracion por iteracion antes de clasificar como infra error.
+
+
 ## Notas iniciales
 - Mantener esta bitacora corta y accionable.
 - Registrar solo aprendizajes reutilizables.

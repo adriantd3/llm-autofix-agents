@@ -52,7 +52,7 @@ class AgentFlowTests(unittest.TestCase):
         provider = _CapturingProvider(_proposal(reasoning_summary="suggested fix"))
         with (
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="",
             ),
             patch(
@@ -144,7 +144,7 @@ class AgentFlowTests(unittest.TestCase):
                 return_value=[],
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="",
             ),
         ):
@@ -192,7 +192,7 @@ class AgentFlowTests(unittest.TestCase):
                 ],
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -239,7 +239,7 @@ class AgentFlowTests(unittest.TestCase):
                 ],
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -281,7 +281,7 @@ class AgentFlowTests(unittest.TestCase):
                 ],
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -319,7 +319,7 @@ class AgentFlowTests(unittest.TestCase):
                 "llm_autofix_agents.flow.workspace.manager._git.delete_branch",
             ) as delete_branch,
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="",
             ),
             patch(
@@ -378,7 +378,7 @@ class AgentFlowTests(unittest.TestCase):
                 ],
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -419,7 +419,7 @@ class AgentFlowTests(unittest.TestCase):
                 "llm_autofix_agents.flow.workspace.manager._git.delete_branch",
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="",
             ),
             patch(
@@ -556,7 +556,7 @@ class AgentFlowStatusTests(unittest.TestCase):
                 ],
             ),
             patch(
-                "llm_autofix_agents.flow.workspace.state.collect_repo_diff",
+                "llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths",
                 return_value="diff --git a/src/a.py b/src/a.py",
             ),
         ):
@@ -612,11 +612,23 @@ def _patch_run_test_command(*, side_effect):
 
     The first item in side_effect is consumed by the orchestrator baseline test;
     the remaining items are consumed by the iteration runner.
+
+    Both the orchestrator and iteration runner bind run_test_command at import
+    time from flow.execution, so each needs its own patch targeting its local
+    namespace binding.
     """
     from contextlib import ExitStack
 
+    orchestrator_effect = side_effect[:1]
+    runner_effect = side_effect[1:]
+
     stack = ExitStack()
-    stack.enter_context(patch("llm_autofix_agents.flow.execution.tests.run_test_command", side_effect=side_effect))
+    stack.enter_context(
+        patch("llm_autofix_agents.flow.orchestrator.run_test_command", side_effect=orchestrator_effect)
+    )
+    stack.enter_context(
+        patch("llm_autofix_agents.flow.iteration.runner.run_test_command", side_effect=runner_effect)
+    )
     return stack
 
 
