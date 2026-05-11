@@ -212,6 +212,7 @@ __marimo__/
 .specify/scripts/
 .specify/*.json
 
+.opencode/
 
 openai-examples/
 results/
