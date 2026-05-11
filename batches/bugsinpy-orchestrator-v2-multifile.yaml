@@ -1,0 +1,22 @@
+name: bugsinpy-orchestrator-v2-multifile
+description: >
+  Task-agent orchestrator (v2) on cross-file BugsInPy bugs.
+  Validates the new explorer + test-runner architecture on bugs
+  that require understanding multiple files.
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 3
+  timeout_seconds: 1200
+  capture_errors: true
+
+bugs:
+  - youtube-dl-42
+  - keras-20
+  - thefuck-16

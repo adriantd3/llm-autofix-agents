@@ -1,0 +1,18 @@
+name: bugsinpy-orchestrator-v2-single
+description: >
+  Single-bug smoke batch for fast iteration on orchestrator v2 improvements.
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 2
+  timeout_seconds: 1200
+  capture_errors: true
+
+bugs:
+  - youtube-dl-42

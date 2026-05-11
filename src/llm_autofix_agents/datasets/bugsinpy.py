@@ -202,16 +202,12 @@ class BugsInPyAdapter:
     def _resolve_test_command(self, dataset: DatasetConfig, bug: BugEntry) -> str:
         if bug.test_command is not None:
             return bug.test_command
-        # Always use the wrapper by default because `bugsinpy-test` does not
-        # propagate non-zero exit codes reliably (it writes failures to
-        # bugsinpy_fail.txt but exits 0).
+        # Use the venv created by bugsinpy-compile. Both this command and the
+        # venv run in bugsinpy-runner (Python 3.8), so the symlinks in env/
+        # always resolve to the correct interpreter.
         return (
             "test -f bugsinpy_run_test.sh && test -f bugsinpy_compile_flag || exit 2; "
-            "rm -f bugsinpy_fail.txt; "
-            "bugsinpy-test; "
-            "status=$?; "
-            "if [ -s bugsinpy_fail.txt ]; then cat bugsinpy_fail.txt; exit 1; fi; "
-            "exit $status"
+            ". env/bin/activate && bash bugsinpy_run_test.sh"
         )
 
 

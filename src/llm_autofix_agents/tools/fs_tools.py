@@ -122,7 +122,17 @@ def search_files(
     context_lines: int = 0,
     max_results: int = 20,
 ) -> str:
-    """Search text files in the workspace for a literal string or regex."""
+    """Search text files in the workspace for a literal string or regex pattern.
+
+    IMPORTANT: set regex=True when using regex syntax such as ^, $, \\d, \\s, \\b,
+    or alternation (|). Without regex=True the pattern is treated as a literal
+    string and special characters like ^ will NOT match as anchors.
+
+    Examples:
+      search_files("import pipes", glob="**/*.py")              # literal search
+      search_files("^def ", glob="**/*.py", regex=True)         # regex: functions at start of line
+      search_files("fix_xml|shell_quote", glob="**/*.py", regex=True)  # alternation
+    """
     cfg = get_tool_context(ctx)
     root = workspace_root(cfg)
     cap = max(1, min(max_results, cfg.max_search_hits))

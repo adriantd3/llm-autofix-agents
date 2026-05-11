@@ -1,0 +1,19 @@
+name: quixbugs-planner-executor-local-sample
+description: Planner-Executor sample on 3 QuixBugs bugs with local Qwen3-coder
+
+dataset: ../datasets/quixbugs.yaml
+
+global:
+  architecture: planner_executor
+  llm:
+    provider: ollama
+    model: qwen3-coder:30b
+    max_turns: 25
+  max_iterations: 3
+  timeout_seconds: 300
+  capture_errors: true
+
+bugs:
+  - gcd
+  - flatten
+  - mergesort

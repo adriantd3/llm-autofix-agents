@@ -122,6 +122,12 @@ def build_continuation_snapshot(
         "- Changed files observed:",
         changed_block,
     ]
+    if not changed_files:
+        lines.append(
+            "⚠ WARNING: No source files were modified in the previous iteration. "
+            "You MUST apply at least one code change before calling run_tests. "
+            "Investigate the root cause and edit the relevant source file."
+        )
     if changes.diff:
         diff_preview = changes.diff[:800]
         if len(changes.diff) > 800:

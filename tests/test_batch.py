@@ -621,8 +621,8 @@ class TestBugsInPyAdapter(unittest.TestCase):
 
             self.assertEqual(case.case_id, "youtube-dl-2")
             self.assertEqual(case.dataset_type, "bugsinpy")
-            self.assertIn("bugsinpy-test", case.test_command)
-            self.assertIn("bugsinpy_fail.txt", case.test_command)
+            self.assertIn("bugsinpy_run_test.sh", case.test_command)
+            self.assertIn("env/bin/activate", case.test_command)
             self.assertEqual(case.runner_service, "bugsinpy-runner")
             self.assertIn("project", case.prompt_variables)
             self.assertEqual(case.prompt_variables["project"], "youtube-dl")
@@ -877,8 +877,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
         cmd = adapter._resolve_test_command(dataset, bug)
         self.assertIn("bugsinpy_run_test.sh", cmd)
         self.assertIn("bugsinpy_compile_flag", cmd)
-        self.assertIn("bugsinpy_fail.txt", cmd)
-        self.assertIn("bugsinpy-test", cmd)
+        self.assertIn("env/bin/activate", cmd)
 
     def test_resolve_test_command_respects_bug_override(self):
         adapter = BugsInPyAdapter()
@@ -903,10 +902,10 @@ class TestBugsInPyAdapter(unittest.TestCase):
         )
         bug = dataset.bugs[0]
         cmd = adapter._resolve_test_command(dataset, bug)
-        # Wrapper is always used by default; tooling.test_command is ignored
-        # because bugsinpy-test does not propagate exit codes reliably.
-        self.assertIn("bugsinpy_fail.txt", cmd)
-        self.assertIn("bugsinpy-test", cmd)
+        # Venv is activated directly; tooling.test_command is ignored
+        # because the default command uses env/bin/activate + bugsinpy_run_test.sh.
+        self.assertIn("env/bin/activate", cmd)
+        self.assertIn("bugsinpy_run_test.sh", cmd)
 
 
 class TestPreparedExecutionCase(unittest.TestCase):

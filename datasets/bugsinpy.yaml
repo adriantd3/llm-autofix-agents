@@ -80,6 +80,13 @@ bugs:
       bug_id: "10"
       version: "0"
 
+  - id: youtube-dl-42
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "42"
+      version: "0"
+
   # pandas (10 bugs)
   - id: pandas-1
     program: pandas
@@ -362,4 +369,80 @@ bugs:
     metadata:
       project: thefuck
       bug_id: "10"
+      version: "0"
+
+  - id: thefuck-16
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "16"
+      version: "0"
+
+  # black
+  - id: black-6
+    program: black
+    metadata:
+      project: black
+      bug_id: "6"
+      version: "0"
+
+  # keras
+  - id: keras-1
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "1"
+      version: "0"
+
+  - id: keras-11
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "11"
+      version: "0"
+
+  - id: keras-20
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "20"
+      version: "0"
+
+  # matplotlib
+  - id: matplotlib-1
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "1"
+      version: "0"
+
+  - id: matplotlib-15
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "15"
+      version: "0"
+
+  # cookiecutter
+  - id: cookiecutter-4
+    program: cookiecutter
+    metadata:
+      project: cookiecutter
+      bug_id: "4"
+      version: "0"
+
+  # scrapy
+  - id: scrapy-33
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "33"
+      version: "0"
+
+  # fastapi
+  - id: fastapi-1
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "1"
       version: "0"

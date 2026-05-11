@@ -26,9 +26,54 @@
 - Regla preventiva: Cuando un run termina en `partial/max_iterations` con file_changes>0, revisar `live.md` iteracion por iteracion antes de clasificar como infra error.
 
 
-## Notas iniciales
-- Mantener esta bitacora corta y accionable.
+## 2026-05-11 (BugsInPy Docker: venvs no son portables entre contenedores)
+- Contexto: split bugsinpy-runner (prep, Python 3.8) / runner (agente+tests, Python 3.13) → todos los bugs fallaban con `import pipes` o `No module named pytest`.
+- Anti-patron detectado: crear el venv del bug en un contenedor y ejecutar los tests en otro.
+- Que no hay que hacer: separar prep y ejecucion de tests en contenedores con distinta version de Python en la misma ruta `/usr/local/bin/python3`.
+- Por que estuvo mal: los venvs de BugsInPy contienen symlinks absolutos a `/usr/local/bin/python3`. Al ejecutar los tests en `runner` (Python 3.13), los symlinks resuelven al Python equivocado → `pipes`/`imp` no existen en 3.13.
+- Alternativa recomendada: prep Y ejecucion de tests en el MISMO contenedor (`bugsinpy-runner`, Python 3.8 sistema). El agente tambien corre ahi, con uv gestionando su propio Python 3.13 en `UV_PYTHON_INSTALL_DIR=/opt/uv-python` (world-readable con `chmod -R a+rX`).
+- Regla preventiva: para cualquier dataset con venvs precreados, la ejecucion de tests DEBE ocurrir en el mismo contenedor donde se creo el venv.
+
+## 2026-05-11 (execute_command como shell generico)
+- Contexto: trazas de orchestrator multi_agent_v2 muestran execute_command como 2a herramienta mas usada (36 llamadas), con cat/ls/grep/find siendo los comandos mas frecuentes.
+- Anti-patron detectado: el orchestrator usa execute_command como shell de propósito general en lugar de las herramientas dedicadas.
+- Que no hay que hacer: dar execute_command al orchestrator main si tiene read_file, list_files, search_files.
+- Por que estuvo mal: (1) las calls son opacas (un `cat` no aporta estructura), (2) el agente puede hacer `pip install` o modificar el entorno, (3) consume turns sin aportar más info que read_file.
+- Alternativa recomendada: eliminar execute_command del perfil `orchestrator_main`. Forzar uso de herramientas dedicadas. Solo el test_runner task-agent necesita execute_command para setups complejos.
+- Regla preventiva: un perfil de herramientas para un agente de razonamiento no debe incluir un shell genérico si existen herramientas dedicadas para las mismas operaciones.
+
+## 2026-05-11 (explore_code task-agent ignorado)
+- Contexto: en toda la campaña de 3 bugs x 3 iteraciones, explore_code fue invocado solo 1 vez. El orchestrator leía archivos directamente.
+- Anti-patron detectado: instrucciones que dicen "prefer explore_code" pero no obligan a usarlo → el agente siempre toma el camino de menor resistencia (leer directamente).
+- Que no hay que hacer: instrucciones opcionales para herramientas que deben ser obligatorias.
+- Por que estuvo mal: el punto de la arquitectura task-agent es que el orchestrator no gaste turns leyendo archivos; sin exploración delegada, el patrón colapsa al mono-agente.
+- Alternativa recomendada: instruccion MANDATORY: "CALL explore_code FIRST every iteration". Reforzar con regla de turno presupuesto.
+- Regla preventiva: si un task-agent es parte del diseño de la arquitectura, las instrucciones deben obligar su uso, no sugerirlo.
 - Registrar solo aprendizajes reutilizables.
+
+## 2026-05-11 (orchestrator explora en loop y nunca escribe código)
+- Contexto: youtube-dl-42 con orchestrator v2 + qwen3.5:9b → 3 iteraciones, 8-15 tool calls por iteración, 0 changed_files. El agente entendía perfectamente el fix (reasoning_summary correcto) pero generaba respuesta de texto en lugar de llamar `replace_in_file`.
+- Anti-patron detectado: dar al orchestrator las mismas herramientas de exploración que al explorer task-agent (list_files, search_files, get_workspace_info). El agente elige exploración sobre edición porque tiene más opciones de "seguir investigando" que de "escribir ahora".
+- Que no hay que hacer: incluir list_files, search_files, get_workspace_info, git_status_summary, git_diff_summary en APR_ORCHESTRATOR_MAIN_TOOLS.
+- Por que estuvo mal: con 9 herramientas de exploración disponibles, qwen3.5:9b entra en un loop exploratorio (pattern matching de su entrenamiento: "responder con texto tras reunir info") en vez de transicionar a "modo acción". Con 12-15 calls de exploración, el modelo "decide" que tiene suficiente contexto y genera texto resumen sin llamar a replace_in_file.
+- Alternativa recomendada: perfile mínimo: `APR_ORCHESTRATOR_MAIN_TOOLS = [read_file, replace_in_file, replace_lines, write_file]`. Exploración delegada EXCLUSIVAMENTE a explore_code task-agent. read_file solo para recuperar exactos old_string para replace_in_file (máx 1 call por iteración).
+- Regla preventiva: el perfil de herramientas del orchestrator debe hacer que "escribir código" sea la acción más fácil disponible, no explorar más. Si hay 8 herramientas de lectura y 3 de escritura, el agente leerá 8 veces antes de escribir.
+
+## 2026-05-11 (output_schema y ModelBehaviorError en orchestrator con qwen3.5:9b)
+- Contexto: orchestrator v2 con qwen3.5:9b, `output_schema=AgentOutputSchema(AgentFixIterationRecord)` → `ModelBehaviorError` en todas las iteraciones. El modelo nunca llamaba `replace_in_file` ni `final_output`.
+- Anti-patron detectado: dar `output_schema` estructurado (JSON) a un orchestrator que usa qwen3.5:9b. El SDK inyecta un tool `final_output` que el modelo debe llamar para terminar. qwen3.5:9b no llama correctamente a `final_output` → `ModelBehaviorError`.
+- Que no hay que hacer: usar `output_schema=AgentOutputSchema(...)` en agentes locales con modelos pequeños (qwen3.5:9b, 9B params). El `final_output` tool crea ambigüedad: ¿llamo replace_in_file y luego final_output? ¿O solo final_output? El modelo elige solo final_output (incorrectamente) o no llama ninguno.
+- Por que estuvo mal: la regla `output_schema=None REQUIRED on all agents to prevent final_output tool injection` ya estaba documentada para explorer y test_runner pero NO se aplicó al orchestrator.
+- Alternativa recomendada: `output_schema=None` en todos los agentes locales, incluido el orchestrator. El provider code ya maneja texto plano vía `isinstance(output, str)`. El pipeline evalúa changed_files independientemente del output del modelo.
+- Regla preventiva: toda llamada a `build_agent()` para un agente local (qwen, llama, etc.) debe incluir `output_schema=None`. Verificar en code review que el orchestrator también lo tiene.
+
+## 2026-05-11 (sub-agente LLM para run_tests bloqueante con Ollama single-slot)
+- Contexto: `run_tests` como sub-agente LLM fallaba con "An error occurred" en la primera llamada (4.885s) y en llamadas concurrentes (28.340s) cuando el orchestrator invocaba el sub-agent justo después de llamar a replace_in_file.
+- Anti-patron detectado: usar un sub-agente LLM para ejecutar tests cuando el modelo local tiene un único slot de inferencia. El orchestrator termina de generar su respuesta y llama al test runner sub-agent, que intenta acceder al mismo modelo → colisión/timeout.
+- Que no hay que hacer: `test_runner_agent.as_tool(tool_name="run_tests")` con modelo local single-slot.
+- Por que estuvo mal: un sub-agente LLM necesita 2 llamadas LLM (1 para decidir qué herramienta llamar + 1 para resumir el resultado). Con Ollama single-slot, la segunda llamada LLM del sub-agent entra en cola detrás del orchestrator → "An error occurred" o timeout silencioso.
+- Alternativa recomendada: `run_test_target` como herramienta directa en el perfil del orchestrator. Devuelve stdout/stderr directamente, el orchestrator lo lee sin necesidad de LLM intermediario. La summarización la hace el orchestrator con su propio LLM call.
+- Regla preventiva: con modelos locales (single-slot), cada herramienta que llama a un sub-agente LLM puede fallar cuando el modelo ya está ocupado. Preferir herramientas directas (sin LLM) siempre que sea posible.
 
 ## Regla de uso (futuras specs)
 - Este archivo es para anti-patrones detectados (por ejemplo, over-engineering o decisiones que complican sin aportar valor).

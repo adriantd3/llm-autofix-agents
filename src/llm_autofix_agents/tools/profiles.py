@@ -86,6 +86,33 @@ APR_VALIDATOR_TOOLS = [
     git_diff_summary,
 ]
 
+# Orchestrator v2 (task-agents) tool profiles
+# explorer task-agent: read-only (reuses APR_TRIAGE_TOOLS)
+APR_ORCHESTRATOR_EXPLORER_TOOLS = APR_TRIAGE_TOOLS
+
+# test-runner task-agent: execution + minimal read
+APR_ORCHESTRATOR_TEST_RUNNER_TOOLS = [
+    execute_command,
+    run_test_target,
+    read_file,
+]
+
+# main orchestrator: write tools + read_file + direct test execution.
+# Intentionally EXCLUDED to prevent exploration procrastination loops:
+#   - execute_command: forces structured tool use, no cat/ls/grep
+#   - list_files, search_files, get_workspace_info: exploration done via explore_code task-agent
+#   - git_status_summary, git_diff_summary: unnecessary overhead in fix loop
+# ONLY read_file is kept for exact line retrieval needed by replace_in_file.
+# run_test_target is included DIRECTLY (no sub-agent) to avoid second LLM call
+# on a local single-slot Ollama instance, which causes "An error occurred" failures.
+APR_ORCHESTRATOR_MAIN_TOOLS = [
+    read_file,
+    write_file,
+    replace_in_file,
+    replace_lines,
+    run_test_target,
+]
+
 # Planner-Executor architecture tool profiles
 APR_PLANNER_TOOLS = [
     get_workspace_info,
@@ -121,6 +148,9 @@ def build_apr_tools(profile: str = "full") -> list[Any]:
         "localizer": APR_LOCALIZER_TOOLS,
         "patcher": APR_PATCHER_TOOLS,
         "validator": APR_VALIDATOR_TOOLS,
+        "explorer": APR_ORCHESTRATOR_EXPLORER_TOOLS,
+        "test_runner": APR_ORCHESTRATOR_TEST_RUNNER_TOOLS,
+        "orchestrator_main": APR_ORCHESTRATOR_MAIN_TOOLS,
         "planner": APR_PLANNER_TOOLS,
         "executor": APR_EXECUTOR_TOOLS,
     }

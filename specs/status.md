@@ -1,6 +1,11 @@
 # Estado
 
 ## Hecho
+- **Documento general de propuesta de refactorizacion por etapas creado (2026-05-08)**:
+  - Nuevo documento en `docs/pipeline-refactor-proposal.md`.
+  - Define el diagnostico del flujo actual, la tesis arquitectonica y una propuesta de evolucion hacia un workflow por etapas secuenciales.
+  - Recomienda combinar `Workflow Skeleton` + `Stage Pipeline` + `Strategy`, evitando una migracion a `pipes and filters` puro por el alto estado compartido del dominio APR.
+  - Incluye beneficios esperados, tradeoffs y plan de migracion incremental por fases.
 - **E2E Validation post-refactors completada (2026-05-08)**:
   - Triage de 8 tests fallando: 4 ERRORs en `test_repo_state.py` + 4 FAILs en `test_agent_flow.py`.
   - Causa raíz: mock stale. Código refactorizado de `collect_repo_diff` a `collect_repo_diff_for_paths` y `_patch_run_test_command` apuntaba a `flow.execution.tests` en lugar de los namespaces donde `orchestrator.py` y `runner.py` importan la función.
@@ -207,8 +212,18 @@
   - Mejoras de prompt (constraint enumeration, baseline reminder) implementadas y validadas.
   - 15 tests pasando (test_architectures + test_iteration_input).
 
+- **SPEC-011 completado**: Orchestrator Task-Agent Architecture + Instructions Package Refactor (ver `specs/011-orchestrator-task-agents/`).
+  - `agents/instructions.py` convertido en paquete `agents/instructions/` con un módulo por arquitectura (mono_agent, handoff, orchestrator, planner_executor).
+  - Exports backwards-compatibles en `__init__.py`: import path `llm_autofix_agents.agents.instructions` sin cambios.
+  - 4 constantes `ORCHESTRATOR_*` antiguas eliminadas; reemplazadas por 3 nuevas `ORCHESTRATOR_V2_*`.
+  - Nuevos perfiles de tools: `explorer` (alias triage), `test_runner`, `orchestrator_main`.
+  - `architectures/orchestrator.py` reescrito: 2 task-agents (`explorer`, `test_runner`) con `Agent.as_tool()` (`explore_code`, `run_tests`); orquestador aplica fixes directamente; sin secuencia fija.
+  - Tests actualizados: `test_orchestrator_architecture_wires_task_agents_and_tools` cubre 2 sub-agentes, modelo compartido y tool names correctos.
+  - Batch config `bugsinpy-orchestrator-v2-multifile.yaml` creado para youtube-dl-42, keras-20, thefuck-16.
+  - 229 tests pasando, lint limpio en archivos modificados.
+
 ## En curso
-- **Bloqueante**: modelo qwen3-coder:30b no resuelve bugs que requieren razonamiento semántico fino (distinción `bool(v)` vs `v is not False`). Para validar la arquitectura completamente se requiere un modelo con mejor capacidad de razonamiento.
+- Bloqueante modelo qwen3-coder:30b (ver SPEC-010). Para validar arquitecturas se requiere modelo con mejor razonamiento semántico.
 
 ## Hecho (reciente)
 - **Refactor arquitectural Fase 1 completada (Architecture Strategy Pattern)**:
@@ -231,6 +246,15 @@
   - 221 tests passing, 8 fallos pre-existentes sin cambio, lint limpio (0 errores nuevos).
 
 ## Siguiente
-- Fase 3: Descomponer IterationRunner + estructura de directorios.
-- Validacion end-to-end de planner-executor vs handoff vs mono_agent.
+- Ejecutar batch `bugsinpy-orchestrator-v2-multifile` (youtube-dl-42, keras-20, thefuck-16) para validar arquitectura task-agents tras mejoras de flujo.
+- Comparar resultados multi_agent_orchestrator v2 vs mono_agent en bugs cross-file.
+
+## En curso
+- **Mejoras de flujo post-análisis de trazas (2026-05-11)**:
+  - `execute_command` eliminado de `orchestrator_main` profile — forza uso de herramientas dedicadas.
+  - Instrucciones orchestrator v2 actualizadas: `explore_code` OBLIGATORIO como primer paso.
+  - `search_files` docstring mejorado: ejemplos y advertencia sobre `regex=True`.
+  - Feedback "no changes made" añadido en continuation snapshot cuando `changed_files=[]`.
+  - Docker: estrategia dual-Python documentada en spec-011 y lessons.md.
+  - 229 tests pasando, lint limpio.
 - Validar con una run real mono_agent y multi_agent_handoff que produce events.jsonl, live.md enriquecido y observability.db con campos nuevos.

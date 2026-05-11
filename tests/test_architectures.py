@@ -182,12 +182,11 @@ class MultiAgentHandoffArchitectureTests(unittest.TestCase):
 
 
 class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
-    def test_orchestrator_architecture_wires_roles_models_and_agent_tools(self) -> None:
+    def test_orchestrator_architecture_wires_task_agents_and_tools(self) -> None:
         settings = _settings()
         tools_by_profile = {
-            "localizer": [_tool("read_file"), _tool("execute_command")],
-            "patcher": [_tool("read_file"), _tool("replace_in_file")],
-            "validator": [_tool("read_file"), _tool("run_test_target")],
+            "explorer": [_tool("read_file"), _tool("search_files")],
+            "orchestrator_main": [_tool("read_file"), _tool("replace_in_file"), _tool("execute_command")],
         }
         build_agent_calls: list[dict[str, object]] = []
         as_tool_calls: list[dict[str, object]] = []
@@ -213,69 +212,45 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         ):
             architecture = build_multi_agent_orchestrator_architecture(
                 settings=settings,
-                agent_models={
-                    "main": "main-model",
-                    "manager": "manager-model",
-                    "localizer": "localizer-model",
-                    "patcher": "patcher-model",
-                    "validator": "validator-model",
-                },
+                agent_models={"orchestrator": "orchestrator-model"},
             )
             facade_agent = architecture.facade_agent_builder()
 
         self.assertEqual(architecture.architecture_name, "multi_agent_orchestrator")
         self.assertEqual(architecture.agent_name, "orchestrator")
-        self.assertEqual(architecture.agent_role, "manager")
-        self.assertEqual(architecture.agent_model, "manager-model")
-        self.assertEqual(architecture.tool_profile, "manager")
-        self.assertEqual(architecture.tool_count, 4)
+        self.assertEqual(architecture.agent_role, "orchestrator")
+        self.assertEqual(architecture.agent_model, "orchestrator-model")
+        self.assertEqual(architecture.tool_profile, "orchestrator_main")
+        self.assertEqual(architecture.tool_count, 3)  # len(tools_by_profile["orchestrator_main"])
         self.assertEqual(facade_agent.name, "orchestrator")
 
-        self.assertEqual(len(architecture.sub_agents), 3)
-        self.assertEqual(architecture.sub_agents[0].agent_name, "localizer")
-        self.assertEqual(architecture.sub_agents[1].agent_name, "patcher")
-        self.assertEqual(architecture.sub_agents[2].agent_name, "validator")
-        self.assertEqual(architecture.sub_agents[0].agent_role, "localizer")
-        self.assertEqual(architecture.sub_agents[1].agent_role, "patcher")
-        self.assertEqual(architecture.sub_agents[2].agent_role, "validator")
+        # Only explorer sub-agent; test execution is done via run_test_target directly
+        self.assertEqual(len(architecture.sub_agents), 1)
+        self.assertEqual(architecture.sub_agents[0].agent_name, "explorer")
+        self.assertEqual(architecture.sub_agents[0].agent_role, "explorer")
+        self.assertEqual(architecture.sub_agents[0].tool_profile, "explorer")
 
-        self.assertEqual(
-            [call.args for call in build_tools.call_args_list],
-            [
-                ("localizer",),
-                ("patcher",),
-                ("validator",),
-            ],
-        )
+        # build_apr_tools is called once during construction (tool_count) then 2 times inside facade_agent_builder
+        profile_calls = [call.args[0] for call in build_tools.call_args_list]
+        self.assertIn("orchestrator_main", profile_calls)
+        self.assertIn("explorer", profile_calls)
+        self.assertNotIn("test_runner", profile_calls)
 
+        # Agents are built in order: explorer, orchestrator
         self.assertEqual(
             [call["name"] for call in build_agent_calls],
-            ["localizer", "patcher", "validator", "orchestrator"],
+            ["explorer", "orchestrator"],
         )
-        self.assertEqual(
-            [call["model_override"] for call in build_agent_calls],
-            [
-                "localizer-model",
-                "patcher-model",
-                "validator-model",
-                "manager-model",
-            ],
-        )
+        # All agents share the same model
+        self.assertTrue(all(call["model_override"] == "orchestrator-model" for call in build_agent_calls))
 
         self.assertIsNone(build_agent_calls[0].get("output_schema"))
         self.assertIsNone(build_agent_calls[1].get("output_schema"))
-        self.assertIsNone(build_agent_calls[2].get("output_schema"))
-        self.assertEqual(build_agent_calls[3].get("output_schema"), None)
 
-        self.assertEqual(len(as_tool_calls), 3)
-        self.assertEqual(as_tool_calls[0]["agent_name"], "localizer")
-        self.assertEqual(as_tool_calls[0]["tool_name"], "localize_bug")
-        self.assertEqual(as_tool_calls[1]["agent_name"], "patcher")
-        self.assertEqual(as_tool_calls[1]["tool_name"], "apply_fix")
-        self.assertEqual(as_tool_calls[2]["agent_name"], "validator")
-        self.assertEqual(as_tool_calls[2]["tool_name"], "validate_patch")
-
-        self.assertEqual(facade_agent.name, "orchestrator")
+        # Only explore_code as a tool; run_test_target is a direct tool (no sub-agent)
+        self.assertEqual(len(as_tool_calls), 1)
+        self.assertEqual(as_tool_calls[0]["agent_name"], "explorer")
+        self.assertEqual(as_tool_calls[0]["tool_name"], "explore_code")
 
 
 class PlannerExecutorArchitectureTests(unittest.TestCase):
