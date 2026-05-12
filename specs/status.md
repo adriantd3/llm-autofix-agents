@@ -1,6 +1,30 @@
 # Estado
 
+## En curso
+- **BugsInPy multifile batch — siguiente paso (2026-05-11)**:
+  - Objetivo: extender el éxito de youtube-dl-42 a keras-20, thefuck-16
+  - Siguiente: lanzar `batches/bugsinpy-orchestrator-v2-multifile.yaml` con los 3 bugs
+
 ## Hecho
+- **Infraestructura Docker BugsInPy — COMPLETA Y VALIDADA (2026-05-11)**:
+  - `docker/bugsinpy.Dockerfile`: Python 3.8 sistema + uv Python 3.13 en `UV_PYTHON_INSTALL_DIR=/opt/uv-python` (world-readable)
+  - `src/llm_autofix_agents/datasets/bugsinpy.py`: runner_service="bugsinpy-runner", test command correcto
+  - Regla clave: prep y ejecución de tests en el MISMO contenedor. Ver `specs/lessons.md`.
+- **Arquitectura orchestrator v2 — funcional (2026-05-11)**:
+  - 1 sub-agente: `explorer_agent` como `explore_code` (LLM read-only)
+  - `output_schema=None` en todos los agentes
+  - `APR_ORCHESTRATOR_MAIN_TOOLS = [read_file, write_file, replace_in_file, replace_lines, run_test_target]`
+  - `changed_files_count` > 0 en todas las iteraciones (antes: 0)
+  - 0 `ModelBehaviorError` (antes: todos fallaban)
+- **PRIMER BUG RESUELTO — youtube-dl-42 (2026-05-11)**:
+  - Arquitectura: `multi_agent_orchestrator` + `qwen3.5:9b` (Ollama)
+  - 2 iteraciones, 389s, `status: success`
+  - Fixes clave que desbloquearon el éxito:
+    - Instrucciones de runner BugsInPy (no `python -m pytest`, usar `. env/bin/activate && bash bugsinpy_run_test.sh`)
+    - Paths relativos al workspace root (no paths absolutos)
+    - `test_command` incluido en prompts de iteración 2+
+    - Guía explícita para ImportError: leer test function antes de implementar
+  - Fix aplicado (it2.patch): renombrar `fix_xml_all_ampersand` → `fix_xml_ampersands` + regex `r'&(?!(amp|apos|gt|lt|quot|nbsp|#[0-9]+|#x[0-9a-fA-F]+);)'`
 - **Documento general de propuesta de refactorizacion por etapas creado (2026-05-08)**:
   - Nuevo documento en `docs/pipeline-refactor-proposal.md`.
   - Define el diagnostico del flujo actual, la tesis arquitectonica y una propuesta de evolucion hacia un workflow por etapas secuenciales.

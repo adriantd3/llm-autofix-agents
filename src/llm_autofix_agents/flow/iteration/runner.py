@@ -267,6 +267,7 @@ class IterationRunner:
             iteration_telemetry=prep.iteration_telemetry,
             state=state,
             observation=observation,
+            repo_root=cfg.repo_root,
         )
         return observation
 
@@ -280,8 +281,9 @@ class IterationRunner:
         iteration_telemetry: IterationTelemetry,
         state: RunState,
         observation: IterationObservation,
+        repo_root: Path | None = None,
     ) -> None:
-        self._record_state(state=state, observation=observation)
+        self._record_state(state=state, observation=observation, repo_root=repo_root)
 
         iteration_telemetry.record_file_changes(
             agent_execution_id=observation.agent_execution_id,
@@ -292,7 +294,7 @@ class IterationRunner:
             result=IterationTelemetryResult.from_observation(observation),
         )
 
-    def _record_state(self, *, state: RunState, observation: IterationObservation) -> None:
+    def _record_state(self, *, state: RunState, observation: IterationObservation, repo_root: Path | None = None) -> None:
         proposal = observation.proposal
         observed_files = list(observation.changes.all_changed_files)
 
@@ -306,6 +308,7 @@ class IterationRunner:
             proposal=proposal,
             changes=observation.changes,
             test_execution=observation.test_execution,
+            repo_root=repo_root,
         )
         state.latest_observed_files = observed_files
         state.max_changed_files_count = max(state.max_changed_files_count, len(observed_files))

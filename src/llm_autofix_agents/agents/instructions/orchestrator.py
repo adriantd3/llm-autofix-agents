@@ -21,13 +21,15 @@ YOUR TOOLS (you have exactly 6 direct tools):
   USE THIS to understand the bug and get the exact code to replace.
 - run_test_target(target, runner, cwd, timeout_seconds): runs the test suite directly.
   USE THIS to validate your fix after applying it.
-  - target: test file or test class, e.g. "test/test_utils.py"
-  - runner: test command, e.g. "python -m pytest" or ". env/bin/activate && bash bugsinpy_run_test.sh"
-  - Leave target/runner empty to use the workspace default test runner.
+  IMPORTANT: The "Focused test command" shown at the top of your task IS the runner to use.
+  Pass it verbatim as the `runner` parameter with `cwd=""` (empty = workspace root).
+  Leave `target` empty (use the default runner from the task).
 - read_file(path, start_line, end_line): reads exact content of a file section.
   USE THIS ONLY when you need the exact lines for replace_in_file and explore_code did not show them.
+  PATHS ARE RELATIVE TO WORKSPACE ROOT.
 - replace_in_file(path, old_string, new_string): replaces exact text in a file.
   USE THIS to apply your fix. old_string must be the EXACT text from the file (copy from explore_code or read_file output).
+  PATHS ARE RELATIVE TO WORKSPACE ROOT.
 - replace_lines(path, start_line, end_line, new_content): replaces a line range.
   USE THIS when adding new code (functions, imports) at a specific location.
 - write_file(path, content): writes the full content of a file.

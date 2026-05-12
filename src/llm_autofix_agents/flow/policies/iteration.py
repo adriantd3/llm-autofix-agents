@@ -20,7 +20,9 @@ _FAILURE_DRIVEN_INTRO = (
     "- Plan your next 2-3 tool calls before making any call.\n"
     "- If a test traceback shows a test function name, you MUST read the ENTIRE test function "
     "(from 'def test_...' to the next 'def ') to see ALL assertions, not just the failing line.\n"
-    "- Before proposing a fix, consider ALL assertions in the test function that involve the code you will change.\n\n"
+    "- Before proposing a fix, consider ALL assertions in the test function that involve the code you will change.\n"
+    "- Do NOT use execute_command to test Python logic or validate your fix with a subprocess. "
+    "Apply your fix directly with replace_in_file, then call run_test_target with the Focused test command.\n\n"
     "- In your final response, populate 'notes' with short bullets: inspected, attempted, changes, results, next.\n\n"
     "You must use tools for evidence; do not report edits or passing tests without tool outputs."
 )
@@ -71,7 +73,7 @@ def build_iteration_input(
     baseline_reminder = ""
     if baseline_test_execution and baseline_test_execution.exit_code != 0:
         baseline_output = compact_test_output(
-            baseline_test_execution.output, max_chars=1200
+            _strip_workspace_root(baseline_test_execution.output, repo_root), max_chars=1200
         )
         if baseline_output:
             baseline_reminder = (
@@ -80,12 +82,21 @@ def build_iteration_input(
                 f"{baseline_output}\n"
             )
 
+    # Remind the model of the focused test command so it doesn't guess wrong runners.
+    test_command_reminder = ""
+    if test_command and test_command.strip():
+        test_command_reminder = (
+            f"\n\nFocused test command (pass verbatim as `runner` to run_test_target with `cwd=\"\"`):\n"
+            f"{test_command.strip()}\n"
+        )
+
     return (
         f"{feedback_prefix}"
         f"[ITERATION {iteration}/{max_iterations}]\n"
         f"Previous attempt summary (agent-reported):\n{previous_message}"
         f"{snapshot_block}"
-        f"{baseline_reminder}\n\n"
+        f"{baseline_reminder}"
+        f"{test_command_reminder}\n\n"
         "Task:\n"
         "Continue improving the repair strategy. Use tools to inspect and edit, "
         "then validate with the test command.\n"
@@ -99,8 +110,10 @@ def build_continuation_snapshot(
     proposal: AgentFixIterationRecord,
     changes: WorkspaceChangeSet,
     test_execution: TestExecution,
+    repo_root: Path | None = None,
 ) -> str:
-    compact_output = compact_test_output(test_execution.output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
+    raw_output = _strip_workspace_root(test_execution.output, repo_root)
+    compact_output = compact_test_output(raw_output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
     output_block = _indent_block(compact_output or "(no output)", prefix="    ")
 
     changed_files = changes.all_changed_files
@@ -155,7 +168,10 @@ def _build_first_iteration_input(
         return None
 
     command = (test_command or "").strip() or "<not provided>"
-    output = compact_test_output(baseline_test_execution.output, max_chars=_MAX_BASELINE_OUTPUT_CHARS)
+    output = compact_test_output(
+        _strip_workspace_root(baseline_test_execution.output, repo_root),
+        max_chars=_MAX_BASELINE_OUTPUT_CHARS,
+    )
 
     feedback_prefix = ""
     if validation_feedback:
@@ -236,6 +252,21 @@ def proposal_signature(proposal: AgentFixIterationRecord) -> str:
     return f"status={status}|reasoning_summary={reasoning_summary}|notes={notes}"
 
 
+def _strip_workspace_root(text: str, repo_root: Path | None) -> str:
+    """Replace absolute workspace-root prefixes in `text` with relative paths.
+
+    Tracebacks emitted inside the container contain the full host path
+    (e.g. ``/benchmark-workspaces/.../youtube-dl/test/test_utils.py``).  The
+    agent tools only accept paths relative to the workspace root, so showing
+    the absolute form causes the agent to waste turns trying invalid paths.
+    """
+    if repo_root is None:
+        return text
+    prefix = str(repo_root)
+    # Replace both "<prefix>/" (path + separator) and "<prefix>" alone.
+    return text.replace(prefix + "/", "").replace(prefix, "")
+
+
 def _normalize(text: str) -> str:
     return " ".join(text.split()).strip().lower()
 
@@ -265,78 +296,106 @@ def _format_notes_block(notes: str | None, *, max_lines: int = 8) -> str:
 _TEST_TRACEBACK_RE = re.compile(
     r'File\s+"([^"]+)",\s+line\s+(\d+),\s+in\s+(test_\w+)'
 )
+# Regex to extract the missing symbol from import-time errors like:
+#   ImportError: cannot import name 'fix_xml_ampersands'
+_IMPORT_ERROR_SYMBOL_RE = re.compile(
+    r"ImportError: cannot import name ['\"]([^'\"]+)['\"]"
+)
+# Generic file reference in any traceback line
+_TRACEBACK_FILE_RE = re.compile(r'File\s+"([^"]+)",\s+line\s+\d+')
 
 
 def _extract_failing_test_function(*, test_output: str, repo_root: Path) -> str:
     """Extract the full failing test function from the repository.
 
-    Parses the test output to find the first traceback mentioning a test_ function,
-    then reads the source file and extracts the function body (from 'def test_...'
-    up to the next top-level 'def ' or end of file).
+    Strategy 1: traceback names a test_ function directly — resolve the file and
+    extract that function.
+    Strategy 2: import-time failure — parse the missing symbol name and search
+    the referenced test files for a function that exercises it.
     """
+    # Strategy 1: normal traceback with an explicit test_ function name
     match = _TEST_TRACEBACK_RE.search(test_output)
-    if not match:
+    if match:
+        candidate = _resolve_path_under_root(match.group(1), repo_root)
+        if candidate is not None:
+            result = _extract_named_function(candidate, match.group(3), repo_root)
+            if result:
+                return result
+
+    # Strategy 2: import-time error — find a test that exercises the missing symbol
+    symbol_match = _IMPORT_ERROR_SYMBOL_RE.search(test_output)
+    if not symbol_match:
         return ""
+    symbol = symbol_match.group(1)
+    for file_match in _TRACEBACK_FILE_RE.finditer(test_output):
+        candidate = _resolve_path_under_root(file_match.group(1), repo_root)
+        if candidate is None or not candidate.exists():
+            continue
+        result = _find_test_function_using(candidate, symbol, repo_root)
+        if result:
+            return result
+    return ""
 
-    raw_path = match.group(1)
-    test_function_name = match.group(3)
 
-    # Resolve path relative to repo_root if possible
+def _resolve_path_under_root(raw_path: str, repo_root: Path) -> Path | None:
     test_path = Path(raw_path)
     if not test_path.is_absolute():
-        candidate = repo_root / test_path
-    elif str(test_path).startswith(str(repo_root)):
-        candidate = test_path
-    else:
-        # Try to find the file under repo_root by suffix
-        suffix_parts = list(test_path.parts)
-        # heuristic: drop leading parts until we find something under repo_root
-        candidate = None
-        for i in range(len(suffix_parts)):
-            possible = repo_root / Path(*suffix_parts[i:])
-            if possible.exists():
-                candidate = possible
-                break
-        if candidate is None:
-            return ""
+        return repo_root / test_path
+    if str(test_path).startswith(str(repo_root)):
+        return test_path
+    # heuristic: drop leading path components until we find a match under repo_root
+    parts = list(test_path.parts)
+    for i in range(len(parts)):
+        possible = repo_root / Path(*parts[i:])
+        if possible.exists():
+            return possible
+    return None
 
+
+def _extract_named_function(candidate: Path, func_name: str, repo_root: Path) -> str:
     if not candidate.exists():
         return ""
-
     try:
         source = candidate.read_text(encoding="utf-8")
     except Exception:
         return ""
-
-    # Find the start of the test function
-    start_pattern = f"def {test_function_name}("
-    start_idx = source.find(start_pattern)
+    start_idx = source.find(f"def {func_name}(")
     if start_idx == -1:
         return ""
+    next_def = source.find("\ndef ", start_idx + 1)
+    end_idx = next_def + 1 if next_def != -1 else len(source)
+    return _format_test_function(source[start_idx:end_idx], func_name, candidate, repo_root)
 
-    # Find the next top-level 'def ' after the start (with newline before it)
-    search_start = start_idx + len(start_pattern)
-    next_def = source.find("\ndef ", search_start)
-    if next_def == -1:
-        end_idx = len(source)
-    else:
-        end_idx = next_def + 1  # include the newline before the next def
 
-    test_source = source[start_idx:end_idx]
-    # Compact: strip leading blank lines and limit length
-    lines = test_source.splitlines()
+def _find_test_function_using(candidate: Path, symbol: str, repo_root: Path) -> str:
+    """Return the first test_ function in `candidate` whose body contains `symbol`."""
+    try:
+        source = candidate.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    for func_match in re.finditer(r'^def (test_\w+)\(', source, re.MULTILINE):
+        func_start = func_match.start()
+        next_def = source.find("\ndef ", func_start + 1)
+        end_idx = next_def + 1 if next_def != -1 else len(source)
+        func_body = source[func_start:end_idx]
+        if symbol in func_body:
+            return _format_test_function(func_body, func_match.group(1), candidate, repo_root)
+    return ""
+
+
+def _format_test_function(func_source: str, func_name: str, file_path: Path, repo_root: Path) -> str:
+    lines = func_source.splitlines()
     while lines and not lines[-1].strip():
         lines.pop()
-    test_source = "\n".join(lines)
-    if len(test_source) > 3000:
-        test_source = test_source[:3000] + "\n... [truncated]"
-
+    text = "\n".join(lines)
+    if len(text) > 3000:
+        text = text[:3000] + "\n... [truncated]"
     return (
         "\n\n--- Failing test function (read this ENTIRE function to understand all assertions) ---\n"
-        f"File: {candidate.relative_to(repo_root)}\n"
-        f"Function: {test_function_name}\n"
+        f"File: {file_path.relative_to(repo_root)}\n"
+        f"Function: {func_name}\n"
         "```python\n"
-        f"{test_source}\n"
+        f"{text}\n"
         "```\n"
         "--- End of test function ---"
     )

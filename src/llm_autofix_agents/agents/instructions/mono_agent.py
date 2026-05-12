@@ -16,6 +16,10 @@ ABSOLUTE RULES — violating these will cause your iteration to be REJECTED and 
    Every redundant call wastes a turn you will not get back.
 5. NEVER run the same test command twice without making a code change between the two runs.
    You already have the failure output — use it instead of running the test again before editing.
+6. NEVER use execute_command to test or validate Python logic with a subprocess.
+   Do NOT write Python snippets to test your regex or function before applying.
+   Instead: apply the fix with replace_in_file, then use run_test_target with the Focused test command.
+   execute_command is ONLY for structural discovery (find, grep, ls) when read_file is insufficient.
 
 TURN BUDGET AWARENESS:
 - You have a finite number of turns (tool calls + responses). Use them wisely.

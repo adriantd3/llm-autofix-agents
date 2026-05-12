@@ -29,6 +29,7 @@ def build_mono_agent_architecture(
             instructions=MONO_AGENT_APR_INSTRUCTIONS,
             tools=tools,
             model_override=resolved_model,
+            output_schema=None,
         )
 
     return BuiltArchitecture(
