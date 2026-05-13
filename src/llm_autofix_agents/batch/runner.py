@@ -6,6 +6,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -130,7 +131,9 @@ class BatchRunner:
         result = self._parse_result(case.case_id, process, duration)
 
         if result.run_id:
-            self._rename_run_dir(batch_dir, result.run_id, case, settings)
+            dest_name = self._rename_run_dir(batch_dir, result.run_id, case, settings)
+            if dest_name:
+                self._merge_into_batch_db(batch_dir, dest_name)
 
         return result
 
@@ -191,6 +194,18 @@ class BatchRunner:
             )
             return None
 
+    def _force_kill_container(self, container_name: str) -> None:
+        """Send SIGKILL to a named container immediately, then wait for removal."""
+        try:
+            subprocess.run(
+                ["docker", "kill", container_name],
+                capture_output=True,
+                timeout=10,
+            )
+            logger.info("Container '%s' killed", container_name)
+        except Exception:
+            logger.warning("Failed to kill container '%s'", container_name, exc_info=True)
+
     def _docker_build(self, service: str) -> None:
         logger.info("Building Docker image for service '%s'...", service)
         result = subprocess.run(
@@ -210,11 +225,8 @@ class BatchRunner:
         timeout_seconds: int,
         service: str,
     ) -> subprocess.CompletedProcess[str]:
-        timeout_arg = f"{timeout_seconds}s"
+        container_name = f"autofix-{uuid.uuid4().hex[:12]}"
         cmd = [
-            "timeout",
-            "--foreground",
-            timeout_arg,
             "docker",
             "compose",
             "-f",
@@ -222,13 +234,42 @@ class BatchRunner:
             "run",
             "--rm",
             "-T",
+            "--name",
+            container_name,
         ]
         # env is already curated by _build_env(); pass everything explicitly.
         for key, value in sorted(env.items()):
             cmd.extend(["-e", f"{key}={value}"])
         cmd.append(service)
         cmd.extend(["uv", "run", "python", "-m", "llm_autofix_agents.batch.executor"])
-        return subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=str(self.project_dir))
+
+        with subprocess.Popen(
+            cmd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(self.project_dir),
+        ) as proc:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout_seconds)
+                return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+            except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+                timed_out = isinstance(exc, subprocess.TimeoutExpired)
+                if timed_out:
+                    logger.warning(
+                        "Container '%s' timed out after %ds — killing container...",
+                        container_name,
+                        timeout_seconds,
+                    )
+                else:
+                    logger.warning("Interrupted — killing container '%s'...", container_name)
+                proc.kill()
+                stdout, stderr = proc.communicate()
+                self._force_kill_container(container_name)
+                if not timed_out:
+                    raise
+                return subprocess.CompletedProcess(cmd, 124, stdout or "", stderr or "")
 
     def _build_env(
         self,
@@ -260,7 +301,6 @@ class BatchRunner:
             "LLM_MODEL": settings.llm.model,
             "AUTOFIX_MAX_ITERATIONS": str(settings.max_iterations),
             "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
-            "AUTOFIX_OBSERVABILITY_DB": f"/results/{batch_name}/observability.db",
             "AUTOFIX_INTERACTIVE": "false",
         }
         if case.dataset_type == "bugsinpy":
@@ -330,11 +370,13 @@ class BatchRunner:
             exit_code=process.returncode,
         )
 
-    def _rename_run_dir(self, batch_dir: Path, run_id: str, case: PreparedExecutionCase, settings: Any) -> None:
+    def _rename_run_dir(
+        self, batch_dir: Path, run_id: str, case: PreparedExecutionCase, settings: Any
+    ) -> str | None:
         src = batch_dir / run_id
         if not src.exists():
             logger.warning("Run directory %s not found for renaming", src)
-            return
+            return None
 
         safe_model = _sanitize_dir_name(settings.llm.model)
         dest_name = f"{case.case_id}-{settings.architecture.value}-{safe_model}"
@@ -344,32 +386,47 @@ class BatchRunner:
         original_dest = dest
         while dest.exists():
             dest = batch_dir / f"{original_dest.name}-{counter}"
+            dest_name = dest.name
             counter += 1
 
         src.rename(dest)
         logger.info("Run directory renamed: %s -> %s", src.name, dest.name)
         self._update_observability_paths(batch_dir, run_id, dest_name)
+        return dest_name
+
+    def _merge_into_batch_db(self, batch_dir: Path, dest_name: str) -> None:
+        run_db = batch_dir / dest_name / "run.db"
+        if not run_db.exists():
+            return
+        try:
+            from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore
+
+            batch_db_path = batch_dir / "batch.db"
+            batch_store = SQLiteObservabilityStore(db_path=batch_db_path)
+            batch_store.initialize()
+            batch_store.merge_from(run_db)
+            logger.debug("Merged run DB %s into batch.db", run_db.name)
+        except Exception:
+            logger.warning("Failed to merge run DB into batch.db", exc_info=True)
 
     def _update_observability_paths(self, batch_dir: Path, run_id: str, dest_name: str) -> None:
-        db_path = batch_dir / "observability.db"
-        if not db_path.exists():
+        # Update path columns in the per-run DB after the run directory is renamed.
+        run_db = batch_dir / dest_name / "run.db"
+        if not run_db.exists():
             return
         try:
             import sqlite3
 
-            conn = sqlite3.connect(str(db_path))
+            conn = sqlite3.connect(str(run_db))
             cursor = conn.cursor()
             batch_name = batch_dir.name
             old_prefix = f"/results/{batch_name}/{run_id}"
             new_prefix = f"/results/{batch_name}/{dest_name}"
-            cursor.execute(
-                "UPDATE runs SET live_log_path = REPLACE(live_log_path, ?, ?) WHERE live_log_path LIKE ?",
-                (old_prefix, new_prefix, f"{old_prefix}%"),
-            )
-            cursor.execute(
-                "UPDATE runs SET diff_path = REPLACE(diff_path, ?, ?) WHERE diff_path LIKE ?",
-                (old_prefix, new_prefix, f"{old_prefix}%"),
-            )
+            for col in ("live_log_path", "diff_path", "summary_path"):
+                cursor.execute(
+                    f"UPDATE runs SET {col} = REPLACE({col}, ?, ?) WHERE {col} LIKE ?",  # noqa: S608
+                    (old_prefix, new_prefix, f"{old_prefix}%"),
+                )
             conn.commit()
             conn.close()
             logger.debug("Updated observability paths for run %s -> %s", run_id, dest_name)

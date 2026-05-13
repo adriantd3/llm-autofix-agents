@@ -21,6 +21,7 @@ from llm_autofix_agents.observability.models import (
 from llm_autofix_agents.observability.sqlite_schema import (
     MIGRATION_V3_TO_V4,
     MIGRATION_V4_TO_V5,
+    MIGRATION_V5_TO_V6,
     SCHEMA_VERSION,
     schema_init_sql,
 )
@@ -50,6 +51,8 @@ class SQLiteObservabilityStore:
                     conn.executescript(MIGRATION_V3_TO_V4)
                 if current_version < 5:
                     conn.executescript(MIGRATION_V4_TO_V5)
+                if current_version < 6:
+                    conn.executescript(MIGRATION_V5_TO_V6)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def upsert_architecture(self, name: str, description: str | None = None) -> str:
@@ -336,7 +339,7 @@ class SQLiteObservabilityStore:
                     duration_seconds,
                     args_summary_json,
                     result_summary_json,
-                    result_excerpt,
+                    retry_index,
                     error_type,
                     error_message_short
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -357,7 +360,7 @@ class SQLiteObservabilityStore:
                     record.duration_seconds,
                     record.args_summary_json,
                     record.result_summary_json,
-                    record.result_excerpt,
+                    record.retry_index,
                     record.error_type,
                     record.error_message_short,
                 ),
@@ -494,6 +497,46 @@ class SQLiteObservabilityStore:
                     record.handoff_note_json,
                 ),
             )
+
+    def merge_from(self, other_db_path: Path) -> None:
+        """Merge all rows from other_db_path into this DB using INSERT OR IGNORE.
+
+        Used by the batch runner to accumulate per-run DBs into a per-batch DB
+        for convenient cross-run queries without touching the atomic per-run files.
+        """
+        if not other_db_path.exists():
+            return
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = self._connect()
+        try:
+            conn.execute(f"ATTACH DATABASE '{other_db_path}' AS src")
+            tables = [
+                "architectures",
+                "model_configs",
+                "runs",
+                "run_agents",
+                "iterations",
+                "agent_executions",
+                "tool_calls",
+                "provider_call_events",
+                "test_executions",
+                "file_changes",
+                "agent_handoffs",
+            ]
+            for table in tables:
+                dest_cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}  # noqa: S608
+                src_cols = [r[1] for r in conn.execute(f"PRAGMA src.table_info({table})")]  # noqa: S608
+                common = [c for c in src_cols if c in dest_cols]
+                if not common:
+                    continue
+                col_list = ", ".join(common)
+                conn.execute(
+                    f"INSERT OR IGNORE INTO {table} ({col_list}) SELECT {col_list} FROM src.{table}"  # noqa: S608
+                )
+            conn.commit()
+            conn.execute("DETACH DATABASE src")
+        finally:
+            conn.close()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)

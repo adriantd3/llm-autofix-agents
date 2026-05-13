@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import unittest
 
-from llm_autofix_agents.observability.lifecycle_hooks import APRRunHooks, infer_tool_status
+from llm_autofix_agents.observability.events import AgentHandoff, ObservabilityEvent, ToolCalled
+from llm_autofix_agents.observability.lifecycle_hooks import APRRunHooks
 from llm_autofix_agents.observability.models import AgentHandoffRecord, ToolCallRecord
 
 
@@ -12,14 +14,11 @@ class _CaptureObserver:
         self.tool_calls: list[ToolCallRecord] = []
         self.handoffs: list[AgentHandoffRecord] = []
 
-    def on_tool_call(self, *, record: ToolCallRecord) -> None:
-        self.tool_calls.append(record)
-
-    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
-        self.handoffs.append(record)
-
-    def on_facade_input(self, *, record) -> None:
-        pass
+    def emit(self, event: ObservabilityEvent) -> None:
+        if isinstance(event, ToolCalled):
+            self.tool_calls.append(event.record)
+        elif isinstance(event, AgentHandoff):
+            self.handoffs.append(event.record)
 
 
 class _FakeAgent:
@@ -28,15 +27,6 @@ class _FakeAgent:
 
 
 class LifecycleHooksTests(unittest.TestCase):
-    def test_infer_tool_status_success(self) -> None:
-        self.assertEqual(infer_tool_status('{"ok": true}'), ("success", True))
-
-    def test_infer_tool_status_failed(self) -> None:
-        self.assertEqual(infer_tool_status('{"ok": false}'), ("failed", False))
-
-    def test_infer_tool_status_unknown(self) -> None:
-        self.assertEqual(infer_tool_status("not-json"), ("unknown", None))
-
     def test_on_tool_end_records_tool_call(self) -> None:
         observer = _CaptureObserver()
         hooks = APRRunHooks(
@@ -55,7 +45,7 @@ class LifecycleHooksTests(unittest.TestCase):
         self.assertEqual(hooks.tool_call_count, 1)
         self.assertEqual(len(observer.tool_calls), 1)
         self.assertEqual(observer.tool_calls[0].tool_name, "read_file")
-        self.assertEqual(observer.tool_calls[0].status, "success")
+        self.assertEqual(observer.tool_calls[0].status, "ok")
 
     def test_on_tool_end_includes_agent_name(self) -> None:
         observer = _CaptureObserver()
@@ -155,6 +145,112 @@ class LifecycleHooksTests(unittest.TestCase):
         self.assertEqual(len(observer.handoffs), 2)
         self.assertIn("handoff001", observer.handoffs[0].handoff_id)
         self.assertIn("handoff002", observer.handoffs[1].handoff_id)
+
+
+class ContextSnapshotTests(unittest.TestCase):
+    def _make_hooks(self) -> APRRunHooks:
+        return APRRunHooks(
+            observer=_CaptureObserver(),
+            run_id="run-1",
+            iteration_id="run-1-it01",
+            agent_execution_id="run-1-it01-agent01",
+        )
+
+    def _run_tool(self, hooks: APRRunHooks, tool_name: str, args_json: str, result: str) -> None:
+        class _Tool:
+            pass
+        _Tool.name = tool_name
+
+        class _Ctx:
+            pass
+        _Ctx.tool_arguments = args_json
+
+        asyncio.run(hooks.on_tool_start(context=_Ctx(), agent=_FakeAgent("agent"), tool=_Tool()))
+        asyncio.run(hooks.on_tool_end(context=_Ctx(), agent=_FakeAgent("agent"), tool=_Tool(), result=result))
+
+    def test_snapshot_returns_none_when_no_tools_called(self) -> None:
+        hooks = self._make_hooks()
+        self.assertIsNone(hooks.extract_context_snapshot())
+
+    def test_snapshot_captures_search_hits(self) -> None:
+        hooks = self._make_hooks()
+        result = '{"ok": true, "results": [{"path": "src/foo.py", "line": 42, "match": "def bar"}]}'
+        self._run_tool(hooks, "search_files", '{"query": "bar"}', result)
+        snapshot = hooks.extract_context_snapshot()
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertIn("src/foo.py:42", snapshot)
+        self.assertIn("def bar", snapshot)
+
+    def test_snapshot_excludes_test_paths(self) -> None:
+        hooks = self._make_hooks()
+        result = '{"ok": true, "results": [{"path": "test/test_foo.py", "line": 10, "match": "def bar"}, {"path": "src/foo.py", "line": 42, "match": "def bar"}]}'
+        self._run_tool(hooks, "search_files", '{"query": "bar"}', result)
+        snapshot = hooks.extract_context_snapshot()
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertNotIn("test/test_foo.py", snapshot)
+        self.assertIn("src/foo.py", snapshot)
+
+    def test_snapshot_captures_read_files(self) -> None:
+        hooks = self._make_hooks()
+        self._run_tool(hooks, "read_file", '{"path": "src/foo.py", "start_line": 100, "end_line": 150}', '{"ok": true}')
+        snapshot = hooks.extract_context_snapshot()
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertIn("src/foo.py:100-150", snapshot)
+
+    def test_snapshot_captures_read_file_without_line_range(self) -> None:
+        hooks = self._make_hooks()
+        self._run_tool(hooks, "read_file", '{"path": "src/utils.py"}', '{"ok": true}')
+        snapshot = hooks.extract_context_snapshot()
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertIn("src/utils.py", snapshot)
+
+    def test_snapshot_captures_edit_attempt_ok(self) -> None:
+        hooks = self._make_hooks()
+        self._run_tool(hooks, "replace_in_file", '{"path": "src/foo.py"}', '{"ok": true}')
+        snapshot = hooks.extract_context_snapshot()
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertIn("replace_in_file(src/foo.py) → ok", snapshot)
+
+    def test_snapshot_captures_edit_attempt_failed(self) -> None:
+        hooks = self._make_hooks()
+        self._run_tool(hooks, "replace_in_file", '{"path": "src/foo.py"}', '{"ok": false, "error": "old_text_not_found"}')
+        snapshot = hooks.extract_context_snapshot()
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertIn("failed:old_text_not_found", snapshot)
+
+    def test_reset_clears_all_accumulated_context(self) -> None:
+        hooks = self._make_hooks()
+        result = '{"ok": true, "results": [{"path": "src/foo.py", "line": 1, "match": "x"}]}'
+        self._run_tool(hooks, "search_files", '{"query": "x"}', result)
+        self._run_tool(hooks, "read_file", '{"path": "src/foo.py"}', '{"ok": true}')
+        self.assertIsNotNone(hooks.extract_context_snapshot())
+        hooks.reset_context_snapshot()
+        self.assertIsNone(hooks.extract_context_snapshot())
+
+    def test_snapshot_deduplicates_read_file_entries(self) -> None:
+        hooks = self._make_hooks()
+        self._run_tool(hooks, "read_file", '{"path": "src/foo.py", "start_line": 1, "end_line": 50}', '{"ok": true}')
+        self._run_tool(hooks, "read_file", '{"path": "src/foo.py", "start_line": 1, "end_line": 50}', '{"ok": true}')
+        snapshot = hooks.extract_context_snapshot()
+        assert snapshot is not None
+        self.assertEqual(snapshot.count("src/foo.py:1-50"), 1)
+
+    def test_snapshot_caps_search_hits_at_five(self) -> None:
+        hooks = self._make_hooks()
+        hits = [{"path": f"src/file{i}.py", "line": i, "match": f"match{i}"} for i in range(10)]
+        result = f'{{"ok": true, "results": {json.dumps(hits)}}}'
+        self._run_tool(hooks, "search_files", '{"query": "x"}', result)
+        snapshot = hooks.extract_context_snapshot()
+        assert snapshot is not None
+        # At most 5 hits should appear
+        hit_count = sum(1 for i in range(10) if f"src/file{i}.py" in snapshot)
+        self.assertLessEqual(hit_count, 5)
 
 
 if __name__ == "__main__":

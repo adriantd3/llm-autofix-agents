@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   duration_seconds REAL,
   args_summary_json TEXT,
   result_summary_json TEXT,
-  result_excerpt TEXT,
+  retry_index INTEGER,
   error_type TEXT,
   error_message_short TEXT,
   FOREIGN KEY (run_id) REFERENCES runs(run_id),
@@ -243,6 +243,12 @@ ALTER TABLE tool_calls ADD COLUMN result_excerpt TEXT;
 ALTER TABLE tool_calls ADD COLUMN error_type TEXT;
 ALTER TABLE tool_calls ADD COLUMN error_message_short TEXT;
 ALTER TABLE agent_handoffs ADD COLUMN handoff_note_json TEXT;
+"""
+
+
+MIGRATION_V5_TO_V6 = """
+ALTER TABLE tool_calls ADD COLUMN retry_index INTEGER;
+ALTER TABLE tool_calls DROP COLUMN result_excerpt;
 """
 
 

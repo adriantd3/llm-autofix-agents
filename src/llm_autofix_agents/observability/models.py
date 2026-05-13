@@ -224,7 +224,7 @@ class ToolCallRecord:
     duration_seconds: float | None = None
     args_summary_json: str | None = None
     result_summary_json: str | None = None
-    result_excerpt: str | None = None
+    retry_index: int | None = None
     error_type: str | None = None
     error_message_short: str | None = None
 

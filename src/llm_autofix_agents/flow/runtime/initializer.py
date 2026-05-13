@@ -71,7 +71,7 @@ class RunInitializer:
         return cfg, state
 
     def _build_agent_config(self, *, settings: LLMSettings, resolved_model: str) -> dict:
-        agent_config = {
+        return {
             **settings.fingerprint_payload(),
             "architecture": self.architecture.architecture_name,
             "agent_name": self.architecture.agent_name,
@@ -80,10 +80,9 @@ class RunInitializer:
             "tool_count": self.architecture.tool_count,
             "model": resolved_model,
         }
-        return agent_config
 
     def _emit_run_started(self, *, observability, run_input: RunInput, identity) -> None:
-        observability.telemetry.start_run(
+        observability.emitter.start_run(
             architecture=self.architecture.architecture_name,
             target_repo=run_input.target_repo,
             target_branch=metadata_text(run_input.metadata, "runtime_branch"),
@@ -100,8 +99,8 @@ class RunInitializer:
         settings: LLMSettings,
         resolved_model: str,
     ) -> dict[str, str]:
-        """Register facade agent and all sub-agents in telemetry, return id mapping."""
-        run_agent_id = observability.telemetry.register_agent(
+        """Register facade agent and all sub-agents in emitter, return id mapping."""
+        run_agent_id = observability.emitter.register_agent(
             agent_name=self.architecture.agent_name,
             agent_role=self.architecture.agent_role,
             provider=settings.provider.value,
@@ -116,8 +115,13 @@ class RunInitializer:
         run_agent_ids: dict[str, str] = {self.architecture.agent_name: run_agent_id}
 
         for order, sub in enumerate(self.architecture.sub_agents, start=2):
+            if not sub.participates_in_run_loop:
+                # Agent is invoked via Agent.as_tool() — not in the SDK run loop.
+                # Do not register in run_agents; its work surfaces through the
+                # wrapper tool's call record (e.g. explore_code).
+                continue
             sub_model = sub.model or resolved_model
-            sub_run_agent_id = observability.telemetry.register_agent(
+            sub_run_agent_id = observability.emitter.register_agent(
                 agent_name=sub.agent_name,
                 agent_role=sub.agent_role,
                 provider=settings.provider.value,
@@ -132,4 +136,3 @@ class RunInitializer:
             run_agent_ids[sub.agent_name] = sub_run_agent_id
 
         return run_agent_ids
-

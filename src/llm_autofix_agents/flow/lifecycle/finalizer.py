@@ -80,7 +80,7 @@ class RunFinalizer:
         paths: FinalizedRunPaths,
         duration_seconds: float,
     ) -> None:
-        cfg.observability.telemetry.finish_run(
+        cfg.observability.emitter.finish_run(
             final_status=output.status.value,
             stop_reason=output.stop_reason.value,
             duration_seconds=duration_seconds,

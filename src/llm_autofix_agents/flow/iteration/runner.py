@@ -23,11 +23,7 @@ from llm_autofix_agents.flow.policies.validation import validate_iteration
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
 from llm_autofix_agents.observability import utc_now_iso
-from llm_autofix_agents.observability.telemetry import IterationTelemetry
-from llm_autofix_agents.observability.telemetry_models import (
-    FileChangeTelemetrySet,
-    IterationTelemetryResult,
-)
+from llm_autofix_agents.observability.emitter import Emitter, IterationContext
 
 
 @runtime_checkable
@@ -48,7 +44,7 @@ class _IterationPrep:
     identity: RunIdentity
     started_at: str
     started_monotonic: float
-    iteration_telemetry: IterationTelemetry
+    iteration_ctx: IterationContext
     before_snapshot: object  # opaque snapshot from WorkspaceManager
 
 
@@ -148,7 +144,7 @@ class IterationRunner:
         started_at = utc_now_iso()
         started_monotonic = time.perf_counter()
 
-        iteration_telemetry = cfg.observability.telemetry.start_iteration(
+        iteration_ctx = cfg.observability.emitter.start_iteration(
             iteration_id=identity.iteration_id,
             iteration_index=iteration,
         )
@@ -171,7 +167,7 @@ class IterationRunner:
             identity=identity,
             started_at=started_at,
             started_monotonic=started_monotonic,
-            iteration_telemetry=iteration_telemetry,
+            iteration_ctx=iteration_ctx,
             before_snapshot=before_snapshot,
         )
 
@@ -193,7 +189,8 @@ class IterationRunner:
             run_agent_id=cfg.run_agent_id,
             run_agent_ids=cfg.run_agent_ids,
             agent_context=cfg.agent_context,
-            iteration_telemetry=prep.iteration_telemetry,
+            emitter=cfg.observability.emitter,
+            iteration_ctx=prep.iteration_ctx,
             user_input=build_iteration_input(
                 prompt=run_input.prompt,
                 iteration=iteration,
@@ -207,7 +204,7 @@ class IterationRunner:
             ),
             max_turns=cfg.settings.max_turns,
         )
-        prep.iteration_telemetry.record_facade_input(input_text=agent_context.user_input)
+        cfg.observability.emitter.record_facade_input(prep.iteration_ctx, input_text=agent_context.user_input)
         return self.agent_runner.invoke_agent(
             context=agent_context,
             execution_index=1,
@@ -243,7 +240,8 @@ class IterationRunner:
             timeout_seconds=cfg.test_timeout_seconds,
         )
 
-        prep.iteration_telemetry.record_test_execution(
+        cfg.observability.emitter.record_test_execution(
+            prep.iteration_ctx,
             phase="iteration_validation",
             command=run_input.test_command,
             exit_code=test_execution.exit_code,
@@ -264,7 +262,8 @@ class IterationRunner:
             test_execution=test_execution,
         )
         self._record_observation(
-            iteration_telemetry=prep.iteration_telemetry,
+            emitter=cfg.observability.emitter,
+            iteration_ctx=prep.iteration_ctx,
             state=state,
             observation=observation,
             repo_root=cfg.repo_root,
@@ -278,20 +277,40 @@ class IterationRunner:
     def _record_observation(
         self,
         *,
-        iteration_telemetry: IterationTelemetry,
+        emitter: Emitter,
+        iteration_ctx: IterationContext,
         state: RunState,
         observation: IterationObservation,
         repo_root: Path | None = None,
     ) -> None:
         self._record_state(state=state, observation=observation, repo_root=repo_root)
 
-        iteration_telemetry.record_file_changes(
+        changes = observation.changes
+        emitter.record_file_changes(
+            iteration_ctx,
             agent_execution_id=observation.agent_execution_id,
-            changes=FileChangeTelemetrySet.from_workspace_changes(observation.changes),
+            modified=list(changes.modified_files),
+            added=list(changes.added_files),
+            deleted=list(changes.deleted_files),
+            untracked=list(changes.untracked_files),
         )
 
-        iteration_telemetry.finish_iteration(
-            result=IterationTelemetryResult.from_observation(observation),
+        proposal = observation.proposal
+        test_execution = observation.test_execution
+        emitter.finish_iteration(
+            iteration_ctx,
+            started_at=observation.started_at,
+            duration_seconds=max(0.0, time.perf_counter() - observation.started_monotonic),
+            status=proposal.status,
+            input_tokens=proposal.input_tokens,
+            output_tokens=proposal.output_tokens,
+            total_tokens=proposal.total_tokens,
+            tool_calls_count=observation.tool_calls_count,
+            changed_files_count=len(changes.all_changed_files),
+            repo_changed=changes.repo_changed,
+            test_exit_code=test_execution.exit_code,
+            test_timed_out=test_execution.timed_out,
+            test_signature=test_execution.signature,
         )
 
     def _record_state(self, *, state: RunState, observation: IterationObservation, repo_root: Path | None = None) -> None:
@@ -317,4 +336,3 @@ class IterationRunner:
         patch_path = cfg.results_dir / f"it{iteration}.patch"
         patch_path.parent.mkdir(parents=True, exist_ok=True)
         patch_path.write_text(diff, encoding="utf-8")
-

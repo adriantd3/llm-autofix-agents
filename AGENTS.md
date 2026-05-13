@@ -15,7 +15,7 @@ Contexto funcional: `docs/general-definition.md` y `docs/anteproyecto.md`.
 4. Antes de implementar: revisar `specs/status.md`.
 5. Despues de implementar: validar cambios y actualizar `specs/status.md`.
 6. Si cambia el alcance: actualizar `specs/requirements.md`.
-7. Considerar siempre las lecciones aprendidas en `specs/lessons.md`
+7. Considerar siempre las lecciones aprendidas en `specs/lessons.md`. Las lessons son para fallos criticos en el desarrollo a nivel de experiencia usuario-agente, no de bugs del código.
 
 ## Regla tecnica
 
@@ -42,6 +42,7 @@ Aplicar siempre, con cambios minimos y bien justificados:
 3. Considerar patrones de diseno cuando simplifiquen extension, testabilidad y mantenimiento.
 4. Revisar cada cambio con criterio de staff engineer: claridad, robustez, trazabilidad y facilidad de evolucion.
 5. SIEMPRE cumplir con las convenciones codigo para planear, desarrollar y refactorizar expuestos en `specs/conventions.md`.
+6. No apliques cambios que sobreajusten el flujo a un bug en concreto. No añadas referencias ni instrucciones en nada que consuma el agente que incluya aspectos especificos de un caso. Los agentes deben ser agnosticos a cada dataset o bug.
 
 ## Notas de tests
 

@@ -11,9 +11,11 @@ class ObservabilityConfig:
     enabled: bool
     interactive: bool
     results_dir: Path
-    sqlite_db_path: Path
     live_log_enabled: bool
     jsonl_enabled: bool = True
+    # None → observer_factory computes per-run path: results_dir / run_id / "run.db"
+    # Explicit Path → use that path (backward-compat override via AUTOFIX_OBSERVABILITY_DB)
+    sqlite_db_path: Path | None = None
 
 
 def resolve_observability_config(*, repo_root: Path, metadata: dict[str, Any]) -> ObservabilityConfig:
@@ -23,10 +25,11 @@ def resolve_observability_config(*, repo_root: Path, metadata: dict[str, Any]) -
         default=repo_root / "results",
         repo_root=repo_root,
     )
-    sqlite_db_path = _resolve_path(
+    # Only set an explicit sqlite_db_path when a caller has overridden it.
+    # When None, observer_factory will default to results_dir / run_id / "run.db".
+    sqlite_db_path = _resolve_optional_path(
         metadata_value=metadata.get("observability_db"),
         env_value=os.environ.get("AUTOFIX_OBSERVABILITY_DB"),
-        default=resolved_results_dir / "observability.db",
         repo_root=repo_root,
     )
 
@@ -75,6 +78,17 @@ def _resolve_path(*, metadata_value: Any, env_value: str | None, default: Path, 
     raw = metadata_value if isinstance(metadata_value, str) else env_value
     if raw is None:
         return default
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = repo_root / candidate
+    return candidate
+
+
+def _resolve_optional_path(*, metadata_value: Any, env_value: str | None, repo_root: Path) -> Path | None:
+    """Like _resolve_path but returns None when no explicit value is set."""
+    raw = metadata_value if isinstance(metadata_value, str) else env_value
+    if raw is None:
+        return None
     candidate = Path(raw)
     if not candidate.is_absolute():
         candidate = repo_root / candidate

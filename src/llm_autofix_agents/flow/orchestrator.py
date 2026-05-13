@@ -125,7 +125,8 @@ class RunOrchestrator:
             cwd=cfg.repo_root,
             timeout_seconds=cfg.test_timeout_seconds,
         )
-        cfg.observability.telemetry.record_test_execution(
+        cfg.observability.emitter.record_test_execution(
+            None,
             phase="baseline",
             command=run_input.test_command,
             exit_code=execution.exit_code,

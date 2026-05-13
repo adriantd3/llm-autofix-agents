@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+from typing import Any, Mapping
+
 from agents import RunContextWrapper, function_tool
 
 from llm_autofix_agents.tools.command_tools import run_shell
 from llm_autofix_agents.tools.context import APRToolContext, get_tool_context
+from llm_autofix_agents.tools.metadata import (
+    ToolDescriptor,
+    ToolResultKind,
+    classify_json_envelope,
+    make_json_result_summarizer,
+)
+from llm_autofix_agents.tools.registry import register
 from llm_autofix_agents.tools.serialization import json_result
 from llm_autofix_agents.tools.text import truncate
 
@@ -61,3 +70,53 @@ def git_diff_summary(
             "patch_truncated": patch_truncated,
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Observability metadata (SH1)
+# ---------------------------------------------------------------------------
+
+
+def _args_git_status(args: Mapping[str, Any]) -> dict[str, Any]:
+    return {"cwd": args.get("cwd")}
+
+
+def _args_git_diff(args: Mapping[str, Any]) -> dict[str, Any]:
+    return {"pathspec": args.get("pathspec"), "cwd": args.get("cwd")}
+
+
+def _result_git_status(payload: dict[str, Any], ok: Any) -> dict[str, Any]:
+    summary: dict[str, Any] = {"ok": ok}
+    if ok is True:
+        summary["branch"] = payload.get("branch")
+        summary["changed_files"] = payload.get("changed_files")
+        summary["truncated"] = payload.get("truncated")
+    else:
+        summary["error"] = payload.get("error")
+    return summary
+
+
+def _result_git_diff(payload: dict[str, Any], ok: Any) -> dict[str, Any]:
+    return {
+        "ok": ok,
+        "pathspec": payload.get("pathspec"),
+        "patch_truncated": payload.get("patch_truncated") if ok is True else None,
+        "error": payload.get("error") if ok is False else None,
+    }
+
+
+register(ToolDescriptor(
+    name="git_status_summary",
+    result_kind=ToolResultKind.JSON_ENVELOPE,
+    summarize_args=_args_git_status,
+    summarize_result=make_json_result_summarizer(_result_git_status),
+    classify_status=classify_json_envelope,
+))
+
+register(ToolDescriptor(
+    name="git_diff_summary",
+    result_kind=ToolResultKind.JSON_ENVELOPE,
+    summarize_args=_args_git_diff,
+    summarize_result=make_json_result_summarizer(_result_git_diff),
+    classify_status=classify_json_envelope,
+))

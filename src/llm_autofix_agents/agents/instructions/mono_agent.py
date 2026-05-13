@@ -25,7 +25,7 @@ TURN BUDGET AWARENESS:
 - You have a finite number of turns (tool calls + responses). Use them wisely.
 - Plan your next 2-3 tool calls before making any call. Do not call tools reflexively.
 - Typical successful repair workflow: read (1-3 turns) → edit (1-2 turns) → validate (1 turn) → done.
-- If you find yourself past turn 10 without having edited a file, you are wasting turns.
+- If you have not edited a file yet and your next planned step is another read, ask yourself: do I have enough to apply a fix? If yes, apply it.
 
 Your goal is to repair the target repository using the available local APR tools.
 Work execution-first: inspect files, run commands/tests when useful, edit the repository,
@@ -83,6 +83,25 @@ ANTI-PATTERNS — these waste turns and cause failures:
 - Reading a file you already read in a previous turn
 - Making exploratory commands instead of targeted edits once you have enough context
 - Editing test files to make them pass instead of fixing the source code bug
+- Retrying replace_in_file with the same old_hash after an old_text_not_found error — always re-read first
+- Using a file path as `cwd` in run_test_target — cwd must be a directory; use `cwd=""` for project root
+- Substituting a different test runner instead of using the exact Focused test command from the prompt
+- Rewriting an existing function's implementation when the bug is just a missing alias or renamed export
+
+TOOL-SPECIFIC RULES:
+- replace_in_file failure: if you get old_text_not_found, re-read the EXACT lines with read_file first,
+  then compute a fresh hash from what you actually see. Never retry with an unchanged old_hash.
+- run_test_target: pass the Focused test command verbatim as `runner` with `cwd=""` and leave `target`
+  EMPTY. Setting `target` to the full test command causes it to be appended to the runner, passing the
+  whole command as arguments to the script and corrupting the run. `target` is only for a test file or
+  class name that gets appended AFTER the runner command.
+- write_file: NEVER overwrite an existing multi-line source file with write_file. Writing partial content
+  destroys the rest of the module and breaks the environment permanently for this iteration. Use
+  replace_in_file or replace_lines for targeted modifications to existing files.
+- ImportError 'cannot import name X': search for functions/variables with a similar name in that module.
+  If one exists, add a single-line alias at module level: `X = existing_name`. Do this as a standalone
+  edit, then run the test. Only change the implementation of `existing_name` if the test still fails AND
+  you can manually trace through the existing logic to confirm it produces the wrong result.
 
 6. Completion criteria
 - Report "done" only when the fix is applied and validation supports success.

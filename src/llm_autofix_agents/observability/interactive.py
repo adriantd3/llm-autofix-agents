@@ -4,24 +4,36 @@ import json
 import logging
 from pathlib import Path
 
+from llm_autofix_agents.observability.events import (
+    AgentExecutionFinished,
+    AgentExecutionStarted,
+    AgentHandoff,
+    AgentRegistered,
+    FacadeInput,
+    FileChanged,
+    IterationFinished,
+    IterationStarted,
+    ObservabilityEvent,
+    ProviderCallHappened,
+    RunFinished,
+    RunStarted,
+    TestExecuted,
+    ToolCalled,
+)
 from llm_autofix_agents.observability.models import (
-    AgentDescriptor,
-    AgentExecutionRecord,
     AgentHandoffRecord,
-    FacadeInputRecord,
-    FileChangeRecord,
-    IterationRecord,
     ProviderCallRecord,
-    RunDescriptor,
-    RunFinishedRecord,
-    TestExecutionRecord,
     ToolCallRecord,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def _format_kv_pairs(data: dict[str, object], max_items: int = 6) -> str:
+_KV_LONG_KEYS = frozenset({"path", "cwd", "command", "cmd", "target"})
+_KV_CONTENT_KEYS = frozenset({"stdout", "stderr", "answer", "content", "output", "diff"})
+
+
+def _format_kv_pairs(data: dict[str, object], max_items: int = 20) -> str:
     """Format a dict as compact key=value pairs, skipping None values."""
     items = []
     for k, v in data.items():
@@ -34,8 +46,14 @@ def _format_kv_pairs(data: dict[str, object], max_items: int = 6) -> str:
         elif isinstance(v, (int, float)):
             items.append(f"{k}={v}")
         elif isinstance(v, str):
-            if len(v) > 60:
-                items.append(f"{k}={v[:57]}...")
+            if k in _KV_CONTENT_KEYS:
+                cap = 500
+            elif k in _KV_LONG_KEYS:
+                cap = 200
+            else:
+                cap = 120
+            if len(v) > cap:
+                items.append(f"{k}={v[:cap - 3]}...")
             else:
                 items.append(f"{k}={v}")
         elif isinstance(v, list):
@@ -48,17 +66,23 @@ def _format_kv_pairs(data: dict[str, object], max_items: int = 6) -> str:
     return ", ".join(items)
 
 
+_ERROR_STATUSES = frozenset({"tool_error", "sdk_error", "failed"})
+
+
 def _format_tool_summary(record: ToolCallRecord) -> str:
     """Return a concise multi-line summary for a tool call in live.md."""
-    header_parts = [f"tool {record.seq:03d}:"]
+    status = record.status or "unknown"
+    is_error = status in _ERROR_STATUSES
+    prefix = f"tool {record.seq:03d}: {'[!] ' if is_error else ''}"
+    parts = []
     if record.agent_name:
-        header_parts.append(f"[{record.agent_name}]")
-    header_parts.append(record.tool_name)
-    header_parts.append("->")
-    header_parts.append(record.status or "unknown")
+        parts.append(f"[{record.agent_name}]")
+    parts.append(record.tool_name)
+    parts.append("->")
+    parts.append(status)
     if record.duration_seconds is not None:
-        header_parts.append(f"({record.duration_seconds:.3f}s)")
-    header = " ".join(header_parts)
+        parts.append(f"({record.duration_seconds:.3f}s)")
+    header = prefix + " ".join(parts)
 
     lines = [header]
 
@@ -106,182 +130,6 @@ def _format_handoff(record: AgentHandoffRecord) -> str:
     return "\n".join(lines)
 
 
-class MarkdownLiveObserver:
-    def __init__(self, live_log_path: Path) -> None:
-        self._path = live_log_path
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-
-    @property
-    def path(self) -> Path:
-        return self._path
-
-    def on_run_started(self, *, run: RunDescriptor, started_at: str) -> None:
-        content = [
-            f"# Run {run.run_id}",
-            "",
-            f"- Architecture: {run.architecture}",
-            f"- Started at: {started_at}",
-            f"- Target repo: {run.target_repo or '(none)'}",
-            "",
-        ]
-        self._path.write_text("\n".join(content), encoding="utf-8")
-
-    def on_run_finished(self, *, run_finished: RunFinishedRecord) -> None:
-        self._append(
-            "\n".join(
-                [
-                    "",
-                    "## Run finished",
-                    f"- status: {run_finished.final_status}",
-                    f"- stop_reason: {run_finished.stop_reason}",
-                    f"- duration_seconds: {run_finished.duration_seconds:.3f}",
-                    f"- total_iterations: {run_finished.total_iterations}",
-                ]
-            )
-        )
-
-    def on_run_agent_registered(self, *, run_id: str, agent: AgentDescriptor, instructions_hash: str | None) -> str:
-        del run_id, instructions_hash
-        self._append(
-            "\n".join(
-                [
-                    "",
-                    "## Agent",
-                    f"- name: {agent.agent_name}",
-                    f"- role: {agent.agent_role}",
-                    f"- model: {agent.model_config.provider}/{agent.model_config.model}",
-                    f"- tool_profile: {agent.tool_profile}",
-                ]
-            )
-        )
-        return ""
-
-    def on_iteration_started(self, *, record: IterationRecord) -> None:
-        self._append(f"\n## Iteration {record.iteration_index}\n- started_at: {record.started_at}")
-
-    def on_iteration_finished(self, *, record: IterationRecord) -> None:
-        self._append(
-            "\n".join(
-                [
-                    "",
-                    f"### Iteration {record.iteration_index} result",
-                    f"- status: {record.status}",
-                    f"- stop_reason: {record.stop_reason}",
-                    f"- duration_seconds: {0.0 if record.duration_seconds is None else record.duration_seconds:.3f}",
-                    f"- tool_calls_count: {record.tool_calls_count}",
-                    f"- changed_files_count: {record.changed_files_count}",
-                    f"- test_exit_code: {record.test_exit_code}",
-                ]
-            )
-        )
-
-    def on_agent_execution_started(self, *, record: AgentExecutionRecord) -> None:
-        self._append(
-            "\n".join(
-                [
-                    "",
-                    "### Agent execution started",
-                    f"- agent_execution_id: {record.agent_execution_id}",
-                    f"- started_at: {record.started_at}",
-                ]
-            )
-        )
-
-    def on_agent_execution_finished(self, *, record: AgentExecutionRecord) -> None:
-        self._append(
-            "\n".join(
-                [
-                    "",
-                    "### Agent execution finished",
-                    f"- status: {record.status}",
-                    f"- duration_seconds: {0.0 if record.duration_seconds is None else record.duration_seconds:.3f}",
-                    f"- tool_calls_count: {record.tool_calls_count}",
-                    f"- reasoning_summary: {record.reasoning_summary or ''}",
-                ]
-            )
-        )
-
-    def on_tool_call(self, *, record: ToolCallRecord) -> None:
-        self._append(_format_tool_summary(record))
-
-    def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
-        self._append(_format_provider_call_record(record))
-
-    def on_test_execution(self, *, record: TestExecutionRecord) -> None:
-        self._append(
-            "- test phase="
-            f"{record.phase} exit_code={record.exit_code} timed_out={record.timed_out} "
-            f"signature={record.signature}"
-        )
-
-    def on_file_change(self, *, record: FileChangeRecord) -> None:
-        self._append(f"- file_change: {record.path} ({record.change_type or 'modified'})")
-
-    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
-        self._append(_format_handoff(record))
-
-    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
-        self._append(
-            "\n".join(
-                [
-                    "",
-                    f"### Facade input (iteration {record.iteration_index})",
-                    "```",
-                    record.input_text,
-                    "```",
-                ]
-            )
-        )
-
-    def _append(self, text: str) -> None:
-        with self._path.open("a", encoding="utf-8") as handler:
-            handler.write(f"{text}\n")
-
-
-class ConsoleObserver:
-    def on_run_started(self, *, run: RunDescriptor, started_at: str) -> None:
-        logger.info("[run] started %s at %s", run.run_id, started_at)
-
-    def on_run_finished(self, *, run_finished: RunFinishedRecord) -> None:
-        logger.info("[run] finished status=%s stop_reason=%s", run_finished.final_status, run_finished.stop_reason)
-
-    def on_run_agent_registered(self, *, run_id: str, agent: AgentDescriptor, instructions_hash: str | None) -> str:
-        del run_id, instructions_hash
-        logger.info("[agent] registered %s/%s", agent.agent_name, agent.agent_role)
-        return ""
-
-    def on_iteration_started(self, *, record: IterationRecord) -> None:
-        logger.info("[it %s] started", record.iteration_index)
-
-    def on_iteration_finished(self, *, record: IterationRecord) -> None:
-        logger.info("[it %s] finished status=%s tokens=%s", record.iteration_index, record.status, record.total_tokens)
-
-    def on_agent_execution_started(self, *, record: AgentExecutionRecord) -> None:
-        logger.info("[agent_exec] %s started", record.agent_execution_id)
-
-    def on_agent_execution_finished(self, *, record: AgentExecutionRecord) -> None:
-        logger.info("[agent_exec] %s finished status=%s", record.agent_execution_id, record.status)
-
-    def on_tool_call(self, *, record: ToolCallRecord) -> None:
-        logger.info("[tool] %s", _format_tool_summary(record).replace("\n", " | "))
-
-    def on_provider_call_event(self, *, record: ProviderCallRecord) -> None:
-        logger.info(_format_provider_call_record(record))
-
-    def on_test_execution(self, *, record: TestExecutionRecord) -> None:
-        logger.info("[test:%s] exit_code=%s timed_out=%s", record.phase, record.exit_code, record.timed_out)
-
-    def on_file_change(self, *, record: FileChangeRecord) -> None:
-        logger.info("[file] %s %s", record.path, record.change_type or "modified")
-
-    def on_agent_handoff(self, *, record: AgentHandoffRecord) -> None:
-        logger.info("[handoff] %s -> %s", record.from_agent_name, record.to_agent_name)
-
-    def on_facade_input(self, *, record: FacadeInputRecord) -> None:
-        text = record.input_text[:200] + "..." if len(record.input_text) > 200 else record.input_text
-        logger.info("[facade_input it=%s] %s", record.iteration_index, text.replace("\n", " "))
-
-
 def _format_provider_call_record(record: ProviderCallRecord) -> str:
     status_code = record.status_code if record.status_code is not None else "unknown"
     tool_calls = record.tool_calls_count if record.tool_calls_count is not None else "unknown"
@@ -322,3 +170,157 @@ def _format_provider_call_record(record: ProviderCallRecord) -> str:
         f"- provider event {record.event_type} attempt={record.attempt}/{record.total_attempts} "
         f"status_code={status_code} error_type={record.error_type or 'unknown'}"
     )
+
+
+class MarkdownLiveObserver:
+    def __init__(self, live_log_path: Path) -> None:
+        self._path = live_log_path
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    def emit(self, event: ObservabilityEvent) -> None:
+        match event:
+            case RunStarted():
+                content = [
+                    f"# Run {event.run.run_id}",
+                    "",
+                    f"- Architecture: {event.run.architecture}",
+                    f"- Started at: {event.started_at}",
+                    f"- Target repo: {event.run.target_repo or '(none)'}",
+                    "",
+                ]
+                self._path.write_text("\n".join(content), encoding="utf-8")
+            case RunFinished():
+                rf = event.run_finished
+                self._append(
+                    "\n".join([
+                        "",
+                        "## Run finished",
+                        f"- status: {rf.final_status}",
+                        f"- stop_reason: {rf.stop_reason}",
+                        f"- duration_seconds: {rf.duration_seconds:.3f}",
+                        f"- total_iterations: {rf.total_iterations}",
+                    ])
+                )
+            case AgentRegistered():
+                self._append(
+                    "\n".join([
+                        "",
+                        "## Agent",
+                        f"- name: {event.agent.agent_name}",
+                        f"- role: {event.agent.agent_role}",
+                        f"- model: {event.agent.model_config.provider}/{event.agent.model_config.model}",
+                        f"- tool_profile: {event.agent.tool_profile}",
+                    ])
+                )
+            case IterationStarted():
+                r = event.record
+                self._append(f"\n## Iteration {r.iteration_index}\n- started_at: {r.started_at}")
+            case IterationFinished():
+                r = event.record
+                self._append(
+                    "\n".join([
+                        "",
+                        f"### Iteration {r.iteration_index} result",
+                        f"- status: {r.status}",
+                        f"- stop_reason: {r.stop_reason}",
+                        f"- duration_seconds: {0.0 if r.duration_seconds is None else r.duration_seconds:.3f}",
+                        f"- tool_calls_count: {r.tool_calls_count}",
+                        f"- changed_files_count: {r.changed_files_count}",
+                        f"- test_exit_code: {r.test_exit_code}",
+                    ])
+                )
+            case AgentExecutionStarted():
+                r = event.record
+                self._append(
+                    "\n".join([
+                        "",
+                        "### Agent execution started",
+                        f"- agent_execution_id: {r.agent_execution_id}",
+                        f"- started_at: {r.started_at}",
+                    ])
+                )
+            case AgentExecutionFinished():
+                r = event.record
+                self._append(
+                    "\n".join([
+                        "",
+                        "### Agent execution finished",
+                        f"- status: {r.status}",
+                        f"- duration_seconds: {0.0 if r.duration_seconds is None else r.duration_seconds:.3f}",
+                        f"- tool_calls_count: {r.tool_calls_count}",
+                        f"- reasoning_summary: {r.reasoning_summary or ''}",
+                    ])
+                )
+            case ToolCalled():
+                self._append(_format_tool_summary(event.record))
+            case ProviderCallHappened():
+                self._append(_format_provider_call_record(event.record))
+            case TestExecuted():
+                r = event.record
+                self._append(
+                    "- test phase="
+                    f"{r.phase} exit_code={r.exit_code} timed_out={r.timed_out} "
+                    f"signature={r.signature}"
+                )
+            case FileChanged():
+                r = event.record
+                self._append(f"- file_change: {r.path} ({r.change_type or 'modified'})")
+            case AgentHandoff():
+                self._append(_format_handoff(event.record))
+            case FacadeInput():
+                r = event.record
+                self._append(
+                    "\n".join([
+                        "",
+                        f"### Facade input (iteration {r.iteration_index})",
+                        "```",
+                        r.input_text,
+                        "```",
+                    ])
+                )
+
+    def _append(self, text: str) -> None:
+        with self._path.open("a", encoding="utf-8") as handler:
+            handler.write(f"{text}\n")
+
+
+class ConsoleObserver:
+    def emit(self, event: ObservabilityEvent) -> None:
+        match event:
+            case RunStarted():
+                logger.info("[run] started %s at %s", event.run.run_id, event.started_at)
+            case RunFinished():
+                rf = event.run_finished
+                logger.info("[run] finished status=%s stop_reason=%s", rf.final_status, rf.stop_reason)
+            case AgentRegistered():
+                logger.info("[agent] registered %s/%s", event.agent.agent_name, event.agent.agent_role)
+            case IterationStarted():
+                logger.info("[it %s] started", event.record.iteration_index)
+            case IterationFinished():
+                r = event.record
+                logger.info("[it %s] finished status=%s tokens=%s", r.iteration_index, r.status, r.total_tokens)
+            case AgentExecutionStarted():
+                logger.info("[agent_exec] %s started", event.record.agent_execution_id)
+            case AgentExecutionFinished():
+                logger.info("[agent_exec] %s finished status=%s", event.record.agent_execution_id, event.record.status)
+            case ToolCalled():
+                logger.info("[tool] %s", _format_tool_summary(event.record).replace("\n", " | "))
+            case ProviderCallHappened():
+                logger.info(_format_provider_call_record(event.record))
+            case TestExecuted():
+                r = event.record
+                logger.info("[test:%s] exit_code=%s timed_out=%s", r.phase, r.exit_code, r.timed_out)
+            case FileChanged():
+                r = event.record
+                logger.info("[file] %s %s", r.path, r.change_type or "modified")
+            case AgentHandoff():
+                r = event.record
+                logger.info("[handoff] %s -> %s", r.from_agent_name, r.to_agent_name)
+            case FacadeInput():
+                r = event.record
+                text = r.input_text[:200] + "..." if len(r.input_text) > 200 else r.input_text
+                logger.info("[facade_input it=%s] %s", r.iteration_index, text.replace("\n", " "))

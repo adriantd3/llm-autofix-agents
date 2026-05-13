@@ -10,7 +10,7 @@ global:
     model: qwen3.5:9b
     max_turns: 20
   max_iterations: 3
-  timeout_seconds: 300
+  timeout_seconds: 600
   capture_errors: true
 
 bugs:

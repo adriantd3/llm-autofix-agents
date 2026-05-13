@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents import FunctionTool
-
 from llm_autofix_agents.tools.command_tools import execute_command
 from llm_autofix_agents.tools.edit_tools import replace_in_file, replace_lines, write_file
 from llm_autofix_agents.tools.fs_tools import get_workspace_info, list_files, read_file, search_files
 from llm_autofix_agents.tools.git_tools import git_diff_summary, git_status_summary
-from llm_autofix_agents.tools.observable import make_observable
 from llm_autofix_agents.tools.patch_tools import apply_unified_diff
 from llm_autofix_agents.tools.test_tools import run_test_target
 
@@ -97,15 +94,19 @@ APR_ORCHESTRATOR_TEST_RUNNER_TOOLS = [
     read_file,
 ]
 
-# main orchestrator: write tools + read_file + direct test execution.
+# main orchestrator: write tools + targeted search + direct test execution.
 # Intentionally EXCLUDED to prevent exploration procrastination loops:
 #   - execute_command: forces structured tool use, no cat/ls/grep
-#   - list_files, search_files, get_workspace_info: exploration done via explore_code task-agent
+#   - get_workspace_info: full-workspace dump, too broad
 #   - git_status_summary, git_diff_summary: unnecessary overhead in fix loop
-# ONLY read_file is kept for exact line retrieval needed by replace_in_file.
+# list_files is included for targeted directory lookups (e.g. listing testdata/)
+# — without it the agent wastes turns using search_files as a filename finder.
+# search_files is for content/symbol lookup; list_files is for file discovery.
 # run_test_target is included DIRECTLY (no sub-agent) to avoid second LLM call
 # on a local single-slot Ollama instance, which causes "An error occurred" failures.
 APR_ORCHESTRATOR_MAIN_TOOLS = [
+    list_files,
+    search_files,
     read_file,
     write_file,
     replace_in_file,
@@ -158,4 +159,4 @@ def build_apr_tools(profile: str = "full") -> list[Any]:
         raw = list(profiles[profile])
     except KeyError as exc:
         raise ValueError(f"Unknown APR tool profile: {profile}") from exc
-    return [make_observable(t) if isinstance(t, FunctionTool) else t for t in raw]
+    return list(raw)

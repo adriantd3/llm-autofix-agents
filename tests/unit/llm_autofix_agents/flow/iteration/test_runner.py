@@ -16,8 +16,8 @@ from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
+from llm_autofix_agents.observability.emitter import Emitter, IterationContext
 from llm_autofix_agents.observability.interactive import MarkdownLiveObserver
-from llm_autofix_agents.observability.telemetry_models import IterationTelemetryResult
 from llm_autofix_agents.tools.context import APRToolContext
 
 
@@ -34,8 +34,8 @@ class IterationRunnerTests(unittest.TestCase):
                 diff_excludes_untracked=False,
             )
         )
-        telemetry = _StubRunTelemetry()
-        cfg = _build_config(telemetry=telemetry)
+        emitter = _StubEmitter()
+        cfg = _build_config(emitter=emitter)
         state = RunState()
 
         test_execution = TestExecution(
@@ -73,8 +73,8 @@ class IterationRunnerTests(unittest.TestCase):
         self.assertIsNotNone(state.latest_tests)
         assert state.latest_tests is not None
         self.assertEqual(state.latest_tests.failed, 1)
-        self.assertTrue(telemetry.iteration_telemetry.finish_called)
-        self.assertEqual(telemetry.iteration_telemetry.test_execution_calls, 1)
+        self.assertTrue(emitter.iteration_finish_called)
+        self.assertEqual(emitter.test_execution_calls, 1)
         mock_write_patch.assert_called_once_with(cfg=cfg, iteration=1, diff="")
 
     def test_run_records_facade_input(self) -> None:
@@ -89,8 +89,8 @@ class IterationRunnerTests(unittest.TestCase):
                 diff_excludes_untracked=False,
             )
         )
-        telemetry = _StubRunTelemetry()
-        cfg = _build_config(telemetry=telemetry)
+        emitter = _StubEmitter()
+        cfg = _build_config(emitter=emitter)
         state = RunState()
 
         test_execution = TestExecution(
@@ -119,7 +119,7 @@ class IterationRunnerTests(unittest.TestCase):
                     iteration=1,
                 )
 
-        self.assertEqual(telemetry.iteration_telemetry.facade_input_record, "Fix parser failure")
+        self.assertEqual(emitter.facade_input_recorded, "Fix parser failure")
 
     def test_run_writes_iteration_patch_file(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -138,8 +138,8 @@ class IterationRunnerTests(unittest.TestCase):
                     diff_excludes_untracked=False,
                 )
             )
-            telemetry = _StubRunTelemetry()
-            cfg = _build_config(telemetry=telemetry, repo_root=repo_root, live_observer=live_observer)
+            emitter = _StubEmitter()
+            cfg = _build_config(emitter=emitter, repo_root=repo_root, live_observer=live_observer)
             state = RunState()
 
             test_execution = TestExecution(
@@ -186,8 +186,8 @@ class IterationRunnerTests(unittest.TestCase):
                     diff_excludes_untracked=False,
                 )
             )
-            telemetry = _StubRunTelemetry()
-            cfg = _build_config(telemetry=telemetry, repo_root=repo_root)
+            emitter = _StubEmitter()
+            cfg = _build_config(emitter=emitter, repo_root=repo_root)
             state = RunState()
 
             test_execution = TestExecution(
@@ -275,38 +275,50 @@ class _StubWorkspaceManager:
         return None
 
 
-class _StubIterationTelemetry:
-    def __init__(self) -> None:
-        self.finish_called = False
-        self.test_execution_calls = 0
-        self.finished_result: IterationTelemetryResult | None = None
-        self.facade_input_record: Any | None = None
+class _StubEmitter(Emitter):
+    """Minimal emitter stub for unit tests — captures calls without emitting to observers."""
 
-    def record_test_execution(self, **kwargs: Any) -> None:
+    def __init__(self) -> None:
+        # Bypass Emitter.__init__; we stub the methods directly.
+        self._run_id = "run-123"
+        self._observer = _NullObserver()
+        self.iteration_finish_called = False
+        self.test_execution_calls = 0
+        self.facade_input_recorded: str | None = None
+        self.file_changes_recorded: list[Any] = []
+
+    def start_iteration(self, *, iteration_id: str, iteration_index: int) -> IterationContext:
+        return IterationContext(iteration_id=iteration_id, iteration_index=iteration_index)
+
+    def record_test_execution(self, ctx, *, phase, command, exit_code, timed_out, signature, iteration=0, agent_execution_id=None) -> None:
         self.test_execution_calls += 1
 
-    def record_file_changes(self, **kwargs: Any) -> None:
-        return None
+    def record_facade_input(self, ctx: IterationContext, input_text: str) -> None:
+        self.facade_input_recorded = input_text
 
-    def record_facade_input(self, input_text: str) -> None:
-        self.facade_input_record = input_text
+    def record_file_changes(self, ctx, *, agent_execution_id, modified, added, deleted, untracked) -> None:
+        self.file_changes_recorded.append((modified, added, deleted, untracked))
 
-    def finish_iteration(self, *, result: IterationTelemetryResult) -> None:
-        self.finish_called = True
-        self.finished_result = result
+    def finish_iteration(self, ctx, *, started_at, status=None, stop_reason=None, duration_seconds=None,
+                         input_tokens=0, output_tokens=0, total_tokens=0, tool_calls_count=0,
+                         changed_files_count=0, repo_changed=False, test_exit_code=None,
+                         test_timed_out=None, test_signature=None) -> None:
+        self.iteration_finish_called = True
 
 
-class _StubRunTelemetry:
-    def __init__(self) -> None:
-        self.iteration_telemetry = _StubIterationTelemetry()
+class _NullObserver:
+    def emit(self, event: Any) -> None:
+        del event
 
-    def start_iteration(self, *, iteration_id: str, iteration_index: int):
-        return self.iteration_telemetry
+
+class _StubProvider:
+    async def run_agent(self, **kwargs: Any):
+        raise AssertionError("Provider should not be called in this test")
 
 
 def _build_config(
     *,
-    telemetry: _StubRunTelemetry,
+    emitter: _StubEmitter,
     repo_root: Path | None = None,
     live_observer: MarkdownLiveObserver | None = None,
 ) -> RunConfig:
@@ -314,10 +326,8 @@ def _build_config(
 
     settings = LLMSettings(provider=ProviderType.OLLAMA, model="test")
     resolved_repo_root = repo_root or Path(tempfile.mkdtemp())
-    # Wrap the stub telemetry in the real RunTelemetry interface expected by RunConfig
-    # For tests, we use the stub directly cast as RunTelemetry via the stack.
     observability = ObservabilityStack(
-        telemetry=telemetry,  # type: ignore[arg-type]
+        emitter=emitter,  # type: ignore[arg-type]
         sqlite_store=None,
         live_observer=live_observer,
     )
@@ -338,11 +348,6 @@ def _build_config(
         run_input_metadata={},
         agent_config={},
     )
-
-
-class _StubProvider:
-    async def run_agent(self, **kwargs: Any):
-        raise AssertionError("Provider should not be called in this test")
 
 
 if __name__ == "__main__":

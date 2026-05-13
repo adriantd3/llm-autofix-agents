@@ -9,11 +9,16 @@ from typing import Any, Literal, Protocol
 from agents import (
     Agent,
     MaxTurnsExceeded,
+    MessageOutputItem,
     ModelBehaviorError,
     RunConfig,
+    RunErrorHandlerInput,
+    RunErrorHandlerResult,
     RunHooks,
     Runner,
     RunResult,
+    ToolCallItem,
+    ToolCallOutputItem,
     set_tracing_disabled,
 )
 from pydantic import BaseModel, Field
@@ -104,35 +109,38 @@ class OpenAIAgentsSDKProvider:
             tool_calls_count_getter=lambda: _extract_tool_call_count(hooks),
         )
 
+        # Context accumulated from a failed attempt, injected into the next retry
+        # so the agent can resume from where it left off instead of starting over.
+        accumulated_context: str | None = None
+
         for attempt in range(1, total_attempts + 1):
+            # Build effective input: on retries after context loss, prepend what was
+            # gathered before the interruption so the agent doesn't re-discover it.
+            effective_input = user_input
+            if attempt > 1 and accumulated_context:
+                tool_count = _extract_tool_call_count(hooks) or 0
+                effective_input = (
+                    f"{user_input}\n\n"
+                    f"[RECOVERY: The previous attempt was interrupted by a rate limit after "
+                    f"{tool_count} tool calls. Context gathered before interruption:\n"
+                    f"{accumulated_context}]"
+                )
+
+            _reset_context_snapshot(hooks)
+
             try:
                 result = await Runner.run(
                     agent,
-                    user_input,
+                    effective_input,
                     context=context,
                     max_turns=max_turns,
                     hooks=hooks,
                     run_config=RunConfig(tracing_disabled=self.settings.tracing_disabled),
+                    error_handlers={"max_turns": _make_max_turns_handler(max_turns)},
                 )
                 if attempt > 1:
                     event_emitter.retry_succeeded(attempt=attempt)
                 break
-            except MaxTurnsExceeded as exc:
-                # The agent used all available turns. Return a fallback record
-                # so the outer iteration loop can still evaluate file changes
-                # and test results that occurred during the run.
-                proposal = AgentFixIterationRecord(
-                    status="done",
-                    reasoning_summary="Agent exceeded maximum turns; assuming completion based on tool usage",
-                    confidence=0.5,
-                    changed_files=[],
-                    notes=f"MaxTurnsExceeded after {max_turns} turns",
-                )
-                usage = _extract_token_usage(getattr(exc, "result", None))
-                proposal.input_tokens = usage["input_tokens"]
-                proposal.output_tokens = usage["output_tokens"]
-                proposal.total_tokens = usage["total_tokens"]
-                return proposal
             except ModelBehaviorError as exc:
                 # The model could not produce output matching the expected
                 # schema (e.g. structured JSON). For local models this is a
@@ -184,7 +192,12 @@ class OpenAIAgentsSDKProvider:
                         cause=exc,
                     ) from exc
 
-                delay_seconds = _compute_retry_delay_seconds(
+                # Capture research context before sleeping so the next attempt can
+                # skip the exploration phase if the runner restarts from scratch.
+                accumulated_context = _extract_context_snapshot(hooks)
+
+                retry_after = _extract_retry_after_seconds(exc) if status_code == 429 else None
+                delay_seconds = retry_after if retry_after is not None else _compute_retry_delay_seconds(
                     attempt=attempt,
                     base_seconds=self.settings.api_retry_base_seconds,
                     max_seconds=self.settings.api_retry_max_seconds,
@@ -199,6 +212,7 @@ class OpenAIAgentsSDKProvider:
                     status_code=status_code,
                     error=exc,
                     retry_delay_seconds=delay_seconds,
+                    rerun_full_runner=accumulated_context is None,
                 )
                 await asyncio.sleep(delay_seconds)
 
@@ -452,6 +466,26 @@ def _is_retryable_provider_error(exc: Exception) -> bool:
     return any(marker in message for marker in transient_markers)
 
 
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Read the Retry-After (or x-ratelimit-reset-requests) header from a 429 response."""
+    response = getattr(exc, "response", None)
+    if response is None:
+        return None
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return None
+    for header_name in ("Retry-After", "retry-after", "x-ratelimit-reset-requests"):
+        raw = headers.get(header_name)
+        if raw:
+            try:
+                value = float(raw)
+                if value > 0:
+                    return value
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
 def _extract_http_status_code(exc: Exception) -> int | None:
     raw_status = getattr(exc, "status_code", None)
     if isinstance(raw_status, int):
@@ -490,6 +524,160 @@ def _extract_tool_call_count(hooks: RunHooks[Any] | None) -> int | None:
         return int(raw_value)
     except (TypeError, ValueError):
         return None
+
+
+def _make_max_turns_handler(max_turns: int):
+    """Return an error_handler for MaxTurnsExceeded that preserves research context.
+
+    Instead of losing everything the agent investigated, we extract search hits,
+    files read, and edit attempts from run_data.new_items and surface them in
+    the notes field so the next iteration can skip the exploration phase.
+    """
+    def _on_max_turns(data: RunErrorHandlerInput[Any]) -> RunErrorHandlerResult:
+        notes = _extract_research_context(data.run_data, max_turns)
+        proposal = AgentFixIterationRecord(
+            status="done",
+            reasoning_summary="Agent exceeded maximum turns; assuming completion based on tool usage",
+            confidence=0.5,
+            changed_files=[],
+            notes=notes,
+        )
+        return RunErrorHandlerResult(final_output=proposal, include_in_history=False)
+
+    return _on_max_turns
+
+
+def _extract_research_context(run_data: Any, max_turns: int) -> str:
+    """Extract useful research context from run_data.new_items after MaxTurnsExceeded.
+
+    Parses tool call / output item pairs to surface:
+    - search_files hits with exact file:line locations
+    - files read (deduplicated, most recent first)
+    - edit attempts and their success/failure
+    - last agent reasoning text
+    """
+    new_items = getattr(run_data, "new_items", None) or []
+
+    pending_call: tuple[str, dict[str, Any]] | None = None
+    searches_with_hits: list[str] = []
+    files_read: list[str] = []
+    edit_attempts: list[str] = []
+    last_agent_text: str | None = None
+
+    for item in new_items:
+        item_type = getattr(item, "type", None)
+
+        if item_type == "tool_call_item":
+            raw = getattr(item, "raw_item", None)
+            name = _coerce_optional_string(getattr(raw, "name", None) if raw is not None else None)
+            args_str = _coerce_optional_string(getattr(raw, "arguments", None) if raw is not None else None)
+            args: dict[str, Any] = {}
+            if args_str:
+                try:
+                    parsed = json.loads(args_str)
+                    if isinstance(parsed, dict):
+                        args = parsed
+                except Exception:  # noqa: BLE001
+                    pass
+            pending_call = (name or "", args)
+
+        elif item_type == "tool_call_output_item" and pending_call is not None:
+            call_name, call_args = pending_call
+            output_any = getattr(item, "output", None)
+            output_str = output_any if isinstance(output_any, str) else ""
+
+            if call_name == "search_files" and output_str:
+                try:
+                    data = json.loads(output_str)
+                    for r in (data.get("results") or []):
+                        path = r.get("path", "")
+                        # Skip test file hits — they're noise; only source file locations are actionable.
+                        if not path or path.startswith(("test/", "tests/", "test\\", "tests\\")):
+                            continue
+                        line = r.get("line", "")
+                        match_text = str(r.get("match", ""))[:80]
+                        searches_with_hits.append(f"{path}:{line} → {match_text}")
+                        if len(searches_with_hits) >= 5:
+                            break
+                except Exception:  # noqa: BLE001
+                    pass
+
+            elif call_name == "read_file":
+                path = call_args.get("path", "")
+                start = call_args.get("start_line")
+                end = call_args.get("end_line")
+                loc = f":{start}-{end}" if start else ""
+                entry = f"{path}{loc}"
+                if entry not in files_read:
+                    files_read.append(entry)
+
+            elif call_name in ("replace_in_file", "replace_lines", "write_file") and output_str:
+                path = call_args.get("path", "")
+                try:
+                    data = json.loads(output_str)
+                    ok = data.get("ok", False)
+                    error = data.get("error", "")
+                    status = "ok" if ok else f"failed:{error}"
+                except Exception:  # noqa: BLE001
+                    status = "?"
+                edit_attempts.append(f"{call_name}({path}) → {status}")
+
+            pending_call = None
+
+        elif item_type == "message_output_item":
+            raw = getattr(item, "raw_item", None)
+            content = getattr(raw, "content", None) if raw is not None else None
+            if content:
+                if isinstance(content, list):
+                    texts = [getattr(b, "text", None) for b in content if getattr(b, "text", None)]
+                    text = " ".join(str(t) for t in texts if t)
+                elif isinstance(content, str):
+                    text = content
+                else:
+                    text = ""
+                if text.strip():
+                    last_agent_text = text.strip()[:300]
+
+    parts: list[str] = [f"MaxTurnsExceeded after {max_turns} turns — no fix applied."]
+    if searches_with_hits:
+        parts.append("Search hits (start here next iteration):")
+        parts.extend(f"  {hit}" for hit in searches_with_hits)
+    if files_read:
+        unique_reads = list(dict.fromkeys(files_read))[-5:]
+        parts.append(f"Files read: {', '.join(unique_reads)}")
+    if edit_attempts:
+        parts.append(f"Edit attempts: {', '.join(edit_attempts)}")
+    if last_agent_text:
+        parts.append(f"Last agent reasoning: {last_agent_text}")
+    if not (searches_with_hits or files_read or edit_attempts):
+        parts.append("No tool calls recorded.")
+
+    return "\n".join(parts)
+
+
+def _extract_context_snapshot(hooks: RunHooks[Any] | None) -> str | None:
+    """Extract accumulated research context from hooks after a retryable failure."""
+    if hooks is None:
+        return None
+    snapshot_fn = getattr(hooks, "extract_context_snapshot", None)
+    if callable(snapshot_fn):
+        try:
+            return snapshot_fn()
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+def _reset_context_snapshot(hooks: RunHooks[Any] | None) -> None:
+    """Reset the context snapshot accumulator in hooks before each retry attempt."""
+    if hooks is None:
+        return
+    reset_fn = getattr(hooks, "reset_context_snapshot", None)
+    if callable(reset_fn):
+        try:
+            reset_fn()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _compute_retry_delay_seconds(*, attempt: int, base_seconds: float, max_seconds: float) -> float:

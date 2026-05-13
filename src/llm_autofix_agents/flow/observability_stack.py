@@ -10,19 +10,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from llm_autofix_agents.observability import MarkdownLiveObserver, SQLiteObservabilityStore
-from llm_autofix_agents.observability.telemetry import RunTelemetry
+from llm_autofix_agents.observability.emitter import Emitter
 
 
 @dataclass(frozen=True)
 class ObservabilityStack:
     """Encapsulates the full observability stack for a run.
 
-    Owns the telemetry API, optional SQLite store, and optional live log.
-    Consumers should depend on this object instead of receiving the three parts
+    Owns the emitter API, optional SQLite store, and optional live log.
+    Consumers should depend on this object instead of receiving the parts
     separately, which avoids spreading observability internals across RunConfig.
     """
 
-    telemetry: RunTelemetry
+    emitter: Emitter
     sqlite_store: SQLiteObservabilityStore | None
     live_observer: MarkdownLiveObserver | None
 

@@ -39,6 +39,37 @@ class TestCompactTestOutput(unittest.TestCase):
 
         self.assertTrue(len(result) <= 250)
 
+    def test_filters_syntax_warning_lines(self) -> None:
+        text = (
+            "youtube_dl/extractor/foo.py:39: SyntaxWarning: \"is not\" with a literal.\n"
+            "  if error_code is not 0:\n"
+            "======================================================================\n"
+            "FAIL: test_something\n"
+        )
+        result = compact_test_output(text, max_chars=4000)
+
+        self.assertNotIn("SyntaxWarning", result)
+        self.assertNotIn("if error_code is not 0", result)
+        self.assertIn("FAIL: test_something", result)
+
+    def test_filters_deprecation_warning_lines(self) -> None:
+        text = (
+            "lib/module.py:12: DeprecationWarning: use new_api instead\n"
+            "  old_api()\n"
+            "FAILED (errors=1)\n"
+        )
+        result = compact_test_output(text, max_chars=4000)
+
+        self.assertNotIn("DeprecationWarning", result)
+        self.assertNotIn("old_api()", result)
+        self.assertIn("FAILED (errors=1)", result)
+
+    def test_preserves_non_warning_lines(self) -> None:
+        text = "AssertionError: 7 != 6\nFAILED"
+        result = compact_test_output(text, max_chars=4000)
+
+        self.assertEqual(result, text)
+
 
 if __name__ == "__main__":
     unittest.main()

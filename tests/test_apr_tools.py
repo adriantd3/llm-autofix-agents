@@ -136,5 +136,33 @@ class APRToolkitTests(unittest.TestCase):
             self.assertGreaterEqual(len(tools), 6)
 
 
+class RunTestTargetGuardTests(unittest.TestCase):
+    def test_rejects_python_inline_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            res = asyncio.run(
+                call(run_test_target, tmp, '{"runner":"python -c \\"import sys; sys.exit(0)\\""}')
+            )
+        self.assertFalse(res["ok"])
+        self.assertIn("python_inline_not_allowed", res["error"])
+
+    def test_rejects_python3_inline_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            res = asyncio.run(
+                call(run_test_target, tmp, '{"runner":"python3 -c \\"print(1)\\""}')
+            )
+        self.assertFalse(res["ok"])
+        self.assertIn("python_inline_not_allowed", res["error"])
+
+    def test_allows_normal_runner(self) -> None:
+        # A normal runner with python in the path but no -c flag should not be blocked.
+        # We just verify no false positive is raised; the command itself will fail
+        # because there is no test file, but ok/error will NOT be "python_inline_not_allowed".
+        with tempfile.TemporaryDirectory() as tmp:
+            res = asyncio.run(
+                call(run_test_target, tmp, '{"runner":"python -m pytest nonexistent_test.py"}')
+            )
+        self.assertNotEqual(res.get("error", ""), "python_inline_not_allowed")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 from pathlib import Path
 
 from llm_autofix_agents.tools.context import APRToolContext
+
+# Matches Python runtime warning header lines emitted before test output, e.g.:
+#   youtube_dl/extractor/foo.py:39: SyntaxWarning: "is not" with a literal.
+_PYTHON_WARNING_LINE_RE = re.compile(r"^[^\s].*:\d+: \w*Warning: ")
 
 
 def is_probably_text(path: Path) -> bool:
@@ -34,6 +39,7 @@ def compact_test_output(text: str, max_chars: int = 4000) -> str:
         return text
 
     lines = text.splitlines()
+    lines = _filter_python_warnings(lines)
     lines = _collapse_repeated_blocks(lines)
     lines = _collapse_repeated_lines(lines)
     compacted = "\n".join(lines)
@@ -41,6 +47,27 @@ def compact_test_output(text: str, max_chars: int = 4000) -> str:
         return compacted
 
     return _truncate_middle(compacted, max_chars=max_chars)
+
+
+def _filter_python_warnings(lines: list[str]) -> list[str]:
+    """Strip Python runtime warning lines and their trailing code-snippet line.
+
+    Python warnings appear before test output and distract models from the real
+    failure.  Each warning occupies 2 lines: the warning header and an indented
+    source snippet.  We drop both.
+    """
+    result: list[str] = []
+    skip_indented = False
+    for line in lines:
+        if skip_indented:
+            skip_indented = False
+            if line and line[0] in " \t":
+                continue
+        if _PYTHON_WARNING_LINE_RE.match(line):
+            skip_indented = True
+            continue
+        result.append(line)
+    return result
 
 
 def _collapse_repeated_blocks(lines: list[str], *, max_repeats: int = 3, max_block_len: int = 50) -> list[str]:

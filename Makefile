@@ -1,4 +1,4 @@
-.PHONY: format test batch batch-dry-run docker-debug-shell
+.PHONY: format test batch batch-dry-run docker-debug-shell aggregate
 
 COMPOSE_FILE ?= docker-compose.yml
 AUTOFIX_RUN_TIMEOUT_SECONDS ?= 300s
@@ -17,3 +17,6 @@ batch-dry-run:
 
 docker-debug-shell:
 	docker compose -f $(COMPOSE_FILE) run --rm --build --entrypoint /bin/sh runner
+
+aggregate:
+	uv run python -m llm_autofix_agents.observability.aggregate --out $(OUT) $(BATCH_DIRS)

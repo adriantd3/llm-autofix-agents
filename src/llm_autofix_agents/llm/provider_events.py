@@ -95,6 +95,7 @@ class ProviderRetryEventEmitter:
         status_code: int | None,
         error: Exception,
         retry_delay_seconds: float,
+        rerun_full_runner: bool = True,
     ) -> None:
         self._emit(
             ProviderCallEvent(
@@ -107,6 +108,7 @@ class ProviderRetryEventEmitter:
                 error_message_short=_short_error_message(error),
                 tool_calls_count=self.tool_calls_count_getter(),
                 retry_delay_seconds=retry_delay_seconds,
+                rerun_full_runner=rerun_full_runner,
             )
         )
 

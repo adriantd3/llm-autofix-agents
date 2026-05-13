@@ -247,6 +247,16 @@
   - 229 tests pasando, lint limpio en archivos modificados.
 
 ## En curso
+- **SPEC-012 completado (SH1–SH7)**: Observability/Telemetry Refactor (ver plan en `.claude/plans/`).
+  - SH1: Tool metadata registry — cada tool APR tiene `ToolDescriptor` con summarize_args/result y classify_status.
+  - SH2: Observer protocol flatten — `Observer.emit(event)`, `Emitter` + `IterationContext` reemplazan 3-tier `*Telemetry`.
+  - SH3: Status taxonomy — `ToolStatus` enum (`ok/tool_error/sdk_error/empty/unknown`), retry_index en tool_calls, schema V6, `[!]` markers en live.md, truncación ampliada.
+  - SH4: SubAgent split — `SubAgent.participates_in_run_loop`, explorer marcado no-participante, `explore_code` registrado con `AGENT_PROSE` kind.
+  - SH5: DB topology — per-run `run.db` como primario, per-batch `batch.db` auto-merge post-run, fix `summary_path` en rename.
+  - SH6: Cross-batch aggregator CLI — `python -m llm_autofix_agents.observability.aggregate`, `make aggregate`.
+  - SH7: Dead code removal — eliminados `telemetry.py`, `telemetry_models.py`, `telemetry_mapping.py`, `observable.py`; removidos `current_tool_args`, `make_observable`; `__init__.py` limpiado.
+  - 230 tests pasando (4 fallos preexistentes en `test_agent_flow.py` sin relación).
+
 - Bloqueante modelo qwen3-coder:30b (ver SPEC-010). Para validar arquitecturas se requiere modelo con mejor razonamiento semántico.
 
 ## Hecho (reciente)
@@ -270,8 +280,20 @@
   - 221 tests passing, 8 fallos pre-existentes sin cambio, lint limpio (0 errores nuevos).
 
 ## Siguiente
+- Ejecutar batch `bugsinpy-mono-youtube-dl-42` para validar que los 4 root-fixes mejoran el fix-rate (sin doom loop, sin write_file truncation, sin double-command).
 - Ejecutar batch `bugsinpy-orchestrator-v2-multifile` (youtube-dl-42, keras-20, thefuck-16) para validar arquitectura task-agents tras mejoras de flujo.
 - Comparar resultados multi_agent_orchestrator v2 vs mono_agent en bugs cross-file.
+- Probar con modelos propietarios de bajo tiempo de respuesta (claude-3-5-haiku, gpt-4o-mini) para validar que el sistema soporta bugs complejos donde qwen3.5:9b no converge.
+
+## Hecho (reciente)
+- **SF-1 completado (2026-05-13)**: Preservación de contexto ante rate limit.
+  - `APRRunHooks` acumula search hits, files read y edit attempts de forma live en `on_tool_end`.
+  - `extract_context_snapshot()` / `reset_context_snapshot()` expuestos vía duck typing.
+  - Provider retry loop inyecta contexto acumulado en `effective_input` del siguiente intento.
+  - `ProviderCallEvent.rerun_full_runner=False` cuando el contexto se preserva.
+  - 21 tests nuevos — 291 pasando, 0 regresiones.
+  - Aplica a todas las arquitecturas (provider layer compartido).
+- **SF-2 ya implementado**: Guard `python -c` en `run_test_target` (sesión anterior).
 
 ## En curso
 - **Mejoras de flujo post-análisis de trazas (2026-05-11)**:
@@ -282,3 +304,10 @@
   - Docker: estrategia dual-Python documentada en spec-011 y lessons.md.
   - 229 tests pasando, lint limpio.
 - Validar con una run real mono_agent y multi_agent_handoff que produce events.jsonl, live.md enriquecido y observability.db con campos nuevos.
+- **4 root-fixes de herramientas implementados (2026-05-12)** — análisis de trazas `youtube-dl-42` con `qwen3.5:9b`:
+  - **Fuzzy matching en `replace_in_file`** (`edit_tools.py`): fallback progresivo (exact → CRLF-normalize → trailing-whitespace-strip). Solo `replace_all=False`. Reporta `fuzzy_matched: true`.
+  - **Guard de truncación en `write_file`** (`edit_tools.py`): bloquea si fichero existente >50 líneas y nuevo <1/3 de ellas (`write_file_would_truncate`).
+  - **Safety net de `target` en `run_test_target`** (`test_tools.py`): `_target_looks_like_command()` descarta target con metacaracteres de shell.
+  - **Regex de extracción de test** (`iteration.py`): `^` anchor eliminado en `_find_test_function_using` para capturar métodos de clase.
+  - 21 tests nuevos — 255 pasando, 0 regresiones.
+- **write_file guard threshold corregido (2026-05-13)**: subido de 1/3 a 2/3 tras e2e que mostró 51% truncation no bloqueada. Evidencia: agente escribió 600 líneas a utils.py de 1163 líneas → módulo destruido. Con 2/3, esa escritura queda bloqueada. 256 tests pasando.

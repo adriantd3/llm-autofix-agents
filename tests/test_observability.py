@@ -6,6 +6,13 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from llm_autofix_agents.observability.events import (
+    AgentHandoff,
+    FacadeInput,
+    RunFinished,
+    RunStarted,
+    ToolCalled,
+)
 from llm_autofix_agents.observability.interactive import MarkdownLiveObserver
 from llm_autofix_agents.observability.jsonl_observer import JsonlEventObserver
 from llm_autofix_agents.observability.models import (
@@ -99,7 +106,7 @@ class ToolCallRecordTests(unittest.TestCase):
             agent_execution_id="run-1-it01-agent01",
             seq=1,
             tool_name="read_file",
-            status="success",
+            status="ok",
             success=True,
             agent_name="baseline",
             run_agent_id="ra-baseline",
@@ -108,7 +115,6 @@ class ToolCallRecordTests(unittest.TestCase):
             duration_seconds=1.0,
             args_summary_json='{"path":"foo.py"}',
             result_summary_json='{"ok":true,"path":"foo.py"}',
-            result_excerpt='{"ok":true,',
             error_type=None,
             error_message_short=None,
         )
@@ -124,12 +130,13 @@ class ToolCallRecordTests(unittest.TestCase):
             agent_execution_id="run-1-it01-agent01",
             seq=1,
             tool_name="read_file",
-            status="success",
+            status="ok",
             success=True,
         )
         self.assertIsNone(record.duration_seconds)
         self.assertIsNone(record.result_summary_json)
         self.assertIsNone(record.agent_name)
+        self.assertIsNone(record.retry_index)
 
 
 class ToolSummariesTests(unittest.TestCase):
@@ -205,7 +212,7 @@ class SQLiteSchemaV5Tests(unittest.TestCase):
         store.initialize()
         return store
 
-    def test_fresh_install_creates_v5_schema(self) -> None:
+    def test_fresh_install_creates_v6_schema(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "obs.db"
             self._init_store(db_path)
@@ -220,11 +227,12 @@ class SQLiteSchemaV5Tests(unittest.TestCase):
                     "duration_seconds",
                     "args_summary_json",
                     "result_summary_json",
-                    "result_excerpt",
+                    "retry_index",
                     "error_type",
                     "error_message_short",
                 ]:
                     self.assertIn(col, tool_cols, f"Missing column: {col}")
+                self.assertNotIn("result_excerpt", tool_cols)
                 handoff_cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_handoffs)").fetchall()}
                 self.assertIn("handoff_note_json", handoff_cols)
 
@@ -290,7 +298,7 @@ class SQLiteSchemaV5Tests(unittest.TestCase):
                     agent_execution_id=ae_id,
                     seq=1,
                     tool_name="read_file",
-                    status="success",
+                    status="ok",
                     success=True,
                     agent_name="baseline",
                     run_agent_id=ra_id,
@@ -299,7 +307,6 @@ class SQLiteSchemaV5Tests(unittest.TestCase):
                     duration_seconds=1.0,
                     args_summary_json='{"path":"gcd.py","start_line":1,"end_line":50}',
                     result_summary_json='{"ok":true,"path":"gcd.py","line_count":50}',
-                    result_excerpt='{"ok":true,',
                     error_type=None,
                     error_message_short=None,
                 )
@@ -358,6 +365,8 @@ class SQLiteSchemaV5Tests(unittest.TestCase):
             self.assertIn("duration_seconds", tool_cols)
             self.assertIn("result_summary_json", tool_cols)
             self.assertIn("args_summary_json", tool_cols)
+            self.assertIn("retry_index", tool_cols)
+            self.assertNotIn("result_excerpt", tool_cols)
             handoff_cols = {row[1] for row in conn2.execute("PRAGMA table_info(agent_handoffs)").fetchall()}
             self.assertIn("handoff_note_json", handoff_cols)
             conn2.close()
@@ -436,7 +445,7 @@ class JsonlEventObserverTests(unittest.TestCase):
             results_dir = Path(tmp_dir)
             observer = JsonlEventObserver(results_dir, "run-jsonl-1")
 
-            observer.on_run_started(
+            observer.emit(RunStarted(
                 run=RunDescriptor(
                     run_id="run-jsonl-1",
                     architecture="mono_agent",
@@ -445,8 +454,8 @@ class JsonlEventObserverTests(unittest.TestCase):
                     run_fingerprint="abc123",
                 ),
                 started_at="2026-01-01T00:00:00+00:00",
-            )
-            observer.on_tool_call(
+            ))
+            observer.emit(ToolCalled(
                 record=ToolCallRecord(
                     tool_call_id="tc-test001",
                     run_id="run-jsonl-1",
@@ -454,13 +463,13 @@ class JsonlEventObserverTests(unittest.TestCase):
                     agent_execution_id="run-jsonl-1-it01-agent01",
                     seq=1,
                     tool_name="read_file",
-                    status="success",
+                    status="ok",
                     success=True,
                     agent_name="baseline",
                     duration_seconds=0.5,
                 )
-            )
-            observer.on_agent_handoff(
+            ))
+            observer.emit(AgentHandoff(
                 record=AgentHandoffRecord(
                     handoff_id="run-jsonl-1-it01-handoff001",
                     run_id="run-jsonl-1",
@@ -472,8 +481,8 @@ class JsonlEventObserverTests(unittest.TestCase):
                     occurred_at="2026-01-01T00:00:05+00:00",
                     handoff_note_json='{"summary":"Bug found"}',
                 )
-            )
-            observer.on_run_finished(
+            ))
+            observer.emit(RunFinished(
                 run_finished=RunFinishedRecord(
                     run_id="run-jsonl-1",
                     finished_at="2026-01-01T00:00:10+00:00",
@@ -487,7 +496,7 @@ class JsonlEventObserverTests(unittest.TestCase):
                     files_changed_count=1,
                     resolved=True,
                 )
-            )
+            ))
 
             content = observer.path.read_text(encoding="utf-8")
             lines = [line for line in content.strip().split("\n") if line]
@@ -515,7 +524,7 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
             live_path = Path(tmp_dir) / "results" / "run-enriched" / "live.md"
             observer = MarkdownLiveObserver(live_path)
 
-            observer.on_run_started(
+            observer.emit(RunStarted(
                 run=RunDescriptor(
                     run_id="run-enriched",
                     architecture="mono_agent",
@@ -524,8 +533,8 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
                     run_fingerprint="abc",
                 ),
                 started_at="2026-01-01T00:00:00+00:00",
-            )
-            observer.on_tool_call(
+            ))
+            observer.emit(ToolCalled(
                 record=ToolCallRecord(
                     tool_call_id="tc-001",
                     run_id="run-enriched",
@@ -533,13 +542,13 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
                     agent_execution_id="run-enriched-it01-agent01",
                     seq=1,
                     tool_name="read_file",
-                    status="success",
+                    status="ok",
                     success=True,
                     agent_name="patcher",
                     duration_seconds=0.007,
                 )
-            )
-            observer.on_tool_call(
+            ))
+            observer.emit(ToolCalled(
                 record=ToolCallRecord(
                     tool_call_id="tc-002",
                     run_id="run-enriched",
@@ -547,13 +556,13 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
                     agent_execution_id="run-enriched-it01-agent01",
                     seq=2,
                     tool_name="replace_in_file",
-                    status="success",
+                    status="ok",
                     success=True,
                     agent_name="patcher",
                     duration_seconds=1.234,
                 )
-            )
-            observer.on_tool_call(
+            ))
+            observer.emit(ToolCalled(
                 record=ToolCallRecord(
                     tool_call_id="tc-003",
                     run_id="run-enriched",
@@ -561,24 +570,24 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
                     agent_execution_id="run-enriched-it01-agent01",
                     seq=3,
                     tool_name="execute_command",
-                    status="success",
+                    status="ok",
                     success=True,
                     agent_name=None,
                     duration_seconds=None,
                 )
-            )
+            ))
 
             content = live_path.read_text(encoding="utf-8")
-            self.assertIn("[patcher] read_file -> success (0.007s)", content)
-            self.assertIn("[patcher] replace_in_file -> success (1.234s)", content)
-            self.assertIn("execute_command -> success", content)
+            self.assertIn("[patcher] read_file -> ok (0.007s)", content)
+            self.assertIn("[patcher] replace_in_file -> ok (1.234s)", content)
+            self.assertIn("execute_command -> ok", content)
 
     def test_handoff_shows_note(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             live_path = Path(tmp_dir) / "results" / "run-note" / "live.md"
             observer = MarkdownLiveObserver(live_path)
 
-            observer.on_agent_handoff(
+            observer.emit(AgentHandoff(
                 record=AgentHandoffRecord(
                     handoff_id="run-note-it01-handoff001",
                     run_id="run-note",
@@ -596,7 +605,7 @@ class MarkdownLiveObserverEnrichedTests(unittest.TestCase):
                         }
                     ),
                 )
-            )
+            ))
 
             content = live_path.read_text(encoding="utf-8")
             self.assertIn("handoff: triage -> localizer", content)
@@ -624,7 +633,7 @@ class JsonlFacadeInputTests(unittest.TestCase):
             results_dir = Path(tmp_dir)
             observer = JsonlEventObserver(results_dir, "run-jsonl-input")
 
-            observer.on_facade_input(
+            observer.emit(FacadeInput(
                 record=FacadeInputRecord(
                     run_id="run-jsonl-input",
                     iteration_id="run-jsonl-input-it01",
@@ -632,7 +641,7 @@ class JsonlFacadeInputTests(unittest.TestCase):
                     input_text="Fix the parser failure\n- step 1\n- step 2",
                     occurred_at="2026-01-01T00:00:01+00:00",
                 )
-            )
+            ))
 
             content = observer.path.read_text(encoding="utf-8")
             lines = [line for line in content.strip().split("\n") if line]
@@ -651,7 +660,7 @@ class MarkdownLiveFacadeInputTests(unittest.TestCase):
             live_path = Path(tmp_dir) / "results" / "run-input" / "live.md"
             observer = MarkdownLiveObserver(live_path)
 
-            observer.on_facade_input(
+            observer.emit(FacadeInput(
                 record=FacadeInputRecord(
                     run_id="run-input",
                     iteration_id="run-input-it02",
@@ -659,7 +668,7 @@ class MarkdownLiveFacadeInputTests(unittest.TestCase):
                     input_text="line1\nline2\nline3",
                     occurred_at="2026-01-01T00:00:00+00:00",
                 )
-            )
+            ))
 
             content = live_path.read_text(encoding="utf-8")
             self.assertIn("### Facade input (iteration 2)", content)

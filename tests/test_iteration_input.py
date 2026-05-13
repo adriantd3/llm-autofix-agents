@@ -169,6 +169,46 @@ class IterationInputTests(unittest.TestCase):
 
         self.assertNotIn("VALIDATION REJECTION", user_input)
 
+    def test_no_edit_previous_iteration_shows_assertive_task(self) -> None:
+        snapshot_with_warning = (
+            "Observed continuation snapshot (runtime evidence):\n"
+            "- Changed files observed:\n"
+            "  - (none)\n"
+            "⚠ WARNING: No source files were modified in the previous iteration. "
+            "You MUST apply at least one code change before calling run_tests."
+        )
+        user_input = build_iteration_input(
+            prompt="fallback prompt",
+            iteration=2,
+            max_iterations=3,
+            previous_message="ran out of turns",
+            latest_snapshot=snapshot_with_warning,
+            baseline_test_execution=None,
+            test_command=None,
+        )
+
+        self.assertIn("You MUST apply a code change this iteration", user_input)
+        self.assertNotIn("Continue improving the repair strategy", user_input)
+
+    def test_edit_made_previous_iteration_shows_normal_task(self) -> None:
+        snapshot_without_warning = (
+            "Observed continuation snapshot (runtime evidence):\n"
+            "- Changed files observed:\n"
+            "  - src/foo.py\n"
+        )
+        user_input = build_iteration_input(
+            prompt="fallback prompt",
+            iteration=2,
+            max_iterations=3,
+            previous_message="applied fix but tests still fail",
+            latest_snapshot=snapshot_without_warning,
+            baseline_test_execution=None,
+            test_command=None,
+        )
+
+        self.assertIn("Continue improving the repair strategy", user_input)
+        self.assertNotIn("You MUST apply a code change this iteration", user_input)
+
 
 if __name__ == "__main__":
     unittest.main()

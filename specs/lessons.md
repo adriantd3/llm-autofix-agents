@@ -42,6 +42,24 @@
 - Alternativa recomendada: eliminar execute_command del perfil `orchestrator_main`. Forzar uso de herramientas dedicadas. Solo el test_runner task-agent necesita execute_command para setups complejos.
 - Regla preventiva: un perfil de herramientas para un agente de razonamiento no debe incluir un shell genérico si existen herramientas dedicadas para las mismas operaciones.
 
+## 2026-05-13 (rate limit reinicia Runner.run() desde cero — pérdida de contexto)
+- Fecha: 2026-05-13
+- Contexto: minimax-m2.5 obtuvo un 429 a mitad de run (después de 7 tool calls). El retry reiniciaba `Runner.run(agent, user_input, ...)` con el input original, perdiendo todo lo investigado. El agente re-descubrió exactamente los mismos 7 pasos (tools 8-11 = tools 1-4), consumiendo ~280s extra.
+- Anti-patron detectado: reiniciar el runner completo en cualquier error retryable, sin preservar lo que el agente ya había explorado.
+- Que no hay que hacer: asumir que un retry es gratis. Con modelos lentos (>30s/turn), el overhead de re-descubrimiento puede superar el timeout del contenedor.
+- Por que estuvo mal: el agente tiene un presupuesto de turns fijo. Si pierde turns re-explorando por un error de infra (rate limit), ese presupuesto se agota sin avanzar en el fix.
+- Alternativa recomendada: `APRRunHooks` acumula search hits, files read y edits de forma live. En el siguiente intento, `provider.py` inyecta ese contexto en `effective_input` con el prefijo `[RECOVERY: ...]`. El agente retoma desde donde se quedó sin re-explorar. `rerun_full_runner=False` en el evento si hay contexto.
+- Regla preventiva: toda mejora de resiliencia ante errores transitorios (rate limit, timeout) debe evitar no solo el fallo en sí sino también el coste de re-descubrimiento. El presupuesto de turns es un recurso escaso.
+
+## 2026-05-13 (no overfitting en instrucciones del agente)
+- Fecha: 2026-05-13
+- Contexto: se evaluó añadir un hint "busca lógica de deduplicación" cuando el test falla con `N != M`. Este hint venía directamente de analizar youtube-dl-2. El handoff lo calificó como SF-3 con prioridad MEDIA-BAJA.
+- Anti-patron detectado: añadir hints específicos al prompt del agente basados en un bug concreto. Los agentes deben ser agnósticos al dataset/bug (AGENTS.md regla 6).
+- Que no hay que hacer: codificar en el flujo el conocimiento de un bug específico aunque esté "generalizado" superficialmente.
+- Por que estuvo mal: si el hint es correcto para youtube-dl-2 pero no para otros bugs con count mismatch, empeora el fix rate general. La capacidad del modelo, no las instrucciones, debe resolver la clasificación del error.
+- Alternativa recomendada: si la capacidad del modelo es el cuello de botella, cambiar el modelo; no añadir hints que overfiten. Para count mismatch genérico, el agente competente ya busca dedup/filtering.
+- Regla preventiva: antes de añadir cualquier hint al prompt del agente, verificar que aplica a ≥3 bugs distintos del benchmark sin falsos positivos. Si solo aplica al bug que motivó el cambio, descartarlo.
+
 ## 2026-05-11 (explore_code task-agent ignorado)
 - Contexto: en toda la campaña de 3 bugs x 3 iteraciones, explore_code fue invocado solo 1 vez. El orchestrator leía archivos directamente.
 - Anti-patron detectado: instrucciones que dicen "prefer explore_code" pero no obligan a usarlo → el agente siempre toma el camino de menor resistencia (leer directamente).
@@ -74,6 +92,118 @@
 - Por que estuvo mal: un sub-agente LLM necesita 2 llamadas LLM (1 para decidir qué herramienta llamar + 1 para resumir el resultado). Con Ollama single-slot, la segunda llamada LLM del sub-agent entra en cola detrás del orchestrator → "An error occurred" o timeout silencioso.
 - Alternativa recomendada: `run_test_target` como herramienta directa en el perfil del orchestrator. Devuelve stdout/stderr directamente, el orchestrator lo lee sin necesidad de LLM intermediario. La summarización la hace el orchestrator con su propio LLM call.
 - Regla preventiva: con modelos locales (single-slot), cada herramienta que llama a un sub-agente LLM puede fallar cuando el modelo ya está ocupado. Preferir herramientas directas (sin LLM) siempre que sea posible.
+
+## 2026-05-12 (doom loop: replace_in_file con exact match falla silenciosamente)
+- Contexto: trazas de youtube-dl-42 con mono_agent + qwen3.5:9b. El agente retría `replace_in_file` con el mismo `old_hash` varias veces consecutivas y cada vez recibía `old_text_not_found`. No convergía nunca.
+- Anti-patron detectado: exact string match rígido en `replace_in_file` cuando el modelo puede producir `old` con espacios trailing diferentes, saltos de línea distintos (CRLF vs LF) o indentación que no coincide exactamente.
+- Que no hay que hacer: retornar `old_text_not_found` sin intentar normalizaciones básicas que absorban imprecisiones del LLM.
+- Por que estuvo mal: el modelo produce `old` razonablemente correcto pero con diferencias menores de whitespace; con exact match cada reintento falla identicamente → doom loop que quema todos los turnos.
+- Alternativa recomendada: fallback progresivo antes de reportar not-found: (1) exact → (2) CRLF-normalize ambos lados → (3) strip trailing whitespace por línea. Reportar `fuzzy_matched: true` para trazabilidad. Excluir `replace_all=True` del fuzzy path (ambiguo con múltiples matches).
+- Regla preventiva: la interfaz de herramientas debe absorber imprecisiones del LLM, no exigir perfección. Cada fallo que el agente no puede superar con información disponible es un doom loop potencial.
+
+## 2026-05-13 (orchestrator explore_code bloqueante por SDK default max_turns=10)
+- Contexto: run `batch-bugsinpy-orchestrator-local-20260513T161137Z` con youtube-dl-2. 3 iteraciones × 20 tool calls cada una, 0 changed_files. El agente leía sin escribir nunca.
+- Anti-patron detectado: `Agent.as_tool()` usa `max_turns=None` por defecto, lo que resuelve en el default interno del SDK (10 turnos). Con qwen3.5:9b el explorer sub-agent consume sus 10 turnos leyendo y falla con `Max turns (10) exceeded`. El orchestrator pierde su herramienta principal de exploración y degrada a escaneo secuencial con `read_file`.
+- Que no hay que hacer: llamar `explorer_agent.as_tool(...)` sin pasar `max_turns` explícito cuando el sub-agente necesita explorar ficheros grandes.
+- Por que estuvo mal: el SDK default no está alineado con el propósito del explorer (puede necesitar 10-20 reads para un fichero grande). Al fallar, el orchestrator queda sin `search_files` (excluido de orchestrator_main para evitar loops exploratorios) y no puede localizar métodos en ficheros de 2600+ líneas.
+- Alternativa recomendada: (1) `as_tool(max_turns=20)` explícito para el explorer, (2) añadir `search_files` de vuelta a orchestrator_main como fallback — un `search_files("def _parse_mpd_formats")` localiza el método en 1 call en lugar de 20 reads secuenciales.
+- Regla preventiva: todo `Agent.as_tool()` debe incluir `max_turns` explícito adecuado al propósito del sub-agente. El default del SDK es arbitrario y puede ser demasiado bajo para tareas de lectura de código.
+
+## 2026-05-13 (search_files es bloqueante en orchestrator_main para bugs en ficheros grandes)
+- Contexto: orchestrator_main tenía `search_files` excluido para evitar loops exploratorios (lessons 2026-05-11). Con explore_code fallando y sin search_files, el agente no podía localizar `_parse_mpd_formats` en common.py (2624 líneas) → escaneo secuencial de 20 chunks de 50 líneas.
+- Anti-patron detectado: eliminar search_files del orchestrator_main sin mecanismo de fallback cuando explore_code falla.
+- Que no hay que hacer: asumir que explore_code siempre estará disponible y es suficiente para localizar símbolos en ficheros grandes.
+- Por que estuvo mal: search_files(pattern, glob) localiza una función en 1 call; sin ella el agente necesita entre 20-50 read_file calls para escanear un fichero de 2600 líneas, agotando los turnos sin escribir nada.
+- Alternativa recomendada: mantener search_files en orchestrator_main como herramienta de localización rápida. search_files es acción-orientada (devuelve file+line para usar directamente con replace_in_file) — no promueve exploración indefinida como list_files o get_workspace_info.
+- Regla preventiva: distinguir entre "herramientas de browsing" (list_files, get_workspace_info → excluir del orchestrator) y "herramientas de lookup puntual" (search_files → incluir). Solo las primeras promueven loops de procrastinación.
+
+## 2026-05-13 (instrucción de turno budget en prompt ignorada si el SDK permite más turnos)
+- Contexto: orchestrator instructions decían "Maximum 5 tool calls per iteration. Stop at turn 5 regardless." pero SDK max_turns=20. qwen3.5:9b ignoró la instrucción y usó los 20 turnos.
+- Anti-patron detectado: poner límites de turnos en el prompt cuando el SDK tiene un límite diferente (mayor). El modelo optimiza hacia el límite real (SDK), no el instruccional.
+- Que no hay que hacer: mantener instrucciones de conteo de turnos en el prompt si no están reforzadas por el SDK.
+- Por que estuvo mal: crea una incoherencia: el prompt dice "para en 5" pero el SDK deja seguir hasta 20. El modelo interpreta el límite del SDK como el real.
+- Alternativa recomendada: eliminar las instrucciones de conteo de turnos del prompt. Ajustar max_turns en la config del batch si se quiere controlar el presupuesto real.
+- Regla preventiva: el único límite de turnos efectivo es el que impone el SDK. Las instrucciones de conteo en el prompt son ruido si no coinciden con el max_turns de la config.
+
+## 2026-05-13 (análisis e2e post-root-fixes: qué funcionó y qué sigue bloqueando)
+- Contexto: run `batch-bugsinpy-mono-youtube-dl-42-20260513T154840Z` mono_agent + qwen3.5:9b con los 4 root-fixes implementados. Resultado: `partial` (3 iteraciones). Baseline previo (sin fixes): también `partial`. Duración: 434s vs 629s (más rápido, sin doom loops).
+- **Qué funcionó correctamente:**
+  1. No hay doom loops: cero reintentos de `replace_in_file` con el mismo `old_hash`. El agente avanzó.
+  2. `_target_looks_like_command` funcionó: `run_test_target` recibió `target=""` en todos los calls, sin double-command.
+  3. El test context extractor encontró funciones de clase (el failing test function block fue incluido en el prompt).
+  4. El write_file guard disparó en el segundo intento (correct behavior given the file was already corrupted).
+  5. La firma del test cambió de `2c1878772297` (ImportError puro) a `83c1ac0f2f2c` en todas las iteraciones posteriores — el agente resolvió parcialmente el ImportError.
+- **Qué sigue bloqueando:**
+  1. **write_file guard threshold 1/3 demasiado permisivo**: el agente escribió 19339 bytes (600 líneas) a un fichero de 37858 bytes (1163 líneas) — 51% truncación, no bloqueada. Módulo corrupto permanentemente para esas iteraciones. Corregido a 2/3.
+  2. **Model over-engineering (capability limitation)**: los 3 `replace_in_file` exitosos antes del write_file no añadieron el alias de una línea (`fix_xml_ampersands = fix_xml_all_ampersand`). En su lugar modificaron funciones del módulo (~45KB de diff). Después de cada cambio, el test seguía en exit=1 — el agente continuó modificando en lugar de diagnosticar el estado intermedio.
+  3. **sdk_error Invalid JSON en run_test_target (it3)**: el modelo generó JSON inválido para el tool call. Reintentó automáticamente con éxito, sin impacto real.
+- **Conclusión**: los root-fixes son efectivos (eliminan el doom loop, la truncación catastrófica y el double-command). El bloqueante final es el modelo: qwen3.5:9b no puede identificar el fix mínimo de 1 línea para un ImportError de alias en un módulo de 1163 líneas. Con el guard 2/3, la iteración 1 hubiera terminado con el módulo intacto aunque incorrecto, y las iteraciones 2-3 tendrían un estado de partida correcto.
+- Anti-patron detectado: evaluar "¿funciona el root-fix?" solo con una run. El resultado sigue siendo `partial`, pero el análisis de la traza muestra que el problema ya no es el doom loop o la destrucción del entorno — es la capacidad del modelo.
+- Regla preventiva: al validar root-fixes de herramientas, analizar la traza completa (¿cambió el comportamiento?, ¿el agente evitó el anti-patrón?) en lugar de solo el resultado final (success/partial/failed). Un partial con traza limpia es mejor que un partial con doom loops.
+
+## 2026-05-13 (write_file guard threshold 1/3 demasiado permisivo — evidencia e2e)
+- Contexto: run e2e post-fix `youtube-dl-42` mono_agent. El agente escribió 19339 bytes (≈600 líneas) en utils.py que tenía 37858 bytes (1163 líneas). 600 > 1163//3=387 → guard NO disparó. El módulo quedó truncado al 51%.
+- Anti-patron detectado: threshold de 1/3 insuficiente para truncaciones moderadas (50%). El 1/3 original solo bloqueaba stubs muy pequeños (< 33%).
+- Que no hay que hacer: asumir que 1/3 cubre todos los casos destructivos. Un write de 50% ya destruye la mitad del módulo.
+- Por que estuvo mal: el agente hizo 3 `replace_in_file` correctos (que añadieron el alias), luego intentó "mejorar" la implementación con `write_file`. Con 1/3 threshold, esa escritura pasó. Con el módulo truncado, los subsiguientes `replace_in_file` fallaron con `old_text_not_found` y el run no se recuperó.
+- Alternativa recomendada: threshold 2/3 — bloquea cualquier write que reduzca el archivo en más de ~33%. Evidencia: con 2/3, la escritura de 600 líneas a un fichero de 1163 (51% < 66%) habría sido bloqueada.
+- Regla preventiva: cuando se tune un guardrail, validar con un e2e real, no solo con el caso extremo (stub vs fichero grande). Los casos intermedios (50-60% truncación) son igualmente destructivos.
+
+## 2026-05-12 (write_file destruye módulo existente)
+- Contexto: trazas de youtube-dl-42. El agente usó `write_file` para "hacer un cambio" en `youtube_dl/utils.py` (37KB, ~1600 líneas) escribiendo un stub de 1756 bytes. El entorno quedó roto permanentemente para esa iteración (pérdida del `bugsinpy_compile_flag`).
+- Anti-patron detectado: `write_file` sin guardrail que detecte truncación masiva de un fichero existente.
+- Que no hay que hacer: permitir que `write_file` sobreescriba un fichero grande con contenido mucho más corto sin error explícito.
+- Por que estuvo mal: `write_file` está pensado para crear ficheros nuevos o reemplazarlos completamente; los modelos lo confunden con "hacer un edit pequeño". Una vez destruido el fichero, el entorno no se recupera en esa iteración (el venv y compile_flag están basados en el fichero correcto).
+- Alternativa recomendada: guard en `write_file`: si el fichero existe con >50 líneas y el nuevo contenido tiene menos de 1/3 líneas → retornar `write_file_would_truncate` con mensaje explícito que dirija al agente a `replace_in_file` o `replace_lines`.
+- Regla preventiva: añadir guardrails a nivel de tool para los "errores de categoría" más comunes del modelo. Los modelos pequeños (9B) cometen sistemáticamente estos errores, y el coste de un guardrail es O(1) mientras que el coste de no tenerlo es perder toda la iteración.
+
+## 2026-05-12 (double-command en run_test_target)
+- Contexto: trazas de youtube-dl-42. El agente pasaba el comando completo tanto en `runner` como en `target`, produciendo `. env/bin/activate && bash bugsinpy_run_test.sh . env/bin/activate && bash bugsinpy_run_test.sh` → error de shell.
+- Anti-patron detectado: interfaz de `run_test_target` sin validación del argumento `target`, permitiendo que el agente pase un comando completo donde se espera solo un nombre de fichero o clase de test.
+- Que no hay que hacer: concatenar `runner` y `target` sin verificar que `target` es realmente un selector de test (nombre de módulo/clase/función) y no un comando de shell completo.
+- Por que estuvo mal: el agente confunde el propósito de ambos parámetros, especialmente con comandos complejos que tienen múltiples partes. Las instrucciones de prompt no son suficientes para evitar el error consistentemente en modelos pequeños.
+- Alternativa recomendada: `_target_looks_like_command()` que detecta metacaracteres de shell (`&&`, `||`, `;`, `|`, `$(`, ` -`, etc.) y descarta `target` si se activa. Registrar el `safe_target` en el resultado para trazabilidad.
+- Regla preventiva: el tool debe ser defensivo ante el patrón de error más probable de ese modelo, especialmente para errores que producen fallos silenciosos (el shell interpreta el doble comando de forma inesperada sin error claro).
+
+## 2026-05-12 (extracción de función de test: métodos de clase ignorados)
+- Contexto: `_find_test_function_using` usaba `r'^def (test_\w+)\('` con `re.MULTILINE`. En youtube-dl, los tests están dentro de `class TestUtil(unittest.TestCase):` con indentación `    def test_xml_ampersands(self):`. El agente nunca recibía el cuerpo del test correcto en el prompt.
+- Anti-patron detectado: regex `^def` que solo captura funciones de nivel 0, ignorando métodos de clase.
+- Que no hay que hacer: anclar el regex a `^` (inicio de línea) cuando se buscan funciones de test que pueden estar dentro de `unittest.TestCase`.
+- Por que estuvo mal: el 90% de los tests en proyectos reales (BugsInPy especialmente) usan `unittest.TestCase` con métodos indentados. El contexto de test que el agente recibe estaba vacío, forzándolo a buscar las aserciones manualmente (burns turns).
+- Alternativa recomendada: eliminar el anchor `^` → `r'def (test_\w+)\('`. El body extraction con `source.find("\ndef ", ...)` puede incluir métodos hermanos, pero eso es aceptable para el check `symbol in func_body`.
+- Regla preventiva: al escribir regex para buscar patrones de código, verificar con casos reales del dataset objetivo antes de asumir que el patrón cubre todos los casos. BugsInPy usa `unittest.TestCase` casi universalmente.
+
+## 2026-05-13 (salida de test con SyntaxWarning distrae al modelo del error real)
+- Contexto: todos los runs de youtube-dl-2 incluían `youtube_dl/extractor/pandatv.py:39: SyntaxWarning: "is not" with a literal.` antes del FAIL. Con qwen3.5:9b, el agente gastó 6 de sus 20 turnos buscando `pandatv.py` cuando el bug estaba en `common.py:_parse_mpd_formats`.
+- Anti-patron detectado: pasar SyntaxWarning, DeprecationWarning, ResourceWarning etc. al modelo como parte del compact_test_output sin filtrar. El modelo las interpreta como errores relacionados con el bug.
+- Que no hay que hacer: asumir que el modelo ignorará los warnings porque el test failure está más abajo en la salida.
+- Por que estuvo mal: los warnings tienen el mismo formato que un error (`file:line: Category: message`). Un modelo de 9B no tiene suficiente razonamiento para distinguir "warning irrelevante" de "stacktrace del bug" si ambos están en el mismo bloque de texto.
+- Alternativa recomendada: filtrar líneas que coincidan con `<file>:<line>: <XxxWarning>:` (y su línea de snippet indentada siguiente) en `compact_test_output` antes de pasarlas al agente. El agente siempre puede leer el archivo si quiere ver el warning.
+- Regla preventiva: cualquier línea de salida de test que no sea parte del fallo real (warnings, deprecations, informational output) debe filtrarse antes de incluirla en el prompt.
+
+## 2026-05-13 (search_files como herramienta de búsqueda de ficheros en lugar de búsqueda de contenido)
+- Contexto: todos los runs de youtube-dl-2. El agente llamó `search_files("float_duration", glob="**/*.mpd")` 6-12 veces esperando encontrar el fichero `float_duration.mpd` por su nombre. `search_files` busca CONTENIDO (grep), no nombres de fichero.
+- Anti-patron detectado: usar `search_files` para descubrir si existe un fichero por nombre, cuando la herramienta es un grep de contenido.
+- Que no hay que hacer: excluir `list_files` del perfil del orchestrator_main asumiendo que `search_files` puede sustituirla para descubrimiento de ficheros en directorio.
+- Por que estuvo mal: `list_files("test/testdata/mpd/")` habría respondido en 1 call; sin ella el agente gastó 6-12 turns con `search_files` en el directorio correcto, obteniendo 0 resultados porque buscaba el texto "float_duration" dentro de los .mpd, no el fichero con ese nombre.
+- Alternativa recomendada: mantener `list_files` en `APR_ORCHESTRATOR_MAIN_TOOLS` para lookups de directorio concretos. Distinguir en el comentario del profile: `list_files` = descubrimiento de ficheros, `search_files` = búsqueda de contenido/símbolos. Excluir solo `get_workspace_info` (dump completo = procrastinación) y `execute_command` (shell genérico).
+- Regla preventiva: el conjunto mínimo de herramientas del orchestrator debe cubrir los 3 modos de localización de código: (1) buscar símbolo por nombre → `search_files`, (2) listar ficheros en directorio → `list_files`, (3) leer sección específica → `read_file`. Si falta alguno, el agente improvisa con los que tiene, gastando 5-10x más turnos.
+
+## 2026-05-13 (notas de MaxTurnsExceeded truncadas al campo `notes` con límite 8 líneas)
+- Contexto: `_format_notes_block` tenía `max_lines=8`. Las notas de `MaxTurnsExceeded` incluyen "Search hits", "Files read" y "Last agent reasoning" — típicamente 12-20 líneas. Las líneas más importantes (`Files read: youtube_dl/extractor/common.py:1753-2100`) quedaban fuera del límite y el agente en la siguiente iteración re-descubría lo mismo desde cero.
+- Anti-patron detectado: truncar las notas de contexto de investigación a 8 líneas cuando ese contexto es la única continuidad entre iteraciones.
+- Que no hay que hacer: cap conservador de 8 líneas en `_format_notes_block` cuando las notas son el principal mecanismo de handoff entre iteraciones que terminan en MaxTurnsExceeded.
+- Por que estuvo mal: si el agente en iteración N encontró `common.py:1753` con `_parse_mpd_formats` pero ese dato queda en la línea 9+ de las notas, la iteración N+1 empieza como si fuera iteración 1, re-buscando el mismo símbolo.
+- Alternativa recomendada: aumentar `max_lines` a 20. Las notas son texto breve (bullets), 20 líneas son <500 chars — irrelevante vs el contexto completo del prompt. Paralelamente, `_extract_research_context` debe filtrar paths de ficheros de test/ de "Search hits" para que las líneas valiosas (source files) no queden desplazadas.
+- Regla preventiva: el límite de notas debe ser suficiente para contener el contexto completo de una investigación interrumpida. Si el contexto tiene estructura fija (header + N bullets + Files read + Last reasoning), el límite debe ser mayor que N_max_bullets + 4 líneas de overhead.
+
+## 2026-05-13 (iteración siguiente no fuerza edición cuando la previa terminó sin cambios)
+- Contexto: 3 iteraciones consecutivas con 0 changed_files. El prompt de continuación decía "Continue improving the repair strategy" — idéntico tanto si el agente había aplicado un fix como si no había hecho ningún cambio. El agente volvía a explorar sin sentido de urgencia.
+- Anti-patron detectado: prompt de continuación genérico que no diferencia entre "el fix falló, ajusta" (changes > 0) y "no hiciste nada, empieza ya" (changes = 0).
+- Que no hay que hacer: el mismo texto de tarea para iteraciones con y sin cambios previos.
+- Por que estuvo mal: el modelo interpreta "continue improving" como "puedo seguir explorando". Sin señal explícita de que la exploración ya no es aceptable, continúa el mismo patrón. La advertencia `⚠ WARNING: No source files were modified` ya estaba en el snapshot pero el task text la contradecía implícitamente.
+- Alternativa recomendada: detectar `⚠ WARNING: No source files were modified` en el snapshot de la iteración anterior y sustituir el task text por: "You MUST apply a code change this iteration — reading more files without editing is not acceptable. Use the notes above to apply your best hypothesis with replace_in_file, then validate."
+- Regla preventiva: el texto de tarea de cada iteración debe ser condicional al resultado de la iteración anterior. Al menos distinguir: (a) no hubo cambios → exigir edición, (b) hubo cambios pero tests siguen fallando → guiar hacia iteración de fix.
 
 ## Regla de uso (futuras specs)
 - Este archivo es para anti-patrones detectados (por ejemplo, over-engineering o decisiones que complican sin aportar valor).

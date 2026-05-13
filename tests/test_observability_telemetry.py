@@ -1,22 +1,26 @@
-from llm_autofix_agents.observability.telemetry import RunTelemetry
+"""Tests for Emitter.record_test_execution (replaces old RunTelemetry tests)."""
+from __future__ import annotations
+
+from typing import Any
+
+from llm_autofix_agents.observability.emitter import Emitter
+from llm_autofix_agents.observability.events import ObservabilityEvent, TestExecuted
 
 
-class FakeObserver:
+class _CaptureObserver:
     def __init__(self) -> None:
-        self.test_records = []
+        self.events: list[ObservabilityEvent] = []
 
-    def on_test_execution(self, *, record):
-        self.test_records.append(record)
-
-    def on_facade_input(self, *, record):
-        pass
+    def emit(self, event: ObservabilityEvent) -> None:
+        self.events.append(event)
 
 
-def test_run_telemetry_records_test_execution() -> None:
-    observer = FakeObserver()
-    telemetry = RunTelemetry(observer=observer, run_id="run-1")
+def test_emitter_records_test_execution() -> None:
+    observer = _CaptureObserver()
+    emitter = Emitter(observer=observer, run_id="run-1")
 
-    telemetry.record_test_execution(
+    emitter.record_test_execution(
+        None,
         phase="iteration_validation",
         command="pytest",
         exit_code=0,
@@ -26,6 +30,7 @@ def test_run_telemetry_records_test_execution() -> None:
         agent_execution_id="agent-1",
     )
 
-    assert len(observer.test_records) == 1
-    assert observer.test_records[0].run_id == "run-1"
-    assert observer.test_records[0].phase == "iteration_validation"
+    test_events = [e for e in observer.events if isinstance(e, TestExecuted)]
+    assert len(test_events) == 1
+    assert test_events[0].record.run_id == "run-1"
+    assert test_events[0].record.phase == "iteration_validation"

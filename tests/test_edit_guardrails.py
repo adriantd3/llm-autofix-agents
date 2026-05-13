@@ -98,5 +98,127 @@ class EditGuardrailTests(unittest.TestCase):
             self.assertEqual(res["error"], "test_file_modification_forbidden")
 
 
+class WriteTruncationGuardTests(unittest.TestCase):
+    def _make_large_file(self, root: Path, name: str, line_count: int) -> Path:
+        p = root / name
+        p.write_text("\n".join(f"line {i}" for i in range(line_count)) + "\n", encoding="utf-8")
+        return p
+
+    def test_blocks_when_new_content_is_less_than_two_thirds_of_existing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # 120-line file; write 60 lines (50% — below 2/3 threshold = 80 lines) → blocked.
+            # This mirrors the real e2e case: agent wrote ~600 lines to a 1163-line file (51%).
+            self._make_large_file(root, "utils.py", 120)
+            new_content = "\n".join(f"# line {i}" for i in range(60)) + "\n"
+            payload = json.dumps({"path": "utils.py", "content": new_content})
+            res = asyncio.run(call(write_file, tmp, payload))
+            self.assertFalse(res["ok"])
+            self.assertEqual(res["error"], "write_file_would_truncate")
+            self.assertIn("Use replace_in_file", res["message"])
+
+    def test_blocks_stub_write_to_large_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # 60-line file; write 5 lines (8% — well below 2/3) → blocked
+            self._make_large_file(root, "utils.py", 60)
+            res = asyncio.run(
+                call(write_file, tmp, '{"path":"utils.py","content":"# stub\\n"}')
+            )
+            self.assertFalse(res["ok"])
+            self.assertEqual(res["error"], "write_file_would_truncate")
+
+    def test_allows_overwrite_when_new_content_is_large_enough(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # 60-line file; write 45 lines (75% — above 2/3 threshold = 40) → allowed
+            self._make_large_file(root, "utils.py", 60)
+            new_content = "\n".join(f"# line {i}" for i in range(45)) + "\n"
+            payload = json.dumps({"path": "utils.py", "content": new_content})
+            res = asyncio.run(call(write_file, tmp, payload))
+            self.assertTrue(res["ok"])
+
+    def test_allows_creating_new_file_with_any_size(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            res = asyncio.run(
+                call(write_file, tmp, '{"path":"new_file.py","content":"x\\n"}')
+            )
+            self.assertTrue(res["ok"])
+
+    def test_allows_overwrite_of_small_existing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # 10-line file — guard only kicks in for >50 lines
+            self._make_large_file(root, "small.py", 10)
+            res = asyncio.run(
+                call(write_file, tmp, '{"path":"small.py","content":"x\\n"}')
+            )
+            self.assertTrue(res["ok"])
+
+
+class FuzzyReplaceTests(unittest.TestCase):
+    def test_exact_match_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src.py").write_text("def foo():\n    return 1\n", encoding="utf-8")
+            res = asyncio.run(
+                call(replace_in_file, tmp, '{"path":"src.py","old":"    return 1","new":"    return 2"}')
+            )
+            self.assertTrue(res["ok"])
+            self.assertNotIn("fuzzy_matched", res)
+
+    def test_fuzzy_crlf_mismatch_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Python's read_text() normalizes file CRLF→LF on read, so the runtime-visible
+            # mismatch is the reverse: LLM produces \r\n in old text (e.g., Windows clipboard)
+            # but the stored source already has \n.  Pass 2 normalizes both sides.
+            (root / "src.py").write_text("def foo():\n    return 1\n", encoding="utf-8")
+            payload = json.dumps({
+                "path": "src.py",
+                "old": "def foo():\r\n    return 1",  # CRLF from LLM
+                "new": "def foo():\n    return 2",
+            })
+            res = asyncio.run(call(replace_in_file, tmp, payload))
+            self.assertTrue(res["ok"])
+            self.assertTrue(res.get("fuzzy_matched"))
+
+    def test_fuzzy_trailing_whitespace_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Source has trailing spaces; LLM strips them in old text
+            (root / "src.py").write_text("def foo():  \n    return 1   \n", encoding="utf-8")
+            # old text has no trailing spaces (as LLM would produce)
+            payload = json.dumps({
+                "path": "src.py",
+                "old": "def foo():\n    return 1",
+                "new": "def foo():\n    return 2",
+            })
+            res = asyncio.run(call(replace_in_file, tmp, payload))
+            self.assertTrue(res["ok"])
+            self.assertTrue(res.get("fuzzy_matched"))
+
+    def test_not_found_still_returns_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src.py").write_text("def foo():\n    return 1\n", encoding="utf-8")
+            res = asyncio.run(
+                call(replace_in_file, tmp, '{"path":"src.py","old":"completely wrong text","new":"x"}')
+            )
+            self.assertFalse(res["ok"])
+            self.assertEqual(res["error"], "old_text_not_found")
+
+    def test_replace_all_requires_exact_match(self) -> None:
+        # replace_all=True must not fall back to fuzzy (ambiguous multi-match semantics)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src.py").write_bytes(b"foo\r\nfoo\r\n")
+            res = asyncio.run(
+                call(replace_in_file, tmp, '{"path":"src.py","old":"foo","new":"bar","replace_all":true}')
+            )
+            # exact match exists (no CRLF in old), so this should succeed normally
+            self.assertTrue(res["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

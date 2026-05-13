@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+from typing import Any
 
 from llm_autofix_agents.architectures import build_architecture
 from llm_autofix_agents.contracts import ContainerInstantiation, RunInput, RunOutput, RunStatus
@@ -129,14 +130,15 @@ def _run(
         repo_root=resolve_repo_root(run_input.target_repo),
         metadata=run_input.metadata,
     )
-    run_input.metadata = {
-        **run_input.metadata,
+    obs_meta: dict[str, Any] = {
         "observability_enabled": observability_config.enabled,
         "live_log_enabled": observability_config.live_log_enabled,
         "interactive": observability_config.interactive,
         "results_dir": str(observability_config.results_dir),
-        "observability_db": str(observability_config.sqlite_db_path),
     }
+    if observability_config.sqlite_db_path is not None:
+        obs_meta["observability_db"] = str(observability_config.sqlite_db_path)
+    run_input.metadata = {**run_input.metadata, **obs_meta}
     resolved_settings = resolved_settings.model_copy(update={"max_turns": resolve_max_turns(run_input.metadata)})
     resolved_provider = provider if provider is not None else create_provider(resolved_settings)
     resolved_architecture = build_architecture(

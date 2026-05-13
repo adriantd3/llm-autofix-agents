@@ -186,7 +186,12 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         settings = _settings()
         tools_by_profile = {
             "explorer": [_tool("read_file"), _tool("search_files")],
-            "orchestrator_main": [_tool("read_file"), _tool("replace_in_file"), _tool("execute_command")],
+            "orchestrator_main": [
+                _tool("search_files"),
+                _tool("read_file"),
+                _tool("replace_in_file"),
+                _tool("execute_command"),
+            ],
         }
         build_agent_calls: list[dict[str, object]] = []
         as_tool_calls: list[dict[str, object]] = []
@@ -221,7 +226,7 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         self.assertEqual(architecture.agent_role, "orchestrator")
         self.assertEqual(architecture.agent_model, "orchestrator-model")
         self.assertEqual(architecture.tool_profile, "orchestrator_main")
-        self.assertEqual(architecture.tool_count, 3)  # len(tools_by_profile["orchestrator_main"])
+        self.assertEqual(architecture.tool_count, 5)  # len(tools_by_profile["orchestrator_main"]) + 1 explore_code
         self.assertEqual(facade_agent.name, "orchestrator")
 
         # Only explorer sub-agent; test execution is done via run_test_target directly
@@ -251,6 +256,8 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         self.assertEqual(len(as_tool_calls), 1)
         self.assertEqual(as_tool_calls[0]["agent_name"], "explorer")
         self.assertEqual(as_tool_calls[0]["tool_name"], "explore_code")
+        # Explorer sub-agent must have an explicit max_turns to avoid SDK default (10)
+        self.assertEqual(as_tool_calls[0]["max_turns"], 20)
 
 
 class PlannerExecutorArchitectureTests(unittest.TestCase):

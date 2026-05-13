@@ -3,12 +3,20 @@ from __future__ import annotations
 import re
 import shutil
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Mapping
 
 from agents import RunContextWrapper, function_tool
 
 from llm_autofix_agents.tools.context import APRToolContext, get_tool_context
+from llm_autofix_agents.tools.metadata import (
+    ToolDescriptor,
+    ToolResultKind,
+    classify_json_envelope,
+    content_hash,
+    make_json_result_summarizer,
+)
 from llm_autofix_agents.tools.paths import iter_files, resolve_path, safe_rel, workspace_root
+from llm_autofix_agents.tools.registry import register
 from llm_autofix_agents.tools.serialization import json_result
 from llm_autofix_agents.tools.text import (
     detect_test_command,
@@ -88,7 +96,12 @@ def read_file(
     start_line: int | None = None,
     end_line: int | None = None,
 ) -> str:
-    """Read a text file inside the workspace with line numbers."""
+    """Read a text file from the workspace with line numbers.
+
+    Paths must be relative to the workspace root.
+    Use start_line/end_line to read specific sections of large files.
+    Returns line-numbered content — copy lines verbatim as old text for replace_in_file.
+    """
     cfg = get_tool_context(ctx)
     file_path = resolve_path(cfg, path)
     ok, error, content = read_text_checked(cfg, file_path)
@@ -183,3 +196,116 @@ def search_files(
             "results": results,
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Observability metadata (SH1)
+# ---------------------------------------------------------------------------
+
+
+def _args_get_workspace_info(args: Mapping[str, Any]) -> dict[str, Any]:
+    return {}
+
+
+def _args_list_files(args: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "glob": args.get("glob"),
+        "include_hidden": args.get("include_hidden", False),
+        "max_entries": args.get("max_entries"),
+    }
+
+
+def _args_read_file(args: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "path": args.get("path"),
+        "start_line": args.get("start_line"),
+        "end_line": args.get("end_line"),
+    }
+
+
+def _args_search_files(args: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "pattern": args.get("pattern"),
+        "glob": args.get("glob"),
+        "regex": args.get("regex"),
+        "max_results": args.get("max_results"),
+    }
+
+
+def _result_get_workspace_info(payload: dict[str, Any], ok: Any) -> dict[str, Any]:
+    return {"ok": ok, "root_dir": payload.get("root_dir")}
+
+
+def _result_list_files(payload: dict[str, Any], ok: Any) -> dict[str, Any]:
+    return {
+        "ok": ok,
+        "glob": payload.get("glob"),
+        "returned": payload.get("returned"),
+        "total_seen": payload.get("total_seen"),
+        "truncated": payload.get("truncated"),
+    }
+
+
+def _result_read_file(payload: dict[str, Any], ok: Any) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "ok": ok,
+        "path": payload.get("path"),
+        "start_line": payload.get("start_line"),
+        "end_line": payload.get("end_line"),
+        "line_count": payload.get("line_count"),
+        "truncated": payload.get("truncated"),
+        "content_chars": len(payload.get("content", "")),
+    }
+    c = payload.get("content", "")
+    if c:
+        summary["content_hash"] = content_hash(c)
+    if ok is False:
+        summary["error"] = payload.get("error")
+        summary["max_file_bytes"] = payload.get("max_file_bytes")
+    return summary
+
+
+def _result_search_files(payload: dict[str, Any], ok: Any) -> dict[str, Any]:
+    results = payload.get("results", [])
+    top_paths = [r.get("path", "") for r in results[:5] if isinstance(r, dict)]
+    return {
+        "ok": ok,
+        "pattern": payload.get("pattern"),
+        "glob": payload.get("glob"),
+        "returned": payload.get("returned"),
+        "scanned_files": payload.get("scanned_files"),
+        "top_paths": top_paths,
+    }
+
+
+register(ToolDescriptor(
+    name="get_workspace_info",
+    result_kind=ToolResultKind.JSON_ENVELOPE,
+    summarize_args=_args_get_workspace_info,
+    summarize_result=make_json_result_summarizer(_result_get_workspace_info),
+    classify_status=classify_json_envelope,
+))
+
+register(ToolDescriptor(
+    name="list_files",
+    result_kind=ToolResultKind.JSON_ENVELOPE,
+    summarize_args=_args_list_files,
+    summarize_result=make_json_result_summarizer(_result_list_files),
+    classify_status=classify_json_envelope,
+))
+
+register(ToolDescriptor(
+    name="read_file",
+    result_kind=ToolResultKind.JSON_ENVELOPE,
+    summarize_args=_args_read_file,
+    summarize_result=make_json_result_summarizer(_result_read_file),
+    classify_status=classify_json_envelope,
+))
+
+register(ToolDescriptor(
+    name="search_files",
+    result_kind=ToolResultKind.JSON_ENVELOPE,
+    summarize_args=_args_search_files,
+    summarize_result=make_json_result_summarizer(_result_search_files),
+    classify_status=classify_json_envelope,
+))
