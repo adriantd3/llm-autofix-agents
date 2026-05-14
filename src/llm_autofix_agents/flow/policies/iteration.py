@@ -22,22 +22,7 @@ _FAILURE_DRIVEN_INTRO = (
     "(from 'def test_...' to the next 'def ') to see ALL assertions, not just the failing line.\n"
     "- Before proposing a fix, consider ALL assertions in the test function that involve the code you will change.\n"
     "- Do NOT use execute_command to test Python logic or validate your fix with a subprocess. "
-    "Apply your fix directly with replace_in_file, then call run_test_target with the Focused test command.\n"
-    "- FOCUSED TEST COMMAND: Pass it verbatim as the `runner` argument with `cwd=\"\"` and leave "
-    "`target` EMPTY (empty string). Never put the full command in `target` — target is for an "
-    "optional test file/class name only, appended after runner. Putting the command in both "
-    "causes the script to receive the command as its own arguments, corrupting the run.\n"
-    "- CWD must be a directory path. Use `cwd=\"\"` for the project root. Never pass a file path as cwd.\n"
-    "- WRITE_FILE restriction: NEVER use write_file to overwrite an existing multi-line source file. "
-    "write_file with partial content will destroy the rest of the module and break the environment "
-    "permanently within this iteration. Use replace_in_file or replace_lines for targeted edits.\n"
-    "- If replace_in_file returns old_text_not_found, IMMEDIATELY re-read that section with read_file "
-    "before retrying. Never retry replace_in_file with the same old_hash — it will fail again.\n"
-    "- ImportError 'cannot import name X': first search for a function/variable with a similar name "
-    "in that module. If found, add a single-line alias (`X = existing_name`). Do NOT change the "
-    "implementation of that function in the same edit — make the alias addition as a standalone change, "
-    "run the test, and only change the implementation if the test still fails AND you can trace through "
-    "the logic to show the existing implementation produces the wrong result.\n\n"
+    "Apply your fix directly with replace_in_file, then call run_test_target with the Focused test command.\n\n"
     "- In your final response, populate 'notes' with short bullets: inspected, attempted, changes, results, next.\n\n"
     "You must use tools for evidence; do not report edits or passing tests without tool outputs."
 )
@@ -88,7 +73,7 @@ def build_iteration_input(
     baseline_reminder = ""
     if baseline_test_execution and baseline_test_execution.exit_code != 0:
         baseline_output = compact_test_output(
-            _strip_workspace_root(baseline_test_execution.output, repo_root), max_chars=1200
+            baseline_test_execution.output, max_chars=1200
         )
         if baseline_output:
             baseline_reminder = (
@@ -105,27 +90,6 @@ def build_iteration_input(
             f"{test_command.strip()}\n"
         )
 
-    no_edit_previous = bool(
-        latest_snapshot
-        and "⚠ WARNING: No source files were modified in the previous iteration" in latest_snapshot
-    )
-    if no_edit_previous:
-        task = (
-            "Task:\n"
-            "The previous iteration ended without any source file edit. "
-            "You MUST apply a code change this iteration — reading more files without editing is not acceptable. "
-            "Use the notes above to identify where to edit, apply your best hypothesis with replace_in_file, "
-            "then validate with the test command."
-        )
-    else:
-        task = (
-            "Task:\n"
-            "Continue improving the repair strategy. Use tools to inspect and edit, "
-            "then validate with the test command.\n"
-            "IMPORTANT: If your last fix broke a different assertion, you need a fix "
-            "that satisfies ALL constraints simultaneously."
-        )
-
     return (
         f"{feedback_prefix}"
         f"[ITERATION {iteration}/{max_iterations}]\n"
@@ -133,7 +97,11 @@ def build_iteration_input(
         f"{snapshot_block}"
         f"{baseline_reminder}"
         f"{test_command_reminder}\n\n"
-        f"{task}"
+        "Task:\n"
+        "Continue improving the repair strategy. Use tools to inspect and edit, "
+        "then validate with the test command.\n"
+        "IMPORTANT: If your last fix broke a different assertion, you need a fix "
+        "that satisfies ALL constraints simultaneously."
     )
 
 
@@ -142,10 +110,8 @@ def build_continuation_snapshot(
     proposal: AgentFixIterationRecord,
     changes: WorkspaceChangeSet,
     test_execution: TestExecution,
-    repo_root: Path | None = None,
 ) -> str:
-    raw_output = _strip_workspace_root(test_execution.output, repo_root)
-    compact_output = compact_test_output(raw_output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
+    compact_output = compact_test_output(test_execution.output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
     output_block = _indent_block(compact_output or "(no output)", prefix="    ")
 
     changed_files = changes.all_changed_files
@@ -200,10 +166,7 @@ def _build_first_iteration_input(
         return None
 
     command = (test_command or "").strip() or "<not provided>"
-    output = compact_test_output(
-        _strip_workspace_root(baseline_test_execution.output, repo_root),
-        max_chars=_MAX_BASELINE_OUTPUT_CHARS,
-    )
+    output = compact_test_output(baseline_test_execution.output, max_chars=_MAX_BASELINE_OUTPUT_CHARS)
 
     feedback_prefix = ""
     if validation_feedback:
@@ -284,21 +247,6 @@ def proposal_signature(proposal: AgentFixIterationRecord) -> str:
     return f"status={status}|reasoning_summary={reasoning_summary}|notes={notes}"
 
 
-def _strip_workspace_root(text: str, repo_root: Path | None) -> str:
-    """Replace absolute workspace-root prefixes in `text` with relative paths.
-
-    Tracebacks emitted inside the container contain the full host path
-    (e.g. ``/benchmark-workspaces/.../youtube-dl/test/test_utils.py``).  The
-    agent tools only accept paths relative to the workspace root, so showing
-    the absolute form causes the agent to waste turns trying invalid paths.
-    """
-    if repo_root is None:
-        return text
-    prefix = str(repo_root)
-    # Replace both "<prefix>/" (path + separator) and "<prefix>" alone.
-    return text.replace(prefix + "/", "").replace(prefix, "")
-
-
 def _normalize(text: str) -> str:
     return " ".join(text.split()).strip().lower()
 
@@ -307,7 +255,7 @@ def _indent_block(text: str, *, prefix: str) -> str:
     return "\n".join(f"{prefix}{line}" for line in text.splitlines())
 
 
-def _format_notes_block(notes: str | None, *, max_lines: int = 20) -> str:
+def _format_notes_block(notes: str | None, *, max_lines: int = 8) -> str:
     if not notes:
         return ""
 
@@ -405,12 +353,8 @@ def _find_test_function_using(candidate: Path, symbol: str, repo_root: Path) -> 
         source = candidate.read_text(encoding="utf-8")
     except Exception:
         return ""
-    # No ^ anchor: class methods like `    def test_xml_ampersands(self):` are valid test
-    # functions that the original anchored regex would silently skip.
-    for func_match in re.finditer(r"def (test_\w+)\(", source, re.MULTILINE):
+    for func_match in re.finditer(r'^def (test_\w+)\(', source, re.MULTILINE):
         func_start = func_match.start()
-        # Find the next top-level def to bound the body.  For class methods this may include
-        # sibling methods, but that is harmless for the `symbol in func_body` check.
         next_def = source.find("\ndef ", func_start + 1)
         end_idx = next_def + 1 if next_def != -1 else len(source)
         func_body = source[func_start:end_idx]
@@ -424,8 +368,8 @@ def _format_test_function(func_source: str, func_name: str, file_path: Path, rep
     while lines and not lines[-1].strip():
         lines.pop()
     text = "\n".join(lines)
-    if len(text) > 5000:
-        text = text[:5000] + "\n... [truncated]"
+    if len(text) > 3000:
+        text = text[:3000] + "\n... [truncated]"
     return (
         "\n\n--- Failing test function (read this ENTIRE function to understand all assertions) ---\n"
         f"File: {file_path.relative_to(repo_root)}\n"

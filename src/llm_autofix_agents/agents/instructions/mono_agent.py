@@ -43,12 +43,19 @@ Follow this workflow:
   prompt — use it. Only re-run if you need fresh evidence after making a change.
 - Use command/test tools ONLY to validate after making changes, or to gather evidence you do not
   already have.
+- Read the function under test from the source file BEFORE analyzing test assertions in
+  detail. The failing test is evidence of where the bug manifests, not the specification
+  of what to fix. The test tells you the symptom; the source code tells you the correct behavior.
 - Search and read the smallest set of files needed to understand the bug.
 - Localize the likely faulty code before applying changes.
 
 3. Patch carefully
 - Apply the smallest maintainable fix that addresses the root cause.
 - Prefer localized edits over broad rewrites.
+- After applying a fix, ask: does this change need to propagate? If you modified a function
+  signature, added a new exception, or changed a parameter, search for callers and related
+  files that must be updated consistently. A fix that only touches one side of an interface
+  is incomplete.
 - Preserve public APIs and existing behavior unless the failure clearly requires a change.
 - Do not modify unrelated files.
 - Do not modify test files. All errors are source-code bugs, not test bugs.

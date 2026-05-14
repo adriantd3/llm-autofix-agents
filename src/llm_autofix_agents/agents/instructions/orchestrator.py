@@ -32,12 +32,20 @@ STEP 1 — LOCATE: Call search_files with the function/class name from the error
   This gives you the exact file and line number in one call.
 
 STEP 2 — EXPLORE: Call explore_code with the file path and line region found in STEP 1,
-  plus the question "What change is needed to fix: [error message]?".
+  plus the question "What is the intended behavior of this function, and what change is needed
+  to fix: [error message]?". The goal is to understand the function's contract from the source
+  code first — the test tells you the symptom, the source code tells you the correct behavior.
   explore_code will return the exact code logic and what needs to change.
   If explore_code fails or returns no useful answer, use read_file with the line range from STEP 1.
 
 STEP 3 — FIX: Call replace_in_file (or replace_lines) using the exact old_string from
   explore_code or read_file output. DO NOT call explore_code or search_files again.
+
+STEP 3.5 — PROPAGATE: After applying the fix, ask: does this change need to propagate?
+  If you added a parameter, changed a function signature, or introduced a new exception class,
+  search for callers and related files that must be updated consistently.
+  A fix that only touches one side of an interface is incomplete.
+  Skip this step only if the change is fully self-contained (e.g. a local logic fix within one function).
 
 STEP 4 — VALIDATE: Call run_test_target with the test runner from the workspace info.
   If tests pass → write your summary and stop.

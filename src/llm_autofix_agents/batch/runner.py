@@ -142,8 +142,7 @@ class BatchRunner:
         case: PreparedExecutionCase,
         timeout_seconds: int = 60,
     ) -> str | None:
-        import os
-
+        container_name = f"autofix-capture-{uuid.uuid4().hex[:12]}"
         uid = os.getuid()
         gid = os.getgid()
         wrapped = f"cd {shlex.quote(case.container_workspace)} && {case.test_command}"
@@ -155,6 +154,8 @@ class BatchRunner:
             "run",
             "--rm",
             "-T",
+            "--name",
+            container_name,
             "--user",
             f"{uid}:{gid}",
             case.runner_service,
@@ -181,12 +182,14 @@ class BatchRunner:
                 return None
             return combined[-4000:] if len(combined) > 4000 else combined
         except subprocess.TimeoutExpired:
+            self._force_kill_container(container_name)
             logger.warning(
                 "Error capture timed out in container for test command: %s",
                 case.test_command,
             )
             return None
         except Exception:
+            self._force_kill_container(container_name)
             logger.warning(
                 "Error capture failed in container for test command: %s",
                 case.test_command,
@@ -265,8 +268,11 @@ class BatchRunner:
                 else:
                     logger.warning("Interrupted — killing container '%s'...", container_name)
                 proc.kill()
-                stdout, stderr = proc.communicate()
                 self._force_kill_container(container_name)
+                try:
+                    stdout, stderr = proc.communicate(timeout=15)
+                except subprocess.TimeoutExpired:
+                    stdout, stderr = "", ""
                 if not timed_out:
                     raise
                 return subprocess.CompletedProcess(cmd, 124, stdout or "", stderr or "")

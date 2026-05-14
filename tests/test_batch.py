@@ -949,6 +949,18 @@ class TestPreparedExecutionCase(unittest.TestCase):
 
 
 class TestBatchRunnerErrorCapture(unittest.TestCase):
+    def _make_case(self, container_workspace="/benchmark-workspaces/batch-1/gcd") -> "PreparedExecutionCase":
+        return PreparedExecutionCase(
+            case_id="gcd",
+            dataset_name="test",
+            dataset_type="quixbugs",
+            host_workspace=Path("/tmp/ws"),
+            container_workspace=container_workspace,
+            test_command="pytest test_gcd.py",
+            prompt_variables={"bug_id": "gcd"},
+            runner_service="runner",
+        )
+
     @patch("llm_autofix_agents.batch.runner.subprocess.run")
     def test_capture_error_output_in_container(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="error output", stderr="")
@@ -960,17 +972,7 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
             compose_file = project_dir / "docker-compose.yml"
             compose_file.write_text("", encoding="utf-8")
             runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
-            case = PreparedExecutionCase(
-                case_id="gcd",
-                dataset_name="test",
-                dataset_type="quixbugs",
-                host_workspace=Path("/tmp/ws"),
-                container_workspace="/benchmark-workspaces/batch-1/gcd",
-                test_command="pytest test_gcd.py",
-                prompt_variables={"bug_id": "gcd"},
-                runner_service="runner",
-            )
-            result = runner._capture_error_output_in_container(case)
+            result = runner._capture_error_output_in_container(self._make_case())
             self.assertEqual(result, "error output")
             mock_run.assert_called_once()
             call_args = mock_run.call_args
@@ -981,6 +983,10 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
             self.assertIn(str(compose_file), cmd)
             self.assertIn("runner", cmd)
             self.assertEqual(call_args[1]["cwd"], str(project_dir))
+            # Container must be named so it can be force-killed on timeout
+            self.assertIn("--name", cmd)
+            name_idx = cmd.index("--name")
+            self.assertTrue(cmd[name_idx + 1].startswith("autofix-capture-"))
 
     @patch("llm_autofix_agents.batch.runner.subprocess.run")
     def test_capture_error_output_uses_shlex_quote(self, mock_run):
@@ -993,17 +999,7 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
             compose_file = project_dir / "docker-compose.yml"
             compose_file.write_text("", encoding="utf-8")
             runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
-            case = PreparedExecutionCase(
-                case_id="gcd",
-                dataset_name="test",
-                dataset_type="quixbugs",
-                host_workspace=Path("/tmp/ws"),
-                container_workspace="/benchmark-workspaces/batch 1/gcd",
-                test_command="pytest test_gcd.py",
-                prompt_variables={"bug_id": "gcd"},
-                runner_service="runner",
-            )
-            runner._capture_error_output_in_container(case)
+            runner._capture_error_output_in_container(self._make_case("/benchmark-workspaces/batch 1/gcd"))
             shell_cmd = mock_run.call_args[0][0][-1]
             self.assertIn("'/benchmark-workspaces/batch 1/gcd'", shell_cmd)
 
@@ -1018,18 +1014,60 @@ class TestBatchRunnerErrorCapture(unittest.TestCase):
             compose_file = project_dir / "docker-compose.yml"
             compose_file.write_text("", encoding="utf-8")
             runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
-            case = PreparedExecutionCase(
-                case_id="gcd",
-                dataset_name="test",
-                dataset_type="quixbugs",
-                host_workspace=Path("/tmp/ws"),
-                container_workspace="/benchmark-workspaces/batch-1/gcd",
-                test_command="pytest test_gcd.py",
-                prompt_variables={"bug_id": "gcd"},
-                runner_service="runner",
-            )
-            result = runner._capture_error_output_in_container(case)
+            result = runner._capture_error_output_in_container(self._make_case())
             self.assertTrue(len(result) <= 4000)
+
+    @patch("llm_autofix_agents.batch.runner.subprocess.run")
+    def test_capture_kills_container_on_timeout(self, mock_run):
+        """On timeout, _force_kill_container must be called with the container's name."""
+        from llm_autofix_agents.batch.runner import BatchRunner
+
+        killed_names: list[str] = []
+
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "docker" and len(cmd) > 1 and cmd[1] == "kill":
+                killed_names.append(cmd[2])
+                return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=60)
+
+        mock_run.side_effect = side_effect
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir)
+            compose_file = project_dir / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
+            result = runner._capture_error_output_in_container(self._make_case())
+
+        self.assertIsNone(result)
+        self.assertEqual(len(killed_names), 1)
+        self.assertTrue(killed_names[0].startswith("autofix-capture-"))
+
+    @patch("llm_autofix_agents.batch.runner.subprocess.run")
+    def test_capture_kills_container_on_exception(self, mock_run):
+        """On any unexpected exception, _force_kill_container is still called."""
+        from llm_autofix_agents.batch.runner import BatchRunner
+
+        killed_names: list[str] = []
+
+        def side_effect(cmd, **kwargs):
+            if cmd[0] == "docker" and len(cmd) > 1 and cmd[1] == "kill":
+                killed_names.append(cmd[2])
+                return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+            raise OSError("Docker socket unavailable")
+
+        mock_run.side_effect = side_effect
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir)
+            compose_file = project_dir / "docker-compose.yml"
+            compose_file.write_text("", encoding="utf-8")
+            runner = BatchRunner(compose_file=compose_file, project_dir=project_dir)
+            result = runner._capture_error_output_in_container(self._make_case())
+
+        self.assertIsNone(result)
+        self.assertEqual(len(killed_names), 1)
+        self.assertTrue(killed_names[0].startswith("autofix-capture-"))
 
 
 class TestBatchRunnerDockerBuild(unittest.TestCase):

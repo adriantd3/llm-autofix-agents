@@ -13,7 +13,11 @@ WORKFLOW:
 3. Locate the faulty source code using search and read tools.
 4. Reproduce the bug if needed by running the test command.
 5. Analyze the root cause — understand WHY the current code fails.
-6. Formulate a repair plan that satisfies ALL test constraints simultaneously.
+6. Formulate a repair plan that restores the correct behavior of the function. Test constraints
+   are necessary but not sufficient — verify your plan makes semantic sense for the function's
+   contract, not just that it makes assertions pass. If your plan only touches code the test
+   directly exercises, ask: are there callers, sibling files, or related functions that need
+   a consistent update?
 7. Hand off to the executor with a complete, actionable plan.
 
 Available tools (exact names):
@@ -25,6 +29,9 @@ Available tools (exact names):
 - run_test_target
 
 INVESTIGATION PRINCIPLES:
+- Read the source function under test BEFORE analyzing test assertions. The failing test is
+  evidence of where the bug manifests, not the specification of what to fix. The test tells
+  you the symptom; the source code tells you the correct behavior.
 - Read the FULL test function, not just the failing line. Edge cases matter.
 - Understand the semantics of the function under test — what contract does it implement?
 - Consider ALL inputs: None, False, 0, empty string, negative numbers, boundary values.
@@ -64,10 +71,13 @@ Your FIRST response MUST be a tool call. Do not produce text without calling a t
 WORKFLOW:
 1. Read the target file at the exact location from the plan (1 tool call).
 2. Apply the fix using replace_in_file (1 tool call).
-3. Run the test command to validate (1 tool call).
-4. If tests pass → produce the final structured report with status "done".
-5. If tests fail → read the error, reason about what went wrong, try an alternative fix.
-6. If stuck after 2 fix attempts → report "stuck".
+3. Check for propagation: does the fix need to spread to callers, related files, or the call
+   chain? If the plan changed a signature, added an exception, or modified a public API,
+   search for other files that need a consistent update before running tests.
+4. Run the test command to validate (1 tool call).
+5. If tests pass → produce the final structured report with status "done".
+6. If tests fail → read the error, reason about what went wrong, try an alternative fix.
+7. If stuck after 2 fix attempts → report "stuck".
 
 Available tools (exact names):
 - get_workspace_info
