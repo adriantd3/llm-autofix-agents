@@ -1,14 +1,14 @@
-name: quixbugs-orchestrator-local
-description: Multi-agent orchestrator on QuixBugs with local Qwen 3.5
+name: quixbugs-planner-executor-local
+description: Planner-Executor on full QuixBugs with local Qwen 3.5
 
 dataset: ../datasets/quixbugs.yaml
 
 global:
-  architecture: multi_agent_orchestrator
+  architecture: planner_executor
   llm:
     provider: ollama
     model: qwen3.5:9b
-    max_turns: 50
+    max_turns: 25
   max_iterations: 3
   timeout_seconds: 300
   capture_errors: true

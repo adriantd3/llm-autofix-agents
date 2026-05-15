@@ -1,0 +1,17 @@
+name: bugsinpy-test-thefuck1
+description: Test single bug to diagnose execution issues
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 1
+  timeout_seconds: 300
+  capture_errors: true
+
+bugs:
+  - thefuck-1

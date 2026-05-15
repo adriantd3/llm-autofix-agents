@@ -65,13 +65,29 @@ def detect_changed_files(before: dict[str, str], after: dict[str, str]) -> list[
     return sorted(changed)
 
 
+def _is_preexisting_untracked(path: str, before: dict[str, str]) -> bool:
+    """Return True if *path* was already present in the workspace before the iteration started.
+
+    git status --porcelain represents untracked directories with a trailing slash, so we
+    check for both the exact path and a directory-prefix match against snapshot file paths.
+    """
+    if path in before:
+        return True
+    prefix = path if path.endswith("/") else f"{path}/"
+    return any(p.startswith(prefix) for p in before)
+
+
 def detect_workspace_change_set(
     *,
     repo_root: Path,
     before: dict[str, str],
     after: dict[str, str],
 ) -> _models.WorkspaceChangeSet:
-    untracked_files = detect_untracked_files(repo_root)
+    # Only report untracked files that are genuinely new — created by the agent during
+    # this iteration.  Pre-existing untracked files (BugsInPy test copies, *.egg-info
+    # directories, etc.) were already present in *before* and must not trigger false
+    # diff_integrity or test_file_modified validation failures.
+    untracked_files = [f for f in detect_untracked_files(repo_root) if not _is_preexisting_untracked(f, before)]
 
     modified_files: list[str] = []
     added_files: list[str] = []

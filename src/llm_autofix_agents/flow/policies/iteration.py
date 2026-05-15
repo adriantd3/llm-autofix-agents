@@ -110,6 +110,7 @@ def build_continuation_snapshot(
     proposal: AgentFixIterationRecord,
     changes: WorkspaceChangeSet,
     test_execution: TestExecution,
+    repo_root: Path | None = None,
 ) -> str:
     compact_output = compact_test_output(test_execution.output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
     output_block = _indent_block(compact_output or "(no output)", prefix="    ")

@@ -1,0 +1,28 @@
+name: bugsinpy-orchestrator-candidates-batch1
+description: |
+  Orchestrator on BugsInPy - Tier 1 simple candidates (1-5 line fixes).
+  Goal: identify which bugs qwen3.5:9b can reliably solve.
+  Bugs selected for single-file, small diff, pure logic nature.
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - thefuck-1
+  - thefuck-2
+  - thefuck-5
+  - thefuck-6
+  - thefuck-7
+  - tornado-9
+  - pandas-10
+  - fastapi-1
+  - cookiecutter-4

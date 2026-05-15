@@ -1,0 +1,28 @@
+name: bugsinpy-orchestrator-candidates-batch2
+description: |
+  Orchestrator on BugsInPy - Tier 1/2 additional candidates.
+  Second wave: more thefuck variants, ansible, scrapy, tornado, pandas.
+  Goal: broaden the validated set beyond 5 bugs.
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - thefuck-3
+  - thefuck-4
+  - thefuck-8
+  - thefuck-9
+  - ansible-5
+  - ansible-3
+  - scrapy-33
+  - tornado-3
+  - pandas-8

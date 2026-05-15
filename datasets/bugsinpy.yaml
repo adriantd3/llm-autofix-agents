@@ -130,13 +130,6 @@ bugs:
       bug_id: "6"
       version: "0"
 
-  - id: pandas-7
-    program: pandas
-    metadata:
-      project: pandas
-      bug_id: "7"
-      version: "0"
-
   - id: pandas-8
     program: pandas
     metadata:

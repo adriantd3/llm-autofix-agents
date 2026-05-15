@@ -1,9 +1,10 @@
 # Estado
 
 ## En curso
-- **BugsInPy multifile batch — siguiente paso (2026-05-11)**:
-  - Objetivo: extender el éxito de youtube-dl-42 a keras-20, thefuck-16
-  - Siguiente: lanzar `batches/bugsinpy-orchestrator-v2-multifile.yaml` con los 3 bugs
+- **BugsInPy orchestrator candidates — validación ampliada (2026-05-14)**:
+  - pandas-7 eliminado del batch y dataset (requiere recompilación Cython — no resoluble con ediciones de texto)
+  - Fix aplicado: `detect_workspace_change_set` ahora filtra untracked pre-existentes via `_is_preexisting_untracked`
+  - Siguiente: lanzar batch2 sin pandas-7 para validar ansible-5, thefuck-8 con el fix de falsos positivos
 
 ## Hecho
 - **Infraestructura Docker BugsInPy — COMPLETA Y VALIDADA (2026-05-11)**:

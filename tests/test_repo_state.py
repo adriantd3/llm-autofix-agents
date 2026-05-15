@@ -118,6 +118,50 @@ class RepoStateTests(unittest.TestCase):
         changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
         self.assertFalse(changes.diff_excludes_untracked)
 
+    @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths", return_value="")
+    @patch(
+        "llm_autofix_agents.flow.workspace.state.detect_untracked_files",
+        return_value=["tests/rules/test_existing.py", "lib/pkg.egg-info/"],
+    )
+    def test_detect_workspace_change_set_filters_preexisting_untracked_files(
+        self, _mock_untracked, _mock_diff
+    ) -> None:
+        """Pre-existing untracked files (e.g. BugsInPy test copies) must not
+        appear in untracked_files when they were already present in *before*."""
+        repo = Path("/fake/repo")
+        # Simulate: test file was already there before agent ran (as snapshotted file)
+        # and an egg-info directory was also present (file inside it is in before)
+        before = {
+            "tests/rules/test_existing.py": "hash_test",
+            "lib/pkg.egg-info/PKG-INFO": "hash_pkg",
+            "src/main.py": "hash_main",
+        }
+        after = {"tests/rules/test_existing.py": "hash_test", "lib/pkg.egg-info/PKG-INFO": "hash_pkg", "src/main.py": "hash_main"}
+        changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
+        self.assertEqual(changes.untracked_files, [])
+        self.assertFalse(changes.diff_excludes_untracked)
+        self.assertFalse(changes.repo_changed)
+
+    @patch("llm_autofix_agents.flow.workspace.state.collect_repo_diff_for_paths", return_value="")
+    @patch(
+        "llm_autofix_agents.flow.workspace.state.detect_untracked_files",
+        return_value=["tests/rules/test_existing.py", "src/agent_new_file.py"],
+    )
+    def test_detect_workspace_change_set_keeps_truly_new_untracked_files(
+        self, _mock_untracked, _mock_diff
+    ) -> None:
+        """Untracked files that were NOT in *before* (agent-created) must still be reported."""
+        repo = Path("/fake/repo")
+        before = {"tests/rules/test_existing.py": "hash_test", "src/main.py": "hash_main"}
+        after = {
+            "tests/rules/test_existing.py": "hash_test",
+            "src/main.py": "hash_main",
+            "src/agent_new_file.py": "hash_new",
+        }
+        changes = detect_workspace_change_set(repo_root=repo, before=before, after=after)
+        self.assertEqual(changes.untracked_files, ["src/agent_new_file.py"])
+        self.assertTrue(changes.diff_excludes_untracked)
+
     def test_diff_integrity_does_not_trigger_on_untracked_and_empty_diff(self) -> None:
         proposal = AgentFixIterationRecord(
             status="done",
