@@ -14,7 +14,7 @@ from llm_autofix_agents.flow.workspace.state import (
     should_ignore_path,
     snapshot_repo_state,
 )
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, AgentFixIterationResult
 
 
 class RepoStateTests(unittest.TestCase):
@@ -164,9 +164,7 @@ class RepoStateTests(unittest.TestCase):
 
     def test_diff_integrity_does_not_trigger_on_untracked_and_empty_diff(self) -> None:
         proposal = AgentFixIterationRecord(
-            status="done",
-            reasoning_summary="added a new helper",
-            confidence=0.8,
+            proposal=AgentFixIterationResult(status="done", reasoning_summary="added a new helper", confidence=0.8),
         )
         changes = WorkspaceChangeSet(
             modified_files=[],

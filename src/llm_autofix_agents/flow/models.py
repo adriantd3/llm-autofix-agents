@@ -61,10 +61,11 @@ class IterationObservation:
 
 def render_final_message(proposal: AgentFixIterationRecord, *, observed_files: list[str]) -> str:
     files = ", ".join(observed_files) if observed_files else "(none observed)"
+    p = proposal.proposal
     lines = [
-        f"status: {proposal.status}",
-        f"reasoning_summary: {proposal.reasoning_summary}",
-        f"confidence: {proposal.confidence:.3f}",
+        f"status: {p.status}",
+        f"reasoning_summary: {p.reasoning_summary}",
+        f"confidence: {p.confidence:.3f}",
         f"changed_files: {files}",
     ]
     return "\n".join(lines)

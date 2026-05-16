@@ -23,6 +23,9 @@ bugs:
   - thefuck-6
   - thefuck-7
   - tornado-9
-  - pandas-10
   - fastapi-1
-  - cookiecutter-4
+  # pandas-10: excluded — C extension (pandas._libs.interval) not present in BugsInPy snapshot;
+  #   fix requires build-system changes, not function-level code. Out of scope for single-function APR.
+  # cookiecutter-4: excluded — tox test suite requires py27/py33/py34/py35/pypy, none available;
+  #   exit_code is always 1 regardless of fix correctness. Only flake8 linting runs; the actual
+  #   test (test_run_failing_hook) never executes. Unverifiable in current BugsInPy harness.

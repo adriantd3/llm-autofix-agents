@@ -112,8 +112,7 @@ class AgentExecutionRunner:
 
         duration_seconds = time.perf_counter() - started_monotonic
 
-        # Translate AgentFixIterationRecord to primitives here (flow knows llm.provider).
-        p = proposal if isinstance(proposal, AgentFixIterationRecord) else None
+        p = proposal.proposal if isinstance(proposal, AgentFixIterationRecord) else None
         emitter.finish_agent_execution(
             ctx,
             agent_execution_id=agent_execution_id,
@@ -124,9 +123,9 @@ class AgentExecutionRunner:
             reasoning_summary=p.reasoning_summary if p else "",
             confidence=p.confidence if p else 0.0,
             notes=p.notes if p else None,
-            input_tokens=p.input_tokens if p else 0,
-            output_tokens=p.output_tokens if p else 0,
-            total_tokens=p.total_tokens if p else 0,
+            input_tokens=proposal.input_tokens if isinstance(proposal, AgentFixIterationRecord) else 0,
+            output_tokens=proposal.output_tokens if isinstance(proposal, AgentFixIterationRecord) else 0,
+            total_tokens=proposal.total_tokens if isinstance(proposal, AgentFixIterationRecord) else 0,
             tool_calls_count=hooks.tool_call_count,
             duration_seconds=duration_seconds,
         )

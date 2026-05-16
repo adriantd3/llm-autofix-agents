@@ -144,12 +144,18 @@ bugs:
       bug_id: "9"
       version: "0"
 
-  - id: pandas-10
-    program: pandas
-    metadata:
-      project: pandas
-      bug_id: "10"
-      version: "0"
+  # pandas-10 — EXCLUDED (bug-specific, not project-wide)
+  # Root cause: C extension pandas._libs.interval not compiled for this commit's snapshot.
+  # The fix requires build-system changes to setup.py, not function-level code.
+  # pandas-1 through pandas-9 use pytest with Python 3.8.3 and should work; pandas-10 is anomalous.
+  # Verified on 2026-05-15 (batch-bugsinpy-orchestrator-candidates-batch1-20260515T170452Z).
+  #
+  # - id: pandas-10
+  #   program: pandas
+  #   metadata:
+  #     project: pandas
+  #     bug_id: "10"
+  #     version: "0"
 
   # tornado (10 bugs)
   - id: tornado-1
@@ -416,13 +422,20 @@ bugs:
       bug_id: "15"
       version: "0"
 
-  # cookiecutter
-  - id: cookiecutter-4
-    program: cookiecutter
-    metadata:
-      project: cookiecutter
-      bug_id: "4"
-      version: "0"
+  # cookiecutter — EXCLUDED (entire project, all bug IDs)
+  # Root cause: ALL cookiecutter bugs use `tox <test>` as run_test.sh command. The project's
+  # tox.ini requires py27/py33/py34/py35/pypy — none available in the Docker environment.
+  # tox always returns exit_code 1 (InterpreterNotFound) regardless of whether the fix is correct.
+  # The actual test functions never execute; only flake8 linting runs.
+  # This is a project-level issue: cookiecutter-1, 2, 3, 4 are all affected identically.
+  # Verified on 2026-05-15 via cookiecutter-4 post-mortem (batch-bugsinpy-orchestrator-candidates-batch1-20260515T170452Z).
+  #
+  # - id: cookiecutter-4
+  #   program: cookiecutter
+  #   metadata:
+  #     project: cookiecutter
+  #     bug_id: "4"
+  #     version: "0"
 
   # scrapy
   - id: scrapy-33

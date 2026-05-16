@@ -129,7 +129,7 @@ class IterationDecisionEnactor:
                 max_iterations=cfg.max_iterations,
                 changed_files=observation.changes.all_changed_files,
                 test_execution=observation.test_execution,
-                confidence=observation.proposal.confidence,
+                confidence=observation.proposal.proposal.confidence,
                 tool_profile=cfg.tool_profile,
                 tool_count=cfg.tool_count,
                 provider=cfg.settings.provider.value,
@@ -140,6 +140,6 @@ class IterationDecisionEnactor:
     def _remember_progress(self, *, state: RunState, observation: IterationObservation) -> None:
         proposal = observation.proposal
         state.previous_proposal_signature = proposal_signature(proposal)
-        state.previous_proposal_status = proposal.status
-        state.previous_proposal_confidence = proposal.confidence
+        state.previous_proposal_status = proposal.proposal.status
+        state.previous_proposal_confidence = proposal.proposal.confidence
         state.previous_test_signature = observation.test_execution.signature

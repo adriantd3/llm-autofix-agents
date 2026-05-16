@@ -12,6 +12,7 @@ from pydantic import SecretStr
 from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.provider import (
     AgentFixIterationRecord,
+    AgentFixIterationResult,
     OpenAIAgentsSDKProvider,
     ProviderCallError,
     RunErrorHandlerInput,
@@ -30,7 +31,7 @@ class LLMProviderTests(unittest.TestCase):
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_returns_structured_output(self, runner_run: AsyncMock, set_tracing_disabled: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
-            final_output=AgentFixIterationRecord(
+            final_output=AgentFixIterationResult(
                 status="done",
                 reasoning_summary="Fix wrong literal",
                 confidence=0.72,
@@ -42,7 +43,7 @@ class LLMProviderTests(unittest.TestCase):
         result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
         self.assertIsInstance(result, AgentFixIterationRecord)
-        self.assertEqual(result.reasoning_summary, "Fix wrong literal")
+        self.assertEqual(result.proposal.reasoning_summary, "Fix wrong literal")
         set_tracing_disabled.assert_called_once_with(True)
         self.assertTrue(runner_run.await_count == 1)
 
@@ -52,7 +53,7 @@ class LLMProviderTests(unittest.TestCase):
         runner_run: AsyncMock,
     ) -> None:
         runner_run.return_value = SimpleNamespace(
-            final_output=AgentFixIterationRecord(
+            final_output=AgentFixIterationResult(
                 status="done",
                 reasoning_summary="Fix wrong literal",
                 confidence=0.72,
@@ -82,8 +83,8 @@ class LLMProviderTests(unittest.TestCase):
 
         result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
-        self.assertEqual(result.changed_files, ["a.py"])
-        self.assertEqual(result.status, "in_progress")
+        self.assertEqual(result.proposal.changed_files, ["a.py"])
+        self.assertEqual(result.proposal.status, "in_progress")
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_enriches_usage_and_tool_calls(self, runner_run: AsyncMock) -> None:
@@ -197,7 +198,7 @@ class LLMProviderTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result.status, "done")
+        self.assertEqual(result.proposal.status, "done")
         self.assertEqual(runner_run.await_count, 2)
         self.assertEqual(sleep_mock.await_count, 1)
         self.assertEqual(
@@ -283,8 +284,8 @@ class LLMProviderTests(unittest.TestCase):
 
         result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="failing test output", max_turns=2))
 
-        self.assertEqual(result.status, "done")
-        self.assertEqual(result.changed_files, ["src/a.py"])
+        self.assertEqual(result.proposal.status, "done")
+        self.assertEqual(result.proposal.changed_files, ["src/a.py"])
 
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_provider_rejects_unparseable_output(self, runner_run: AsyncMock) -> None:
@@ -360,7 +361,7 @@ class AgentFactoryTests(unittest.TestCase):
         self.assertTrue(agent_ctor.called)
         output_type = agent_ctor.call_args.kwargs["output_type"]
         self.assertIsInstance(output_type, AgentOutputSchema)
-        self.assertIs(output_type.output_type, AgentFixIterationRecord)
+        self.assertIs(output_type.output_type, AgentFixIterationResult)
         self.assertFalse(output_type.is_strict_json_schema())
         self.assertNotIn("mcp_servers", agent_ctor.call_args.kwargs)
 
@@ -700,15 +701,15 @@ class MaxTurnsHandlerTests(unittest.TestCase):
         self.assertFalse(result.include_in_history)
         proposal = result.final_output
         self.assertIsInstance(proposal, AgentFixIterationRecord)
-        self.assertEqual(proposal.status, "done")
-        self.assertIn("foo.py:42", proposal.notes or "")
+        self.assertEqual(proposal.proposal.status, "done")
+        self.assertIn("foo.py:42", proposal.proposal.notes or "")
 
     @patch("llm_autofix_agents.llm.provider.set_tracing_disabled")
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
     def test_runner_receives_error_handlers(self, runner_run: AsyncMock, _tracing: AsyncMock) -> None:
         runner_run.return_value = SimpleNamespace(
-            final_output=AgentFixIterationRecord(
-                status="done", reasoning_summary="ok", confidence=0.9, changed_files=[]
+            final_output=AgentFixIterationResult(
+                status="done", reasoning_summary="ok", confidence=0.9
             )
         )
         provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())

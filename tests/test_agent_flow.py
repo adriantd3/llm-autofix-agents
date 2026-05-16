@@ -11,7 +11,7 @@ from pydantic import SecretStr
 from llm_autofix_agents.batch.executor import _run as _run_agent_baseline
 from llm_autofix_agents.contracts import ErrorCategory, RunInput, RunStatus, StopReason
 from llm_autofix_agents.flow.workspace.git import TempBranchContext
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, AgentFixIterationResult
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 from llm_autofix_agents.observability import ObservabilityConfig
 from llm_autofix_agents.tools import build_apr_tools
@@ -597,13 +597,14 @@ def _proposal(
     tool_calls: list[dict[str, str]] | None = None,
 ) -> AgentFixIterationRecord:
     return AgentFixIterationRecord(
-        status=status,
-        reasoning_summary=reasoning_summary,
-        confidence=confidence,
+        proposal=AgentFixIterationResult(
+            status=status,
+            reasoning_summary=reasoning_summary,
+            confidence=confidence,
+        ),
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total_tokens,
-        tool_calls=tool_calls if tool_calls is not None else [],
     )
 
 

@@ -4,7 +4,7 @@ import unittest
 
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.policies.iteration import build_continuation_snapshot, build_iteration_input
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, AgentFixIterationResult
 
 
 class IterationInputTests(unittest.TestCase):
@@ -65,10 +65,12 @@ class IterationInputTests(unittest.TestCase):
     def test_followup_iteration_includes_previous_summary_and_snapshot(self) -> None:
         snapshot = build_continuation_snapshot(
             proposal=AgentFixIterationRecord(
-                status="in_progress",
-                reasoning_summary="summary",
-                confidence=0.5,
-                notes="Checked gcd.py, updated loop",
+                proposal=AgentFixIterationResult(
+                    status="in_progress",
+                    reasoning_summary="summary",
+                    confidence=0.5,
+                    notes="Checked gcd.py, updated loop",
+                ),
             ),
             changes=WorkspaceChangeSet(
                 modified_files=["gcd.py"],

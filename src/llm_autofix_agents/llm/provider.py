@@ -31,14 +31,38 @@ from llm_autofix_agents.llm.settings import LLMSettings
 
 
 class AgentFixIterationResult(BaseModel):
-    status: Literal["in_progress", "done", "stuck"]
-    reasoning_summary: str = Field(min_length=1)
-    confidence: float = Field(ge=0.0, le=1.0)
-    notes: str | None = None
+    """Structured APR iteration report. Be honest and evidence-driven — the runtime independently verifies changed_files, diffs, and test results."""
+
+    status: Literal["in_progress", "done", "stuck"] = Field(
+        description=(
+            '"done" = fix applied and tests pass. '
+            '"stuck" = cannot progress with available tools or evidence. '
+            '"in_progress" = partial progress, validation incomplete or still failing.'
+        )
+    )
+    reasoning_summary: str = Field(
+        min_length=1,
+        description="Concise summary of diagnosis, patch applied, and validation evidence.",
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the fix (0.0–1.0). Must reflect observed validation, not optimism.",
+    )
+    notes: str | None = Field(
+        default=None,
+        description="Optional caveats, next steps, or explanation if validation could not run.",
+    )
+    changed_files: list[str] = Field(
+        default_factory=list,
+        description="Repository-relative paths of every file modified in this iteration.",
+    )
 
 
-class AgentFixIterationRecord(AgentFixIterationResult):
-    changed_files: list[str] = Field(default_factory=list)
+class AgentFixIterationRecord(BaseModel):
+    """APR run record: the agent's proposal combined with harness-populated execution metadata."""
+
+    proposal: AgentFixIterationResult
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     total_tokens: int = Field(default=0, ge=0)
@@ -147,20 +171,20 @@ class OpenAIAgentsSDKProvider:
                 # capability issue, not a transient failure — retrying is
                 # wasteful. Return a fallback record so the outer loop can
                 # evaluate actual changes.
-                proposal = AgentFixIterationRecord(
-                    status="done",
-                    reasoning_summary=(
-                        "Model could not produce structured output; assuming completion based on tool usage"
-                    ),
-                    confidence=0.5,
-                    changed_files=[],
-                    notes=f"ModelBehaviorError: {str(exc)[:200]}",
-                )
                 usage = _extract_token_usage(getattr(exc, "result", None))
-                proposal.input_tokens = usage["input_tokens"]
-                proposal.output_tokens = usage["output_tokens"]
-                proposal.total_tokens = usage["total_tokens"]
-                return proposal
+                return AgentFixIterationRecord(
+                    proposal=AgentFixIterationResult(
+                        status="done",
+                        reasoning_summary=(
+                            "Model could not produce structured output; assuming completion based on tool usage"
+                        ),
+                        confidence=0.5,
+                        notes=f"ModelBehaviorError: {str(exc)[:200]}",
+                    ),
+                    input_tokens=usage["input_tokens"],
+                    output_tokens=usage["output_tokens"],
+                    total_tokens=usage["total_tokens"],
+                )
             except Exception as exc:  # noqa: BLE001
                 retryable = _is_retryable_provider_error(exc)
                 status_code = _extract_http_status_code(exc)
@@ -238,45 +262,43 @@ class OpenAIAgentsSDKProvider:
 
         try:
             if isinstance(output, AgentFixIterationResult):
-                # convertir a record para poder añadir métricas
-                proposal = AgentFixIterationRecord(**output.model_dump())
+                agent_proposal = output
             elif isinstance(output, dict):
-                proposal = AgentFixIterationRecord.model_validate(output)
+                agent_proposal = AgentFixIterationResult.model_validate(output)
             elif isinstance(output, str):
                 # Model returned text instead of structured output.
                 # Try parsing as JSON first (model may have returned JSON string).
                 try:
-                    proposal = AgentFixIterationRecord.model_validate_json(output)
+                    agent_proposal = AgentFixIterationResult.model_validate_json(output)
                 except Exception:
-                    # Fallback: wrap text into a minimal record so the pipeline
-                    # can continue rather than crashing.
-                    proposal = AgentFixIterationRecord(
+                    agent_proposal = AgentFixIterationResult(
                         status="in_progress",
                         reasoning_summary=output or "Model returned empty text output",
                         confidence=0.0,
-                        changed_files=[],
-                        notes="Model returned text output instead of structured AgentFixIterationRecord",
+                        notes="Model returned text output instead of structured output",
                     )
             elif output is None:
-                proposal = AgentFixIterationRecord(
+                agent_proposal = AgentFixIterationResult(
                     status="in_progress",
                     reasoning_summary="Model returned no output",
                     confidence=0.0,
-                    changed_files=[],
                     notes="Model final_output was None",
                 )
             else:
-                proposal = AgentFixIterationRecord.model_validate_json(json.dumps(output, ensure_ascii=True))
+                agent_proposal = AgentFixIterationResult.model_validate_json(
+                    json.dumps(output, ensure_ascii=True)
+                )
         except Exception as exc:
             raise RuntimeError("Model returned invalid structured output for APR proposal") from exc
 
         usage = _extract_token_usage(result)
-        proposal.input_tokens = usage["input_tokens"]
-        proposal.output_tokens = usage["output_tokens"]
-        proposal.total_tokens = usage["total_tokens"]
-        proposal.last_agent_name = last_agent_name
-
-        return proposal
+        return AgentFixIterationRecord(
+            proposal=agent_proposal,
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
+            total_tokens=usage["total_tokens"],
+            last_agent_name=last_agent_name,
+        )
 
 
 def create_provider(settings: LLMSettings) -> LLMProvider:
@@ -536,11 +558,12 @@ def _make_max_turns_handler(max_turns: int):
     def _on_max_turns(data: RunErrorHandlerInput[Any]) -> RunErrorHandlerResult:
         notes = _extract_research_context(data.run_data, max_turns)
         proposal = AgentFixIterationRecord(
-            status="done",
-            reasoning_summary="Agent exceeded maximum turns; assuming completion based on tool usage",
-            confidence=0.5,
-            changed_files=[],
-            notes=notes,
+            proposal=AgentFixIterationResult(
+                status="done",
+                reasoning_summary="Agent exceeded maximum turns; assuming completion based on tool usage",
+                confidence=0.5,
+                notes=notes,
+            ),
         )
         return RunErrorHandlerResult(final_output=proposal, include_in_history=False)
 

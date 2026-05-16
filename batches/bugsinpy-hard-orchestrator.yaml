@@ -1,0 +1,36 @@
+name: bugsinpy-hard-orchestrator
+description: |
+  Orchestrator vs Mono-agent comparison — harder BugsInPy bugs.
+  Hypothesis: multi_agent_orchestrator architecture adds value on bugs that require
+  understanding multi-file interactions or architectural contracts, where explore_code
+  can map component relationships before patching.
+
+  Bugs selected for difficulty:
+  - tornado-3: HTTPClient subprocess, single-file but deep async client internals (Python 3.7.0)
+  - tornado-6: asyncio ioloop leak, cross-module WeakKeyDictionary lifecycle (Python 3.7.0)
+  - ansible-1: Galaxy collection verification flow, requires understanding module structure (Python 3.6.9)
+  - ansible-2: Version comparison operators, 6 methods must be fixed consistently (Python 3.6.9)
+  - scrapy-33: Multi-test, multi-file pipeline and logging utils (Python 3.8.3)
+  - keras-1: Stateful initializer, requires understanding Layer/initializer contract (Python 3.7.3)
+
+  Compare results against batches/bugsinpy-hard-mono.yaml (same bugs, mono_agent architecture).
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - tornado-3
+  - tornado-6
+  - ansible-1
+  - ansible-2
+  - scrapy-33
+  - keras-1

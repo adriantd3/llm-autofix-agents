@@ -1,0 +1,30 @@
+name: bugsinpy-hard-mono
+description: |
+  Orchestrator vs Mono-agent comparison — harder BugsInPy bugs.
+  Baseline: mono_agent architecture on the same bugs as bugsinpy-hard-orchestrator.yaml.
+
+  Hypothesis to test: on architecturally complex bugs (multi-file, interface contracts,
+  multi-method consistency fixes), the orchestrator's explore_code delegation adds value
+  over a single agent doing everything directly.
+
+  Compare results against batches/bugsinpy-hard-orchestrator.yaml.
+
+dataset: ../datasets/bugsinpy.yaml
+
+global:
+  architecture: mono_agent
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 25
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - tornado-3
+  - tornado-6
+  - ansible-1
+  - ansible-2
+  - scrapy-33
+  - keras-1

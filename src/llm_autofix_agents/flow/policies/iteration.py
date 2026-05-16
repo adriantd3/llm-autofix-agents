@@ -90,8 +90,15 @@ def build_iteration_input(
             f"{test_command.strip()}\n"
         )
 
+    anti_wander = (
+        f"This is attempt {iteration}/{max_iterations}. Your previous attempt failed. "
+        "If your plan for this attempt is the same as before, stop now and report status='stuck'. "
+        "Otherwise, your first action must be different from what you tried last time.\n\n"
+    )
+
     return (
         f"{feedback_prefix}"
+        f"{anti_wander}"
         f"[ITERATION {iteration}/{max_iterations}]\n"
         f"Previous attempt summary (agent-reported):\n{previous_message}"
         f"{snapshot_block}"
@@ -121,7 +128,7 @@ def build_continuation_snapshot(
     else:
         changed_block = "  - (none)"
 
-    notes_block = _format_notes_block(proposal.notes)
+    notes_block = _format_notes_block(proposal.proposal.notes)
 
     lines = [
         "Observed continuation snapshot (runtime evidence):",
@@ -173,8 +180,16 @@ def _build_first_iteration_input(
     if validation_feedback:
         feedback_prefix = _VALIDATION_FEEDBACK_TEMPLATE.format(feedback=validation_feedback)
 
+    source_function_block = ""
     test_function_block = ""
     if repo_root is not None:
+        # Source function is injected BEFORE the test function so the model reads
+        # the semantic contract first — leveraging position bias (models attend more
+        # to content that appears early in the prompt, Liu et al. "Lost in the Middle" 2023).
+        source_function_block = _extract_source_function_under_test(
+            test_output=baseline_test_execution.output,
+            repo_root=repo_root,
+        )
         test_function_block = _extract_failing_test_function(
             test_output=baseline_test_execution.output,
             repo_root=repo_root,
@@ -190,6 +205,7 @@ def _build_first_iteration_input(
         f"- signature: {baseline_test_execution.signature}\n\n"
         "Compact test output:\n"
         f"{output}"
+        f"{source_function_block}"
         f"{test_function_block}"
     )
 
@@ -242,9 +258,10 @@ def is_regression(*, baseline: TestExecution, current: TestExecution) -> bool:
 
 
 def proposal_signature(proposal: AgentFixIterationRecord) -> str:
-    status = proposal.status.strip().lower()
-    reasoning_summary = _normalize(proposal.reasoning_summary)
-    notes = _normalize(proposal.notes or "")
+    p = proposal.proposal
+    status = p.status.strip().lower()
+    reasoning_summary = _normalize(p.reasoning_summary)
+    notes = _normalize(p.notes or "")
     return f"status={status}|reasoning_summary={reasoning_summary}|notes={notes}"
 
 
@@ -284,6 +301,10 @@ _IMPORT_ERROR_SYMBOL_RE = re.compile(
 )
 # Generic file reference in any traceback line
 _TRACEBACK_FILE_RE = re.compile(r'File\s+"([^"]+)",\s+line\s+\d+')
+# All traceback frames: file + line + function name
+_ALL_FRAMES_RE = re.compile(
+    r'File\s+"([^"]+)",\s+line\s+(\d+),\s+in\s+(\w+)'
+)
 
 
 def _extract_failing_test_function(*, test_output: str, repo_root: Path) -> str:
@@ -380,3 +401,69 @@ def _format_test_function(func_source: str, func_name: str, file_path: Path, rep
         "```\n"
         "--- End of test function ---"
     )
+
+
+_SYNTHETIC_FRAME_NAMES = frozenset({"<module>", "<lambda>", "<listcomp>", "<genexpr>", "<dictcomp>"})
+
+
+def _is_test_path(raw_path: str) -> bool:
+    lowered = raw_path.lower().replace("\\", "/")
+    if "/test/" in lowered or "/tests/" in lowered:
+        return True
+    basename = lowered.rsplit("/", 1)[-1]
+    stem = basename.rsplit(".", 1)[0] if "." in basename else basename
+    return stem.startswith("test_") or stem.endswith("_test")
+
+
+def _extract_raw_function(source: str, func_name: str) -> str | None:
+    """Return the raw source text of `func_name` from `source`, or None."""
+    start_idx = source.find(f"def {func_name}(")
+    if start_idx == -1:
+        return None
+    next_def = source.find("\ndef ", start_idx + 1)
+    end_idx = next_def + 1 if next_def != -1 else len(source)
+    lines = source[start_idx:end_idx].splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _format_source_function(func_source: str, func_name: str, file_path: Path, repo_root: Path) -> str:
+    if len(func_source) > 3000:
+        func_source = func_source[:3000] + "\n... [truncated]"
+    return (
+        "\n\n--- Source function under test (defines the CORRECT behavior — understand this BEFORE reading the test) ---\n"
+        f"File: {file_path.relative_to(repo_root)}\n"
+        f"Function: {func_name}\n"
+        "```python\n"
+        f"{func_source}\n"
+        "```\n"
+        "--- End of source function ---"
+    )
+
+
+def _extract_source_function_under_test(*, test_output: str, repo_root: Path) -> str:
+    """Extract the innermost source function from the traceback.
+
+    Walks all traceback frames from innermost (closest to the error) to outermost,
+    skipping test files and synthetic frames, and returns the first source function
+    that can be resolved under repo_root. Injected before the test function in the
+    prompt so the model reads the semantic contract first (position bias mitigation).
+    """
+    frames = _ALL_FRAMES_RE.findall(test_output)
+    for raw_path, _line_no, func_name in reversed(frames):
+        if func_name in _SYNTHETIC_FRAME_NAMES:
+            continue
+        if _is_test_path(raw_path):
+            continue
+        candidate = _resolve_path_under_root(raw_path, repo_root)
+        if candidate is None or not candidate.exists():
+            continue
+        try:
+            source = candidate.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        raw = _extract_raw_function(source, func_name)
+        if raw:
+            return _format_source_function(raw, func_name, candidate, repo_root)
+    return ""

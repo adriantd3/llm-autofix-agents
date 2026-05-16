@@ -14,7 +14,7 @@ from llm_autofix_agents.flow.iteration.decision_enactor import IterationDecision
 from llm_autofix_agents.flow.iteration.runner import IterationRunner
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, AgentFixIterationResult
 from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
 from llm_autofix_agents.observability.emitter import Emitter, IterationContext
 from llm_autofix_agents.observability.interactive import MarkdownLiveObserver
@@ -241,9 +241,7 @@ class _CapturingAgentRunner:
         del execution_index, provider, agent
         self.last_context = context
         proposal = AgentFixIterationRecord(
-            status="in_progress",
-            reasoning_summary="attempt",
-            confidence=0.2,
+            proposal=AgentFixIterationResult(status="in_progress", reasoning_summary="attempt", confidence=0.2),
         )
         return AgentExecutionResult(
             proposal=proposal,

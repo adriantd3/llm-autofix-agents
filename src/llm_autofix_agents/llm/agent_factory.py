@@ -7,7 +7,7 @@ from agents import Agent, AgentOutputSchema, OpenAIChatCompletionsModel, Tool
 from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 from openai import AsyncOpenAI
 
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationResult
 from llm_autofix_agents.llm.settings import LLMSettings
 
 
@@ -51,7 +51,7 @@ def build_agent(
         "tools": resolved_tools,
     }
     if isinstance(output_schema, _Missing):
-        agent_kwargs["output_type"] = AgentOutputSchema(AgentFixIterationRecord, strict_json_schema=False)
+        agent_kwargs["output_type"] = AgentOutputSchema(AgentFixIterationResult, strict_json_schema=False)
     elif output_schema is not None:
         agent_kwargs["output_type"] = output_schema
     if handoffs:

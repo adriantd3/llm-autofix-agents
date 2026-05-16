@@ -12,15 +12,13 @@ from llm_autofix_agents.flow.policies.validation import (
     validate_iteration,
 )
 from llm_autofix_agents.flow.runtime.context import RunState
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, AgentFixIterationResult
 
 
 class FlowRefactorTests(unittest.TestCase):
     def test_validate_iteration_does_not_fail_on_untracked_without_diff(self) -> None:
         proposal = AgentFixIterationRecord(
-            status="done",
-            reasoning_summary="added a new helper",
-            confidence=0.8,
+            proposal=AgentFixIterationResult(status="done", reasoning_summary="added a new helper", confidence=0.8),
         )
         changes = WorkspaceChangeSet(
             modified_files=[],
@@ -41,9 +39,7 @@ class FlowRefactorTests(unittest.TestCase):
 
     def test_validate_iteration_test_file_modified_is_retryable(self) -> None:
         proposal = AgentFixIterationRecord(
-            status="done",
-            reasoning_summary="modified test",
-            confidence=0.8,
+            proposal=AgentFixIterationResult(status="done", reasoning_summary="modified test", confidence=0.8),
         )
         changes = WorkspaceChangeSet(
             modified_files=["tests/test_foo.py", "src/foo.py"],
@@ -66,9 +62,7 @@ class FlowRefactorTests(unittest.TestCase):
 
     def test_validate_iteration_diff_integrity_is_not_retryable(self) -> None:
         proposal = AgentFixIterationRecord(
-            status="done",
-            reasoning_summary="strange diff",
-            confidence=0.8,
+            proposal=AgentFixIterationResult(status="done", reasoning_summary="strange diff", confidence=0.8),
         )
         changes = WorkspaceChangeSet(
             modified_files=["src/a.py"],
@@ -90,9 +84,7 @@ class FlowRefactorTests(unittest.TestCase):
 
     def test_validate_iteration_regression_is_not_retryable(self) -> None:
         proposal = AgentFixIterationRecord(
-            status="done",
-            reasoning_summary="fix attempt",
-            confidence=0.8,
+            proposal=AgentFixIterationResult(status="done", reasoning_summary="fix attempt", confidence=0.8),
         )
         changes = WorkspaceChangeSet(
             modified_files=["src/a.py"],

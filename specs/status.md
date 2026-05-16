@@ -1,6 +1,16 @@
 # Estado
 
 ## En curso
+- **SPEC-012 completado (SH1–SH8): Prompt Refactor — Anti-Overfit & Harness Hardening (2026-05-15)**:
+  - `agents/instructions/_shared.py` creado con 6 constantes canónicas (TEST_FILES_ARE_CORRECT_RULE, CODE_FIRST_DIAGNOSIS_PRINCIPLE, PROPAGATION_CHECK_RULE, READ_BEFORE_EDIT_RULE, HANDOFF_PAYLOAD_FORMAT, ITERATION_RECORD_FORMAT).
+  - R1: eliminados ejemplos overfit a youtube-dl (`_parse_mpd_formats`, alias `ImportError`) y QuixBugs (`None, False, 0` enumeration) de orchestrator, mono_agent, planner_executor, handoff.
+  - R2: reducidos TOOL-SPECIFIC RULES en mono_agent y TOOL STRATEGY en orchestrator; mantenido cwd note para run_test_target.
+  - R3: los 4 módulos de instrucciones usan f-strings con constantes compartidas desde `_shared.py`.
+  - R4: orchestrator main unificado a `AgentFixIterationRecord` JSON (antes texto plano).
+  - R5: `build_iteration_input` añade gate anti-wander para iteraciones N≥2.
+  - R6: `READ_BEFORE_EDIT_RULE` añadida como ABSOLUTE RULE en mono_agent, orchestrator, executor, patcher.
+  - SH9 (validación con batches reales) pendiente.
+  - 283 tests passing, 0 nuevos fallos (3 pre-existentes sin relación).
 - **BugsInPy orchestrator candidates — validación ampliada (2026-05-14)**:
   - pandas-7 eliminado del batch y dataset (requiere recompilación Cython — no resoluble con ediciones de texto)
   - Fix aplicado: `detect_workspace_change_set` ahora filtra untracked pre-existentes via `_is_preexisting_untracked`

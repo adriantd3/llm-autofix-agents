@@ -301,7 +301,7 @@ class IterationRunner:
             iteration_ctx,
             started_at=observation.started_at,
             duration_seconds=max(0.0, time.perf_counter() - observation.started_monotonic),
-            status=proposal.status,
+            status=proposal.proposal.status,
             input_tokens=proposal.input_tokens,
             output_tokens=proposal.output_tokens,
             total_tokens=proposal.total_tokens,
