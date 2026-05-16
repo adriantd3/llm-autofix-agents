@@ -49,3 +49,24 @@ Aplicar siempre, con cambios minimos y bien justificados:
 - Los tests deben validar la funcionalidad general.
 - Ubicar tests en una ruta similar a la clase objetivo (ejemplo: `tests/unit/llm_autofix_agents/flow/iteration/test_runner.py`).
 - Buscar buena cobertura sin obsesionarse.
+
+## Criterios de evaluacion APR (arquitecturas de agentes)
+
+El rendimiento de una arquitectura no se mide unicamente por el pass/fail del test. Hay dos dimensiones igualmente importantes:
+
+### 1. Eficiencia del procedimiento
+
+Un agente eficiente usa las tools exactamente cuando las necesita y no mas:
+- **Sobreuso**: llamar a la misma tool dos veces con los mismos argumentos, explorar codigo que ya se ha leido, ejecutar el test antes de hacer ningun cambio, usar `execute_command` para explorar cuando `read_file` o `search_files` son suficientes.
+- **Infrauso**: editar sin leer primero, proponer un fix sin validar, ignorar propagacion de cambios a otros modulos.
+
+El consumo de tokens (input + output) es el proxy cuantitativo de eficiencia. Menos tokens para el mismo resultado = mejor arquitectura. Al comparar arquitecturas hay que medir tokens por run y por iteracion, no solo el resultado final.
+
+### 2. Calidad del fix
+
+Un fix correcto no es el que hace pasar el test — es el que restaura el comportamiento intencionado de la funcion:
+- **El test es un validador, no un oraculo.** Un agente que adapta el codigo a las aserciones del test sin entender la funcion esta sobreajustando (test overfitting). El fix puede pasar el test y ser semanticamente incorrecto.
+- **El agente debe entender el contexto** del repositorio y el proposito de la funcion antes de proponer el parche. El traceback indica donde falla; la funcion fuente define que debe hacer.
+- **La calidad del codigo importa.** El parche debe ser minimal, consistente con el estilo del repositorio, sin introducir ruido (whitespace incorrecto, imports innecesarios, logica redundante).
+
+Un fix de calidad se reconoce porque: (a) la logica del parche tiene sentido independientemente del test, (b) se puede explicar por que el codigo original estaba mal y por que el nuevo es correcto, (c) no rompe ningun otro comportamiento del modulo.
