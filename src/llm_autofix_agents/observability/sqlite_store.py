@@ -15,13 +15,16 @@ from llm_autofix_agents.observability.models import (
     ProviderCallRecord,
     RunDescriptor,
     RunFinishedRecord,
+    RunValidationRecord,
     TestExecutionRecord,
     ToolCallRecord,
 )
 from llm_autofix_agents.observability.sqlite_schema import (
+    ANALYSIS_VIEWS_SQL,
     MIGRATION_V3_TO_V4,
     MIGRATION_V4_TO_V5,
     MIGRATION_V5_TO_V6,
+    MIGRATION_V6_TO_V7,
     SCHEMA_VERSION,
     schema_init_sql,
 )
@@ -53,6 +56,8 @@ class SQLiteObservabilityStore:
                     conn.executescript(MIGRATION_V4_TO_V5)
                 if current_version < 6:
                     conn.executescript(MIGRATION_V5_TO_V6)
+                if current_version < 7:
+                    conn.executescript(MIGRATION_V6_TO_V7)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def upsert_architecture(self, name: str, description: str | None = None) -> str:
@@ -469,6 +474,54 @@ class SQLiteObservabilityStore:
                 ),
             )
 
+    def upsert_run_validation(self, record: RunValidationRecord) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO run_validations (
+                    validation_id,
+                    run_id,
+                    validated_at,
+                    validator_model,
+                    test_passed,
+                    infra_fail_detected,
+                    canonical_patch_available,
+                    patch_semantically_matches,
+                    verdict,
+                    confidence,
+                    justification
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(validation_id) DO UPDATE SET
+                    validated_at = excluded.validated_at,
+                    validator_model = excluded.validator_model,
+                    test_passed = excluded.test_passed,
+                    infra_fail_detected = excluded.infra_fail_detected,
+                    canonical_patch_available = excluded.canonical_patch_available,
+                    patch_semantically_matches = excluded.patch_semantically_matches,
+                    verdict = excluded.verdict,
+                    confidence = excluded.confidence,
+                    justification = excluded.justification
+                """,
+                (
+                    record.validation_id,
+                    record.run_id,
+                    record.validated_at,
+                    record.validator_model,
+                    None if record.test_passed is None else (1 if record.test_passed else 0),
+                    None if record.infra_fail_detected is None else (1 if record.infra_fail_detected else 0),
+                    None if record.canonical_patch_available is None else (1 if record.canonical_patch_available else 0),
+                    None if record.patch_semantically_matches is None else (1 if record.patch_semantically_matches else 0),
+                    record.verdict,
+                    record.confidence,
+                    record.justification,
+                ),
+            )
+
+    def create_analysis_views(self) -> None:
+        """Create TFM analysis views in this DB. Intended for aggregate/analysis DBs."""
+        with self._connect() as conn:
+            conn.executescript(ANALYSIS_VIEWS_SQL)
+
     def insert_agent_handoff(self, record: AgentHandoffRecord) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -522,6 +575,7 @@ class SQLiteObservabilityStore:
                 "test_executions",
                 "file_changes",
                 "agent_handoffs",
+                "run_validations",
             ]
             for table in tables:
                 dest_cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}  # noqa: S608

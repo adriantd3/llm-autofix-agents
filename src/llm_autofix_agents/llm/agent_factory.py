@@ -88,3 +88,11 @@ def _resolve_api_key(settings: LLMSettings) -> str:
     if not resolved:
         return "ollama"
     return resolved
+
+
+def build_model(
+    settings: LLMSettings,
+    model_override: str | None = None,
+) -> OpenAIChatCompletionsModel:
+    """Public helper: build an OpenAIChatCompletionsModel from LLMSettings."""
+    return _build_model(settings, model_override=model_override)

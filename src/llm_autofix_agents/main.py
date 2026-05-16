@@ -21,6 +21,10 @@ def app() -> None:
         exit_code = _run_batch(args)
         _hard_exit(exit_code)
 
+    if args.command_name == "validate":
+        exit_code = _run_validate(args)
+        _hard_exit(exit_code)
+
     parser.print_help()
 
 
@@ -47,7 +51,112 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show the batch plan without executing runs.",
     )
+
+    validate_parser = subcommands.add_parser(
+        "validate",
+        help="Post-run: validate fixes in a batch DB using an LLM judge.",
+    )
+    validate_db = validate_parser.add_mutually_exclusive_group(required=True)
+    validate_db.add_argument("--db", type=Path, help="Path to a run.db or batch.db file.")
+    validate_db.add_argument(
+        "--batch-dir",
+        type=Path,
+        help="Path to a batch result directory (uses batch.db inside it).",
+    )
+    validate_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Validate only this specific run_id (default: all runs in the DB).",
+    )
+    validate_parser.add_argument(
+        "--canonical-root",
+        type=Path,
+        default=None,
+        help=(
+            "Base directory for canonical (ground-truth) patches. "
+            "QuixBugs: path to the cloned repo. BugsInPy: parent dir of {problem_id}/bug_patch.txt."
+        ),
+    )
+    validate_parser.add_argument(
+        "--provider",
+        default=os.environ.get("LLM_PROVIDER", "openai"),
+        help="LLM provider for the validator (default: $LLM_PROVIDER or 'openai').",
+    )
+    validate_parser.add_argument(
+        "--model",
+        default=os.environ.get("LLM_MODEL", "gpt-4.1-mini"),
+        help="Model name for the validator (default: $LLM_MODEL or 'gpt-4.1-mini').",
+    )
+    validate_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-validate runs that already have a verdict.",
+    )
+    validate_parser.add_argument(
+        "--create-views",
+        action="store_true",
+        help="Create analysis views (v_run_summary, v_architecture_metrics, v_bug_heatmap) after validation.",
+    )
+
     return parser
+
+
+def _run_validate(args: argparse.Namespace) -> int:
+    _configure_logging()
+    from llm_autofix_agents.llm.settings import LLMSettings, ProviderType
+    from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore
+    from llm_autofix_agents.validation.runner import ValidationRunner
+
+    # Resolve the DB path.
+    if args.db:
+        db_path = args.db.resolve()
+    else:
+        db_path = args.batch_dir.resolve() / "batch.db"
+
+    if not db_path.exists():
+        print(f"ERROR: DB not found: {db_path}", file=sys.stderr)
+        return 1
+
+    # Build LLM settings for the validator.
+    llm_settings = LLMSettings(
+        provider=ProviderType(args.provider),
+        model=args.model,
+    )
+
+    runner = ValidationRunner(
+        db_path=db_path,
+        llm_settings=llm_settings,
+        canonical_root=args.canonical_root,
+        force_revalidate=args.force,
+    )
+
+    if args.run_id:
+        results = [runner.validate_run(args.run_id)]
+    else:
+        results = runner.validate_all()
+
+    if args.create_views:
+        store = SQLiteObservabilityStore(db_path=db_path)
+        store.create_analysis_views()
+        logger.info("Analysis views created in %s", db_path)
+
+    # Print summary table.
+    print(f"\n{'run_id':<55} {'verdict':<12} {'conf':>5}  justification")
+    print("-" * 110)
+    for r in results:
+        if r.skipped:
+            print(f"{r.run_id:<55} {'SKIPPED':<12}  ({r.skip_reason})")
+        else:
+            conf = f"{r.confidence:.2f}" if r.confidence is not None else "  n/a"
+            short_just = (r.justification or "")[:60].replace("\n", " ")
+            print(f"{r.run_id:<55} {r.verdict:<12} {conf:>5}  {short_just}")
+
+    total = len(results)
+    validated = sum(1 for r in results if not r.skipped)
+    correct = sum(1 for r in results if r.verdict == "CORRECT")
+    plausible = sum(1 for r in results if r.verdict in ("CORRECT", "PLAUSIBLE"))
+    print(f"\nTotal: {total}  Validated: {validated}  CORRECT: {correct}  PLAUSIBLE: {plausible}")
+    return 0
 
 
 def _run_batch(args: argparse.Namespace) -> int:

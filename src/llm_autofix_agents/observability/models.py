@@ -373,3 +373,20 @@ class AgentHandoffRecord:
     to_run_agent_id: str | None
     occurred_at: str
     handoff_note_json: str | None = None
+
+
+@dataclass(frozen=True)
+class RunValidationRecord:
+    """Formal validation verdict for a completed APR run."""
+
+    validation_id: str
+    run_id: str
+    validated_at: str
+    validator_model: str
+    verdict: str  # CORRECT | PLAUSIBLE | INCORRECT | INFRA_FAIL
+    test_passed: bool | None = None
+    infra_fail_detected: bool | None = None
+    canonical_patch_available: bool | None = None
+    patch_semantically_matches: bool | None = None
+    confidence: float | None = None
+    justification: str | None = None

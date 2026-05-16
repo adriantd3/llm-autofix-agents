@@ -1,6 +1,7 @@
 # Estado
 
 ## En curso
+
 - **SPEC-012 completado (SH1–SH8): Prompt Refactor — Anti-Overfit & Harness Hardening (2026-05-15)**:
   - `agents/instructions/_shared.py` creado con 6 constantes canónicas (TEST_FILES_ARE_CORRECT_RULE, CODE_FIRST_DIAGNOSIS_PRINCIPLE, PROPAGATION_CHECK_RULE, READ_BEFORE_EDIT_RULE, HANDOFF_PAYLOAD_FORMAT, ITERATION_RECORD_FORMAT).
   - R1: eliminados ejemplos overfit a youtube-dl (`_parse_mpd_formats`, alias `ImportError`) y QuixBugs (`None, False, 0` enumeration) de orchestrator, mono_agent, planner_executor, handoff.
@@ -17,6 +18,17 @@
   - Siguiente: lanzar batch2 sin pandas-7 para validar ansible-5, thefuck-8 con el fix de falsos positivos
 
 ## Hecho
+- **SPEC-013: Validación Formal de Fixes APR — COMPLETADA (2026-05-16)**:
+  - Pipeline de 3 capas: test signal → comparación semántica de patch → veredicto LLM.
+  - Veredictos: CORRECT | PLAUSIBLE | INCORRECT | INFRA_FAIL.
+  - Tabla `run_validations` (SCHEMA_VERSION 7), migración v6→v7, `upsert_run_validation`, `merge_from` con validaciones.
+  - Módulo `validation/` con canonical resolver, prompt builder, runner.
+  - CLI `autofix validate --batch-dir/--db` + `--create-views`.
+  - Vistas SQL `v_run_summary`, `v_architecture_metrics`, `v_bug_heatmap`.
+  - SKILL `.agents/skills/apr-validator/SKILL.md` con protocolo de 6 pasos + árbol de decisión.
+  - Script `fetch_bugsinpy_patch.sh` para descargar patches de GitHub cuando no hay repo local.
+  - Fix de `canonical.py`: resolución correcta BugsInPy (`projects/{project}/bugs/{n}/bug_patch.txt`).
+  - 316 tests passing, sin regresiones.
 - **Infraestructura Docker BugsInPy — COMPLETA Y VALIDADA (2026-05-11)**:
   - `docker/bugsinpy.Dockerfile`: Python 3.8 sistema + uv Python 3.13 en `UV_PYTHON_INSTALL_DIR=/opt/uv-python` (world-readable)
   - `src/llm_autofix_agents/datasets/bugsinpy.py`: runner_service="bugsinpy-runner", test command correcto

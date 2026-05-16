@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -211,6 +211,24 @@ CREATE TABLE IF NOT EXISTS agent_handoffs (
 
 CREATE INDEX IF NOT EXISTS idx_agent_handoffs_run ON agent_handoffs(run_id);
 CREATE INDEX IF NOT EXISTS idx_agent_handoffs_iteration ON agent_handoffs(iteration_id);
+
+CREATE TABLE IF NOT EXISTS run_validations (
+  validation_id              TEXT PRIMARY KEY,
+  run_id                     TEXT NOT NULL,
+  validated_at               TEXT NOT NULL,
+  validator_model            TEXT NOT NULL,
+  test_passed                INTEGER,
+  infra_fail_detected        INTEGER,
+  canonical_patch_available  INTEGER,
+  patch_semantically_matches INTEGER,
+  verdict                    TEXT NOT NULL,
+  confidence                 REAL,
+  justification              TEXT,
+  FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_validations_run ON run_validations(run_id);
+CREATE INDEX IF NOT EXISTS idx_run_validations_verdict ON run_validations(verdict);
 """
 
 
@@ -249,6 +267,110 @@ ALTER TABLE agent_handoffs ADD COLUMN handoff_note_json TEXT;
 MIGRATION_V5_TO_V6 = """
 ALTER TABLE tool_calls ADD COLUMN retry_index INTEGER;
 ALTER TABLE tool_calls DROP COLUMN result_excerpt;
+"""
+
+
+MIGRATION_V6_TO_V7 = """
+CREATE TABLE IF NOT EXISTS run_validations (
+  validation_id              TEXT PRIMARY KEY,
+  run_id                     TEXT NOT NULL,
+  validated_at               TEXT NOT NULL,
+  validator_model            TEXT NOT NULL,
+  test_passed                INTEGER,
+  infra_fail_detected        INTEGER,
+  canonical_patch_available  INTEGER,
+  patch_semantically_matches INTEGER,
+  verdict                    TEXT NOT NULL,
+  confidence                 REAL,
+  justification              TEXT,
+  FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_run_validations_run ON run_validations(run_id);
+CREATE INDEX IF NOT EXISTS idx_run_validations_verdict ON run_validations(verdict);
+"""
+
+
+# Analysis views for cross-batch aggregation and TFM metrics.
+# These are NOT part of the base schema — call create_analysis_views() on an
+# aggregate DB (produced by observability.aggregate) to materialise them.
+ANALYSIS_VIEWS_SQL = """
+CREATE VIEW IF NOT EXISTS v_run_summary AS
+SELECT
+  r.run_id,
+  r.benchmark_name,
+  r.problem_id,
+  a.name            AS architecture,
+  mc.model,
+  mc.provider,
+  r.final_status,
+  r.resolved,
+  r.total_iterations,
+  r.total_tokens,
+  r.total_input_tokens,
+  r.total_output_tokens,
+  r.duration_seconds,
+  r.files_changed_count,
+  r.started_at,
+  r.batch_id,
+  v.verdict,
+  v.confidence,
+  v.test_passed,
+  v.infra_fail_detected,
+  v.canonical_patch_available,
+  v.patch_semantically_matches,
+  v.justification,
+  v.validated_at
+FROM runs r
+JOIN architectures a USING (architecture_id)
+LEFT JOIN run_agents ra ON ra.run_id = r.run_id AND ra.agent_order = 1
+LEFT JOIN model_configs mc ON mc.model_config_id = ra.model_config_id
+LEFT JOIN run_validations v USING (run_id);
+
+CREATE VIEW IF NOT EXISTS v_architecture_metrics AS
+SELECT
+  a.name        AS architecture,
+  mc.model,
+  r.benchmark_name,
+  COUNT(*)      AS total_runs,
+  SUM(CASE WHEN v.verdict = 'CORRECT' THEN 1 ELSE 0 END)
+                AS correct,
+  SUM(CASE WHEN v.verdict IN ('CORRECT', 'PLAUSIBLE') THEN 1 ELSE 0 END)
+                AS plausible,
+  ROUND(1.0 * SUM(CASE WHEN v.verdict = 'CORRECT' THEN 1 ELSE 0 END) / COUNT(*), 3)
+                AS repair_rate,
+  ROUND(1.0 * SUM(CASE WHEN v.verdict IN ('CORRECT', 'PLAUSIBLE') THEN 1 ELSE 0 END) / COUNT(*), 3)
+                AS plausible_rate,
+  ROUND(AVG(r.total_tokens), 0)
+                AS avg_tokens,
+  ROUND(AVG(r.total_iterations), 2)
+                AS avg_iterations
+FROM runs r
+JOIN architectures a USING (architecture_id)
+LEFT JOIN run_agents ra ON ra.run_id = r.run_id AND ra.agent_order = 1
+LEFT JOIN model_configs mc ON mc.model_config_id = ra.model_config_id
+LEFT JOIN run_validations v USING (run_id)
+WHERE v.verdict IS NOT NULL
+GROUP BY a.name, mc.model, r.benchmark_name;
+
+CREATE VIEW IF NOT EXISTS v_bug_heatmap AS
+SELECT
+  r.problem_id  AS bug,
+  r.benchmark_name,
+  a.name        AS architecture,
+  mc.model,
+  COUNT(*)      AS total_runs,
+  GROUP_CONCAT(COALESCE(v.verdict, 'UNVALIDATED'), ', ')
+                AS verdicts,
+  MAX(CASE WHEN v.verdict = 'CORRECT' THEN 1 ELSE 0 END)
+                AS ever_correct,
+  MAX(CASE WHEN v.verdict IN ('CORRECT', 'PLAUSIBLE') THEN 1 ELSE 0 END)
+                AS ever_plausible
+FROM runs r
+JOIN architectures a USING (architecture_id)
+LEFT JOIN run_agents ra ON ra.run_id = r.run_id AND ra.agent_order = 1
+LEFT JOIN model_configs mc ON mc.model_config_id = ra.model_config_id
+LEFT JOIN run_validations v USING (run_id)
+GROUP BY r.problem_id, r.benchmark_name, a.name, mc.model;
 """
 
 

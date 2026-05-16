@@ -205,9 +205,14 @@ class BugsInPyAdapter:
         # Use the venv created by bugsinpy-compile. Both this command and the
         # venv run in bugsinpy-runner (Python 3.8), so the symlinks in env/
         # always resolve to the correct interpreter.
+        # pip install -e . --no-deps registers the project package in the venv without
+        # disturbing pinned requirements. Required for projects like httpie whose
+        # bugsinpy_requirements.txt omits the package itself.  Also corrects thefuck,
+        # where the editable install points at env/src/<project> (a separate git clone)
+        # instead of the workspace root, causing agent edits to be invisible at test time.
         return (
             "test -f bugsinpy_run_test.sh && test -f bugsinpy_compile_flag || exit 2; "
-            ". env/bin/activate && bash bugsinpy_run_test.sh"
+            ". env/bin/activate && (pip install -e . --no-deps -q 2>/dev/null || true) && bash bugsinpy_run_test.sh"
         )
 
 
