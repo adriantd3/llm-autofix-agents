@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from pathlib import Path
 
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
@@ -35,6 +36,14 @@ _VALIDATION_FEEDBACK_TEMPLATE = (
     "{feedback}\n\n"
     "Your changes from the previous iteration have been reverted. "
     "DO NOT repeat the same mistake.\n\n"
+)
+
+_NO_EDIT_SNAPSHOT_SIGNAL = "No source files were modified"
+_ASSERTIVE_NO_EDIT_TASK = (
+    "Task:\n"
+    "You MUST apply a code change this iteration. "
+    "The previous attempt made no edits — do not repeat that. "
+    "Read the failing test, locate the source file, and call replace_in_file before running tests."
 )
 
 
@@ -96,6 +105,15 @@ def build_iteration_input(
         "Otherwise, your first action must be different from what you tried last time.\n\n"
     )
 
+    no_edit_previous = latest_snapshot is not None and _NO_EDIT_SNAPSHOT_SIGNAL in latest_snapshot
+    task_block = _ASSERTIVE_NO_EDIT_TASK if no_edit_previous else (
+        "Task:\n"
+        "Continue improving the repair strategy. Use tools to inspect and edit, "
+        "then validate with the test command.\n"
+        "IMPORTANT: If your last fix broke a different assertion, you need a fix "
+        "that satisfies ALL constraints simultaneously."
+    )
+
     return (
         f"{feedback_prefix}"
         f"{anti_wander}"
@@ -104,11 +122,7 @@ def build_iteration_input(
         f"{snapshot_block}"
         f"{baseline_reminder}"
         f"{test_command_reminder}\n\n"
-        "Task:\n"
-        "Continue improving the repair strategy. Use tools to inspect and edit, "
-        "then validate with the test command.\n"
-        "IMPORTANT: If your last fix broke a different assertion, you need a fix "
-        "that satisfies ALL constraints simultaneously."
+        f"{task_block}"
     )
 
 
@@ -182,7 +196,9 @@ def _build_first_iteration_input(
 
     source_function_block = ""
     test_function_block = ""
+    workspace_tree_block = ""
     if repo_root is not None:
+        workspace_tree_block = _build_workspace_tree(repo_root)
         # Source function is injected BEFORE the test function so the model reads
         # the semantic contract first — leveraging position bias (models attend more
         # to content that appears early in the prompt, Liu et al. "Lost in the Middle" 2023).
@@ -205,6 +221,7 @@ def _build_first_iteration_input(
         f"- signature: {baseline_test_execution.signature}\n\n"
         "Compact test output:\n"
         f"{output}"
+        f"{workspace_tree_block}"
         f"{source_function_block}"
         f"{test_function_block}"
     )
@@ -289,10 +306,81 @@ def _format_notes_block(notes: str | None, *, max_lines: int = 8) -> str:
     return rendered
 
 
+_WORKSPACE_TREE_EXCLUDE = frozenset({
+    "env", "venv", ".venv", ".git", "__pycache__", ".pytest_cache",
+    "node_modules", ".tox", ".mypy_cache", "htmlcov", "dist", "build",
+})
+_MAX_FILES_PER_DIR = 8
+_MAX_TREE_DIRS = 12
+
+
+def _build_workspace_tree(repo_root: Path) -> str:
+    """Return a compact workspace layout string for injection into the first iteration prompt."""
+    lines = ["Workspace layout (use these path prefixes for search_files and read_file):"]
+    large_excluded: list[str] = []
+    root_py_files: list[str] = []
+    dir_rows: list[str] = []
+    shown_dirs = 0
+
+    for entry in sorted(repo_root.iterdir()):
+        if entry.name in _WORKSPACE_TREE_EXCLUDE:
+            if entry.is_dir():
+                count = sum(1 for _ in entry.rglob("*") if _.is_file())
+                if count > 20:
+                    large_excluded.append(f"  {entry.name}/  ({count}+ files — do NOT search here)")
+            continue
+        if entry.is_file() and entry.suffix == ".py":
+            root_py_files.append(entry.name)
+            continue
+        if not entry.is_dir():
+            continue
+        if shown_dirs >= _MAX_TREE_DIRS:
+            continue
+
+        # Direct .py files in this directory
+        direct_py = sorted(p.name for p in entry.iterdir() if p.is_file() and p.suffix == ".py")
+        # Non-excluded subdirectories that contain .py files
+        sub_dirs = sorted(
+            sub.name
+            for sub in entry.iterdir()
+            if sub.is_dir()
+            and sub.name not in _WORKSPACE_TREE_EXCLUDE
+            and any(True for _ in sub.rglob("*.py"))
+        )
+        if not direct_py and not sub_dirs:
+            continue
+
+        parts: list[str] = []
+        if direct_py:
+            preview = ", ".join(direct_py[:_MAX_FILES_PER_DIR])
+            if len(direct_py) > _MAX_FILES_PER_DIR:
+                preview += f", ... ({len(direct_py)} total)"
+            parts.append(preview)
+        if sub_dirs:
+            parts.append("subdirs: " + ", ".join(f"{s}/" for s in sub_dirs[:5]))
+        dir_rows.append(f"  {entry.name}/  →  " + "  |  ".join(parts))
+        shown_dirs += 1
+
+    if not dir_rows and not large_excluded and not root_py_files:
+        return ""
+
+    lines.extend(dir_rows)
+    if root_py_files:
+        lines.append(f"  (root)  →  {', '.join(root_py_files)}")
+    lines.extend(large_excluded)
+
+    return "\n\n<workspace_layout>\n" + "\n".join(lines) + "\n</workspace_layout>"
+
+
 # Regex to extract test location from traceback lines like:
 #   File ".../test/test_utils.py", line 1076, in test_match_str
 _TEST_TRACEBACK_RE = re.compile(
     r'File\s+"([^"]+)",\s+line\s+(\d+),\s+in\s+(test_\w+)'
+)
+# Pytest FAILED summary line: "FAILED tests/foo.py::Class::test_method"
+# Captures the .py file path (group 1) and the last test_* component (group 2).
+_PYTEST_FAILED_RE = re.compile(
+    r'FAILED\s+([^\s:]+\.py)::(?:\w+::)*(test_\w+)'
 )
 # Regex to extract the missing symbol from import-time errors like:
 #   ImportError: cannot import name 'fix_xml_ampersands'
@@ -310,17 +398,25 @@ _ALL_FRAMES_RE = re.compile(
 def _extract_failing_test_function(*, test_output: str, repo_root: Path) -> str:
     """Extract the full failing test function from the repository.
 
-    Strategy 1: traceback names a test_ function directly — resolve the file and
-    extract that function.
-    Strategy 2: import-time failure — parse the missing symbol name and search
-    the referenced test files for a function that exercises it.
+    Strategy 1: Python traceback names a test_ function directly — File "...", in test_func.
+    Strategy 1b: pytest FAILED summary line — "FAILED path::Class::test_func".
+    Strategy 2: import-time failure — parse the missing symbol and search test files.
     """
-    # Strategy 1: normal traceback with an explicit test_ function name
+    # Strategy 1: normal Python traceback with an explicit test_ function name
     match = _TEST_TRACEBACK_RE.search(test_output)
     if match:
         candidate = _resolve_path_under_root(match.group(1), repo_root)
         if candidate is not None:
             result = _extract_named_function(candidate, match.group(3), repo_root)
+            if result:
+                return result
+
+    # Strategy 1b: pytest assertion-style failure — no File/line/in frame for the test
+    # function itself, but pytest always appends "FAILED path::Class::test_method".
+    for m in _PYTEST_FAILED_RE.finditer(test_output):
+        candidate = _resolve_path_under_root(m.group(1), repo_root)
+        if candidate is not None:
+            result = _extract_named_function(candidate, m.group(2), repo_root)
             if result:
                 return result
 
@@ -375,13 +471,24 @@ def _find_test_function_using(candidate: Path, symbol: str, repo_root: Path) -> 
         source = candidate.read_text(encoding="utf-8")
     except Exception:
         return ""
-    for func_match in re.finditer(r'^def (test_\w+)\(', source, re.MULTILINE):
+    # Match test functions at any indentation level (top-level and class methods).
+    for func_match in re.finditer(r'^([ \t]*)def (test_\w+)\(', source, re.MULTILINE):
+        indent = func_match.group(1)
+        func_name = func_match.group(2)
         func_start = func_match.start()
-        next_def = source.find("\ndef ", func_start + 1)
-        end_idx = next_def + 1 if next_def != -1 else len(source)
+        tail = source[func_start + 1:]
+        # Next peer: same indentation def (sibling method or next top-level function)
+        peer = re.search(r'\n' + re.escape(indent) + r'def ', tail)
+        # If inside a class, also stop at next top-level def/class
+        parent = re.search(r'\ndef |\nclass ', tail) if indent else None
+        candidates = [m for m in (peer, parent) if m is not None]
+        if candidates:
+            end_idx = func_start + 1 + min(m.start() for m in candidates) + 1
+        else:
+            end_idx = len(source)
         func_body = source[func_start:end_idx]
         if symbol in func_body:
-            return _format_test_function(func_body, func_match.group(1), candidate, repo_root)
+            return _format_test_function(func_body, func_name, candidate, repo_root)
     return ""
 
 

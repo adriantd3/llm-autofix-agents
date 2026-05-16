@@ -99,3 +99,23 @@
 
 - [x] `batches/bugsinpy-orchestrator-candidates-batch1.yaml` — removed pandas-10 and cookiecutter-4 with comments explaining exclusion
 - [x] `specs/012-prompt-refactor-anti-overfit/spec.md` — documented validation results, R7 hit rate, dataset exclusions, remaining issues
+
+## SH14 — Trace analysis improvements (post-httpie batch)
+
+Implemented after analysing `batch-bugsinpy-full-httpie-orchestrator-20260516T114500Z`.
+
+- [x] F1 — Explorer sub-agent max_turns capped: `orchestrator.py` `as_tool(max_turns=5)` (was 20); explorer instructions add "Answer using at most 4 tool calls".
+- [x] F2 — Workspace tree injected in first iteration: `_build_workspace_tree()` in `iteration.py` walks repo top level, skips env/venv/.git/__pycache__, outputs `<workspace_layout>` block between test output and source function. Prevents wasted list_files navigation in nested repos.
+- [x] F3 — `iteration_edit_count` guard in `run_test_target`: harness-level block on pre-edit test runs (`no_changes_yet` error); counter reset per iteration in `IterationRunner._prepare()`; incremented by `replace_in_file`, `replace_lines`, `write_file`. Python inline guard moved before edit-count guard.
+- [x] F5 — Per-iteration asyncio timeout: `iteration_timeout_seconds` plumbed from batch YAML → env var → `RunConfig` → `AgentExecutionContext` → `_run_sync(asyncio.wait_for)`; `TimeoutError` caught in `invoke_agent()`, returns synthetic result so iteration lifecycle continues.
+- [x] F5b — Assertive no-edit task text: `build_iteration_input()` detects `_NO_EDIT_SNAPSHOT_SIGNAL` in latest snapshot and replaces generic Task block with `_ASSERTIVE_NO_EDIT_TASK` ("You MUST apply a code change this iteration").
+
+## SH15 — Pre-existing test bug fixes (2026-05-16)
+
+Three tests that had been documented as pre-existing failures were actually fixable bugs.
+
+- [x] B1 — Circular import in `flow/runtime/__init__.py`: removed `RunInitializer` from package init (unused re-export). Broke cycle: `flow.policies.stop` → `flow.runtime.context` → `flow.runtime.__init__` → `flow.runtime.initializer` → `architectures` → `flow.strategy` → `flow.policies.stop`.
+- [x] B2 — `_find_test_function_using` missed class methods: regex `^def (test_\w+)\(` only matched top-level functions. Rewritten to match any indentation with `^([ \t]*)def (test_\w+)\(`; body boundary now stops at next peer-level def OR parent-level def/class (for methods inside a class).
+- [x] B3 — `build_iteration_input` missing assertive no-edit task: test `test_no_edit_previous_iteration_shows_assertive_task` existed but the feature wasn't implemented. Added `_NO_EDIT_SNAPSHOT_SIGNAL` detection and `_ASSERTIVE_NO_EDIT_TASK` constant (see F5b above).
+- [x] B4 — `test_architectures.py` expected `max_turns=20` for explorer sub-agent; updated to `max_turns=5` after F1 change.
+- [x] All 319 tests pass, 0 failures.

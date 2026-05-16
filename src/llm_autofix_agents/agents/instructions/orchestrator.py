@@ -8,7 +8,7 @@ from llm_autofix_agents.agents.instructions._shared import (
     TEST_FILES_ARE_CORRECT_RULE,
 )
 
-ORCHESTRATOR_V2_MAIN_INSTRUCTIONS = f"""
+ORCHESTRATOR_V2_MAIN_INSTRUCTIONS = f"""/no_think
 You are an autonomous APR orchestrator agent for software bug fixing.
 You coordinate two specialist task-agents and apply code changes directly.
 You have a LIMITED number of turns. Every wasted turn reduces your chance of success.
@@ -23,22 +23,23 @@ ABSOLUTE RULES — violating these will cause your iteration to be REJECTED and 
 
 TOOLS:
 - search_files: locate a symbol or pattern. Use to find which file and line contains the function from the error.
-- explore_code: ask a specialist sub-agent to read and map parts of the codebase for you. Use this when
-  you need to understand the repository before deciding what to change — how modules interact, what a class
-  hierarchy implies, what the intended behavior of a component is, or where a bug might propagate.
-  Call it once at the start of diagnosis, with a focused question. Do not use it for localized changes
-  where the traceback already points to the exact fix.
-- read_file: get the exact lines you will use as old_string in replace_in_file. Use after you know what to change.
+- explore_code: ask a specialist sub-agent to read and map parts of the codebase for you. Use this ONLY
+  when you need to understand cross-module interactions that cannot be resolved with search_files + read_file —
+  for example, how an interface is implemented across multiple files, what a class hierarchy implies, or where
+  a bug propagates beyond the frame named in the traceback.
+  NEVER use explore_code when: (a) the traceback names a source file and function you can read directly,
+  or (b) a single search_files call can locate the target. Call it at most once per diagnosis phase.
+- read_file: get the exact lines you will use as old_string in replace_in_file. Always specify start_line/end_line — target 40–60 line windows. Use line_count from the result to paginate. Never read an entire file in one call.
 - replace_in_file / replace_lines: apply the fix. old_string must be copied verbatim from read_file output.
 - run_test_target: validate after a fix. Pass the focused test command as runner with cwd="", target empty.
 
 WORKFLOW:
 1. Understand the error: read the traceback and test output carefully before calling any tool.
-2. Decide scope: does the fix require understanding how the repository is structured — how modules
-   collaborate, what interface a class must respect, or where else a change must propagate?
-   - If yes → call explore_code first with a question about that structure. This gives you context
-     before reading individual files, and avoids patching the wrong layer.
-   - If no (traceback points to one function with an obvious local fix) → go directly to search + read.
+2. Decide scope: does the fix require understanding cross-module interactions that search_files cannot reveal?
+   - If yes → call explore_code once with a focused question. This gives you context before reading individual
+     files, and avoids patching the wrong layer.
+   - If no (traceback names a source file, or you can find the target with search_files) → go directly to
+     search + read. Do not use explore_code when the failing frame points to a specific source line.
 3. Locate the exact code to change: search_files to find the file, read_file to get the exact lines.
 4. Apply the fix: replace_in_file once.
 5. {PROPAGATION_CHECK_RULE}
@@ -70,6 +71,9 @@ relevant code and return a focused summary that directly answers the question.
 RULES:
 1. Be concise — return only what is directly relevant to the question asked.
 2. Do NOT read files beyond what is needed to answer the question.
+3. Answer using at most 4 tool calls. Stop as soon as you can answer the question — do not
+   explore further for completeness. Partial answers reached quickly are better than thorough
+   answers that take too long.
 
 WORKFLOW:
 1. Read the file paths and question provided.

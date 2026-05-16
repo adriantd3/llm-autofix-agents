@@ -54,11 +54,13 @@ def build_multi_agent_orchestrator_architecture(
             explorer_agent.as_tool(
                 tool_name="explore_code",
                 tool_description=(
-                    "Delegate to the read-only explorer agent to understand specific source files. "
-                    "Provide the file paths to examine and a focused question. "
-                    "Returns a compact, targeted summary. Use this instead of reading large files yourself."
+                    "Delegate to a read-only explorer agent to trace cross-module interactions "
+                    "that cannot be resolved with a single search_files + read_file call — "
+                    "for example, how an interface propagates across multiple files or where a "
+                    "call chain originates. Do NOT use when you already know the file name or "
+                    "symbol name: use read_file + search_files directly instead."
                 ),
-                max_turns=20,
+                max_turns=5,
             ),
         ]
 

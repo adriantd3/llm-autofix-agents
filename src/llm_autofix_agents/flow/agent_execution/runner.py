@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from llm_autofix_agents.flow.errors import ProviderExecutionError
-from llm_autofix_agents.llm.provider import AgentFixIterationRecord, LLMProvider
+from llm_autofix_agents.llm.provider import AgentFixIterationRecord, AgentFixIterationResult, LLMProvider
 from llm_autofix_agents.observability.emitter import Emitter, IterationContext
 from llm_autofix_agents.tools.context import APRToolContext
 
@@ -21,6 +21,7 @@ class AgentExecutionContext:
     iteration_ctx: IterationContext
     user_input: str
     max_turns: int
+    iteration_timeout_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -91,7 +92,32 @@ class AgentExecutionRunner:
                     context=context.agent_context,
                     hooks=hooks,
                     event_callback=_provider_callback,
-                )
+                ),
+                timeout_seconds=context.iteration_timeout_seconds,
+            )
+        except TimeoutError:
+            duration_seconds = time.perf_counter() - started_monotonic
+            emitter.finish_agent_execution(
+                ctx,
+                agent_execution_id=agent_execution_id,
+                started_at=started_at,
+                run_agent_id=context.run_agent_id,
+                execution_index=execution_index,
+                status="timed_out",
+                reasoning_summary=f"Iteration timed out after {context.iteration_timeout_seconds}s",
+                tool_calls_count=hooks.tool_call_count,
+                duration_seconds=duration_seconds,
+            )
+            return AgentExecutionResult(
+                proposal=AgentFixIterationRecord(
+                    proposal=AgentFixIterationResult(
+                        status="in_progress",
+                        reasoning_summary=f"Iteration timed out after {context.iteration_timeout_seconds}s — no structured output produced",
+                        confidence=0.0,
+                    )
+                ),
+                agent_execution_id=agent_execution_id,
+                tool_calls_count=hooks.tool_call_count,
             )
         except Exception as exc:  # noqa: BLE001
             duration_seconds = time.perf_counter() - started_monotonic
@@ -136,9 +162,17 @@ class AgentExecutionRunner:
         )
 
 
-def _run_sync(awaitable: Coroutine[object, object, AgentFixIterationRecord]) -> AgentFixIterationRecord:
+def _run_sync(
+    awaitable: Coroutine[object, object, AgentFixIterationRecord],
+    timeout_seconds: int | None = None,
+) -> AgentFixIterationRecord:
+    async def _run() -> AgentFixIterationRecord:
+        if timeout_seconds is not None:
+            return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+        return await awaitable
+
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(awaitable)
+        return asyncio.run(_run())
     raise RuntimeError("Cannot be called from an active event loop")

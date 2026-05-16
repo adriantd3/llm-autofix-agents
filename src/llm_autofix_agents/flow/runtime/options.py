@@ -81,6 +81,15 @@ def resolve_temp_branch_prefix(metadata: dict[str, Any]) -> str:
     return normalized
 
 
+def resolve_iteration_timeout_seconds(metadata: dict[str, Any]) -> int | None:
+    value = metadata.get("iteration_timeout_seconds")
+    if value is None:
+        return None
+    if not isinstance(value, int) or value < 30 or value > 3600:
+        raise ValueError("metadata.iteration_timeout_seconds must be an integer between 30 and 3600")
+    return value
+
+
 def metadata_text(metadata: dict[str, Any], key: str) -> str | None:
     value = metadata.get(key)
     if isinstance(value, str):

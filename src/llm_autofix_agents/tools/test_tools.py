@@ -50,13 +50,7 @@ def run_test_target(
     cwd: working directory path. Use "" or "." for the workspace root. NEVER pass a file path here.
     """
     cfg = get_tool_context(ctx)
-    root = workspace_root(cfg)
-    if runner is None:
-        detected = detect_test_command(root)
-        if detected is None:
-            return json_result({"ok": False, "error": "no_test_runner_detected"})
-        runner = detected[1]
-    if _PYTHON_INLINE_RE.search(runner):
+    if runner is not None and _PYTHON_INLINE_RE.search(runner):
         return json_result({
             "ok": False,
             "error": (
@@ -64,6 +58,17 @@ def run_test_target(
                 "then run the actual test command (e.g. bash bugsinpy_run_test.sh)"
             ),
         })
+    if cfg.iteration_edit_count == 0:
+        return json_result({
+            "ok": False,
+            "error": "no_changes_yet: apply a fix with replace_in_file or replace_lines before running tests",
+        })
+    root = workspace_root(cfg)
+    if runner is None:
+        detected = detect_test_command(root)
+        if detected is None:
+            return json_result({"ok": False, "error": "no_test_runner_detected"})
+        runner = detected[1]
     # Drop target if it looks like a full command — prevents the double-command failure mode
     # where the agent sets runner=<full cmd> AND target=<full cmd>, corrupting the shell call.
     safe_target = target if target and not _target_looks_like_command(target) else None

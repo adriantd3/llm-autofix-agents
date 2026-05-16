@@ -309,6 +309,8 @@ class BatchRunner:
             "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
             "AUTOFIX_INTERACTIVE": "false",
         }
+        if settings.iteration_timeout_seconds is not None:
+            env["AUTOFIX_ITERATION_TIMEOUT_SECONDS"] = str(settings.iteration_timeout_seconds)
         if case.dataset_type == "bugsinpy":
             compile_required = dataset.tooling.get("compile_required", True)
             env["RUN_BUGSINPY_COMPILE_REQUIRED"] = "true" if compile_required else "false"

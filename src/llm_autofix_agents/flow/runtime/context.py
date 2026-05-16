@@ -89,6 +89,7 @@ class RunConfig:
     # Run metadata for logging and identity
     run_input_metadata: dict[str, Any]
     agent_config: dict[str, Any] = field(default_factory=dict)
+    iteration_timeout_seconds: int | None = None
 
     @property
     def results_dir(self) -> Path:

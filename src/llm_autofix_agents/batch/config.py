@@ -149,6 +149,7 @@ class GlobalSettings(BaseModel):
     llm: LLMSettings
     max_iterations: int = 6
     timeout_seconds: int = 300
+    iteration_timeout_seconds: int | None = None
     prompt_template: str | None = None
     capture_errors: bool = True
     cleanup_workspaces: bool = False

@@ -33,9 +33,13 @@ class DummyUsage:
     total_tokens = 0
 
 
-def make_wrapper(root: str, tool_name: str) -> ToolContext[APRToolContext]:
+def make_wrapper(
+    root: str,
+    tool_name: str,
+    ctx: APRToolContext | None = None,
+) -> ToolContext[APRToolContext]:
     return ToolContext(
-        context=APRToolContext(root_dir=root),
+        context=ctx or APRToolContext(root_dir=root),
         usage=DummyUsage(),
         tool_name=tool_name,
         tool_call_id="tc_123",
@@ -43,8 +47,8 @@ def make_wrapper(root: str, tool_name: str) -> ToolContext[APRToolContext]:
     )
 
 
-async def call(tool, root: str, payload: str):
-    return json.loads(await tool.on_invoke_tool(make_wrapper(root, tool.name), payload))
+async def call(tool, root: str, payload: str, ctx: APRToolContext | None = None):
+    return json.loads(await tool.on_invoke_tool(make_wrapper(root, tool.name, ctx=ctx), payload))
 
 
 class APRToolkitTests(unittest.TestCase):
@@ -72,42 +76,58 @@ class APRToolkitTests(unittest.TestCase):
             subprocess.run(["git", "add", "."], cwd=root, check=True)
             subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True)
 
-            res = asyncio.run(call(list_files, tmp, '{"glob":"src/**/*.py"}'))
+            # Shared context simulates a single APR iteration (same context object across all tool calls).
+            iteration_ctx = APRToolContext(root_dir=tmp)
+
+            res = asyncio.run(call(list_files, tmp, '{"glob":"src/**/*.py"}', ctx=iteration_ctx))
             self.assertTrue(res["ok"])
             self.assertEqual(res["returned"], 1)
 
-            res = asyncio.run(call(search_files, tmp, '{"pattern":"return a - b","glob":"src/**/*.py"}'))
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"return a - b","glob":"src/**/*.py"}', ctx=iteration_ctx))
             self.assertEqual(res["returned"], 1)
 
-            res = asyncio.run(call(read_file, tmp, '{"path":"src/maths.py"}'))
+            res = asyncio.run(call(read_file, tmp, '{"path":"src/maths.py"}', ctx=iteration_ctx))
             self.assertIn("1: def add(a, b):", res["content"])
 
+            # run_test_target requires at least one edit first — verify the guard fires correctly.
             res = asyncio.run(
-                call(run_test_target, tmp, '{"target":"tests/test_maths.py","cwd":".","timeout_seconds":60}')
+                call(run_test_target, tmp, '{"target":"tests/test_maths.py","cwd":".","timeout_seconds":60}', ctx=iteration_ctx)
             )
-            self.assertTrue(res["ok"])
-            self.assertNotEqual(res["exit_code"], 0)
+            self.assertFalse(res["ok"])
+            self.assertIn("no_changes_yet", res["error"])
 
             res = asyncio.run(
                 call(
                     replace_in_file,
                     tmp,
                     '{"path":"src/maths.py","old":"return a - b","new":"return a + b","expected_occurrences":1}',
+                    ctx=iteration_ctx,
                 )
             )
             self.assertTrue(res["ok"])
+            self.assertEqual(iteration_ctx.iteration_edit_count, 1)
+
+            # After an edit, run_test_target should now be allowed and report the fix.
+            res = asyncio.run(
+                call(run_test_target, tmp, '{"target":"tests/test_maths.py","cwd":".","timeout_seconds":60}', ctx=iteration_ctx)
+            )
+            self.assertTrue(res["ok"])
+            self.assertEqual(res["exit_code"], 0)
 
             res = asyncio.run(
                 call(
                     replace_lines,
                     tmp,
                     '{"path":"src/maths.py","start_line":1,"end_line":1,"new_lines":"def add(a, b):\\n"}',
+                    ctx=iteration_ctx,
                 )
             )
             self.assertTrue(res["ok"])
+            self.assertEqual(iteration_ctx.iteration_edit_count, 2)
 
-            res = asyncio.run(call(write_file, tmp, '{"path":"notes.txt","content":"done\\n"}'))
+            res = asyncio.run(call(write_file, tmp, '{"path":"notes.txt","content":"done\\n"}', ctx=iteration_ctx))
             self.assertTrue(res["ok"])
+            self.assertEqual(iteration_ctx.iteration_edit_count, 3)
 
             res = asyncio.run(call(git_status_summary, tmp, "{}"))
             self.assertTrue(res["ok"])

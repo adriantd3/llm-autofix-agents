@@ -162,6 +162,7 @@ class IterationRunner:
 
         before_snapshot = self.workspace.snapshot(cfg.repo_root)
         state.validation_feedback = None
+        cfg.agent_context.iteration_edit_count = 0
 
         return _IterationPrep(
             identity=identity,
@@ -203,6 +204,7 @@ class IterationRunner:
                 repo_root=cfg.repo_root,
             ),
             max_turns=cfg.settings.max_turns,
+            iteration_timeout_seconds=cfg.iteration_timeout_seconds,
         )
         cfg.observability.emitter.record_facade_input(prep.iteration_ctx, input_text=agent_context.user_input)
         return self.agent_runner.invoke_agent(

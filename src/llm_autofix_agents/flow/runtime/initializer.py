@@ -11,6 +11,7 @@ from llm_autofix_agents.flow.runtime.options import metadata_text
 from llm_autofix_agents.flow.workspace.state import resolve_repo_root
 from llm_autofix_agents.llm.provider import LLMProvider
 from llm_autofix_agents.llm.settings import LLMSettings
+from llm_autofix_agents.flow.runtime.options import resolve_iteration_timeout_seconds
 from llm_autofix_agents.observability import (
     resolve_observability_config,
 )
@@ -31,6 +32,7 @@ class RunInitializer:
         provider: LLMProvider,
         max_iterations: int,
         test_timeout_seconds: int,
+        iteration_timeout_seconds: int | None = None,
     ) -> tuple[RunConfig, RunState]:
         repo_root = resolve_repo_root(run_input.target_repo)
         resolved_model = self.architecture.agent_model or settings.model
@@ -62,6 +64,7 @@ class RunInitializer:
             tool_count=self.architecture.tool_count,
             max_iterations=max_iterations,
             test_timeout_seconds=test_timeout_seconds,
+            iteration_timeout_seconds=iteration_timeout_seconds,
             repo_root=repo_root,
             observability=observability,
             run_input_metadata=run_input.metadata,

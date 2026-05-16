@@ -96,6 +96,7 @@ def write_file(
     elif not file_path.parent.exists():
         return json_result({"ok": False, "error": "parent_missing", "path": path})
     file_path.write_text(content, encoding="utf-8")
+    cfg.iteration_edit_count += 1
     return json_result({"ok": True, "path": path, "bytes_written": len(content.encode("utf-8"))})
 
 
@@ -188,6 +189,7 @@ def replace_in_file(
         updated = source.replace(old, new) if replace_all else source.replace(old, new, 1)
 
     file_path.write_text(updated, encoding="utf-8")
+    cfg.iteration_edit_count += 1
     result: dict[str, Any] = {
         "ok": True,
         "path": path,
@@ -243,6 +245,7 @@ def replace_lines(
     updated_lines = lines[: start_line - 1] + replacement + lines[end_line:]
     updated = "".join(updated_lines)
     file_path.write_text(updated, encoding="utf-8")
+    cfg.iteration_edit_count += 1
     return json_result({"ok": True, "path": path, "start_line": start_line, "end_line": end_line})
 
 

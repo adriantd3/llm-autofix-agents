@@ -59,6 +59,39 @@
   test. Sin un paso que diga "leer el código para entender el contrato antes de leer el test", el
   agente siempre parte de los síntomas.
 
+
+## 2026-05-16 (la arquitectura de agentes es un factor secundario en APR test-guided)
+
+- **Contexto:** Tras múltiples experimentos con QuixBugs y BugsInPy comparando mono-agente,
+  orchestrator y planner-executor, se observa que las diferencias de tasa de reparación entre
+  arquitecturas son menores de lo esperado, especialmente cuando el harness y el contexto
+  están bien configurados.
+
+- **Insight:** En APR test-guided (el traceback ya actúa como fault localization implícito),
+  el problema no requiere exploración autónoma del grafo del repositorio — que es donde
+  la orquestación multi-agente aporta más valor. Lo que realmente mueve la aguja es:
+  (1) **Context engineering**: qué código, traceback, tests y metadatos se incluyen en el
+  prompt y en qué orden.
+  (2) **Agent harness**: el ciclo fix→validate→retry, el feedback de tests en cada iteración
+  y el toolset disponible.
+  La arquitectura (mono vs orquestador vs handoff) es una variable que, controladas las otras
+  dos, apenas diferencia los resultados.
+
+- **Implicación para el TFM:** Las RQs del anteproyecto (RQ1: orquestación, RQ2: modelos LLM)
+  se mantienen intactas porque están comprometidas con el tribunal. Sin embargo:
+  - Al responder RQ1 en el Capítulo 7, documentar explícitamente que las diferencias entre
+    arquitecturas son moderadas y correlacionan más con el contexto/harness que con la
+    estrategia de orquestación en sí.
+  - En el Capítulo 8 (Conclusiones §trabajo-futuro), introducir este finding como hipótesis
+    emergente: "los resultados sugieren que en APR test-guided el context engineering y el
+    harness iterativo pueden explicar más varianza que la arquitectura de orquestación;
+    se propone como línea futura un estudio de ablación de contexto".
+  - NO añadir una RQ3 nueva: el contrato del anteproyecto no debe romperse.
+
+- **Regla preventiva:** Cuando se diseñe una nueva arquitectura APR, separar explícitamente
+  las variables: (a) qué ve el agente (contexto), (b) cómo itera (harness), (c) cuántos/qué
+  agentes hay (arquitectura). No atribuir mejoras a la arquitectura sin controlar (a) y (b).
+
 - **Soluciones aplicadas** (en los 5 archivos de instrucciones: `mono_agent.py`, `orchestrator.py`,
   `planner_executor.py`, `handoff.py`):
 
@@ -285,6 +318,14 @@
 - Alternativa recomendada: para modelos locales, usar `output_schema=None` en `build_agent()` — el modelo solo puede producir texto o llamar tools; el provider ya parsea texto libre a `AgentFixIterationRecord` como fallback.
 - Resultado: de 0 tool calls → 45 tool calls (20 planner + 25 executor) con output_schema=None.
 - Regla preventiva para futuras specs: evaluar si `output_type` del SDK actúa como "escape hatch" para cada modelo; con modelos locales, preferir no restringir output format para forzar tool engagement.
+
+## 2026-05-16 (handoff como arquitectura descartada para evaluación APR)
+- Contexto: revisión final de arquitecturas a incluir en la evaluación comparativa del TFM.
+- Problema detectado: la arquitectura handoff nunca ejecuta su pipeline real; los éxitos observados son artefactos del fallback MaxTurnsExceeded, no del flujo triage→localizer→patcher→validator.
+- Por qué no es reparable en este proyecto: (1) APR requiere múltiples tool calls por fase, lo que agota los turnos antes del handoff; (2) con modelos locales el mecanismo de handoff del SDK es inoperante; (3) con modelos frontier funciona pero no aporta valor diferencial sobre el orquestador.
+- Decisión: excluir de la evaluación comparativa y documentar como resultado negativo con análisis de causas.
+- Valor académico: la incompatibilidad entre handoff de ownership fuerte y flujos intensivos en herramientas es un hallazgo empírico válido; refuerza la ventaja del patrón orchestrator (agents-as-tools) para APR.
+- Regla preventiva: antes de incluir una arquitectura en una evaluación comparativa, verificar que el mecanismo de control (handoff, orquestación, etc.) se activa realmente en los traces — no inferir funcionamiento desde el resultado final.
 
 ## 2026-05-07 (handoff del SDK inoperante con modelos locales post-transfer)
 - Contexto: en planner-executor con handoff SDK, tras la transferencia planner→executor, el agente receptor (executor) producía JSON/text output sin llamar tools; `tool_choice="required"` no resolvía el problema vía Ollama.

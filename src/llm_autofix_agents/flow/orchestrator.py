@@ -12,7 +12,7 @@ from llm_autofix_agents.flow.lifecycle.output_builder import RunOutputBuilder
 from llm_autofix_agents.flow.policies.stop import StopPolicy
 from llm_autofix_agents.flow.runtime.context import RunConfig, RunState
 from llm_autofix_agents.flow.runtime.initializer import RunInitializer
-from llm_autofix_agents.flow.runtime.options import resolve_max_iterations
+from llm_autofix_agents.flow.runtime.options import resolve_iteration_timeout_seconds, resolve_max_iterations
 from llm_autofix_agents.flow.strategy import IterationStrategy, StandardIterationStrategy
 from llm_autofix_agents.flow.workspace.manager import WorkspaceManager
 from llm_autofix_agents.flow.workspace.validators import validate_bugsinpy_workspace
@@ -112,6 +112,7 @@ class RunOrchestrator:
             provider=provider,
             max_iterations=resolve_max_iterations(run_input.metadata),
             test_timeout_seconds=resolve_test_timeout_seconds(run_input.metadata),
+            iteration_timeout_seconds=resolve_iteration_timeout_seconds(run_input.metadata),
         )
 
     def _run_baseline_tests(self, *, run_input: RunInput, cfg: RunConfig, state: RunState):

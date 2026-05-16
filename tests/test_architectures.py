@@ -256,8 +256,8 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         self.assertEqual(len(as_tool_calls), 1)
         self.assertEqual(as_tool_calls[0]["agent_name"], "explorer")
         self.assertEqual(as_tool_calls[0]["tool_name"], "explore_code")
-        # Explorer sub-agent must have an explicit max_turns to avoid SDK default (10)
-        self.assertEqual(as_tool_calls[0]["max_turns"], 20)
+        # Explorer sub-agent must have an explicit max_turns cap to prevent runaway thinking time
+        self.assertEqual(as_tool_calls[0]["max_turns"], 5)
 
 
 class PlannerExecutorArchitectureTests(unittest.TestCase):

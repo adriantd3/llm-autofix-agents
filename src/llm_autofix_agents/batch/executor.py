@@ -92,6 +92,17 @@ def main() -> int:
             )
             return 2
 
+    iteration_timeout_env = _resolve_optional_text(os.environ.get("AUTOFIX_ITERATION_TIMEOUT_SECONDS"))
+    if iteration_timeout_env is not None:
+        try:
+            metadata["iteration_timeout_seconds"] = int(iteration_timeout_env)
+        except ValueError:
+            logger.error(
+                "AUTOFIX_ITERATION_TIMEOUT_SECONDS must be an integer, got: %s",
+                iteration_timeout_env,
+            )
+            return 2
+
     run_input = RunInput(
         prompt=prompt,
         metadata=metadata,

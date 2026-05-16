@@ -11,7 +11,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from llm_autofix_agents.flow.policies.iteration import _find_test_function_using
+from llm_autofix_agents.flow.policies.iteration import (
+    _extract_failing_test_function,
+    _find_test_function_using,
+)
 from llm_autofix_agents.tools.test_tools import _target_looks_like_command
 
 
@@ -92,6 +95,64 @@ class FindTestFunctionClassMethodTests(unittest.TestCase):
             )
             result = _find_test_function_using(f, "use_symbol_here", Path(tmp))
             self.assertIn("test_first", result)
+
+
+class ExtractFailingTestFunctionPytestFormatTests(unittest.TestCase):
+    """Strategy 1b: pytest FAILED summary line for assertion-style failures."""
+
+    def _write(self, path: Path, content: str) -> None:
+        path.write_text(content, encoding="utf-8")
+
+    def test_extracts_top_level_function_from_failed_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tests").mkdir()
+            f = root / "tests" / "test_regressions.py"
+            self._write(
+                f,
+                "def test_Host_header_overwrite():\n"
+                "    assert r.lower().count('host:') == 1\n",
+            )
+            output = (
+                "FAILED tests/test_regressions.py::test_Host_header_overwrite - assert 2 == 1\n"
+            )
+            result = _extract_failing_test_function(test_output=output, repo_root=root)
+            self.assertIn("test_Host_header_overwrite", result)
+
+    def test_extracts_class_method_from_failed_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tests").mkdir()
+            f = root / "tests" / "tests.py"
+            self._write(
+                f,
+                "class TestItemParsing:\n"
+                "    def test_escape_longsep(self):\n"
+                "        self.assertDictEqual(data, {'bob:=': 'foo'})\n",
+            )
+            output = (
+                "FAILED tests/tests.py::TestItemParsing::test_escape_longsep - AssertionError\n"
+            )
+            result = _extract_failing_test_function(test_output=output, repo_root=root)
+            self.assertIn("test_escape_longsep", result)
+
+    def test_strategy1_still_wins_when_traceback_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tests").mkdir()
+            f = root / "tests" / "test_redirects.py"
+            self._write(
+                f,
+                "def test_max_redirects(self, httpbin):\n"
+                "    assert r.exit_status == ExitStatus.ERROR_TOO_MANY_REDIRECTS\n",
+            )
+            output = (
+                f'  File "{root}/tests/test_redirects.py", line 22, in test_max_redirects\n'
+                "    assert r.exit_status == ExitStatus.ERROR_TOO_MANY_REDIRECTS\n"
+                "FAILED tests/test_redirects.py::TestRedirects::test_max_redirects\n"
+            )
+            result = _extract_failing_test_function(test_output=output, repo_root=root)
+            self.assertIn("test_max_redirects", result)
 
 
 if __name__ == "__main__":

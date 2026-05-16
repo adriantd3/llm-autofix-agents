@@ -2,6 +2,14 @@
 
 ## En curso
 
+- **SPEC-003 descartada — Arquitectura handoff (2026-05-16)**:
+  - Decisión: la arquitectura `multi_agent_handoff` queda excluida de la evaluación comparativa.
+  - El pipeline nunca ejecuta realmente: los éxitos en QuixBugs son producto del fallback `MaxTurnsExceeded`, no de handoffs completados.
+  - Incompatibilidad estructural: APR es intensivo en herramientas por iteración; los agentes agotan turnos explorando antes de invocar `transfer_to_*`.
+  - El patrón requiere modelos frontier (GPT-4/Claude) para funcionar limpiamente; con modelos locales (Ollama) el handoff es inoperante.
+  - El orquestador (agents-as-tools) cubre el mismo espacio de diseño con mejores resultados y compatibilidad con modelos locales.
+  - El código permanece en el repositorio. La spec documenta el veredicto y el análisis de causas en `specs/003-multi-agent-handoff/spec.md`.
+
 - **SPEC-012 completado (SH1–SH8): Prompt Refactor — Anti-Overfit & Harness Hardening (2026-05-15)**:
   - `agents/instructions/_shared.py` creado con 6 constantes canónicas (TEST_FILES_ARE_CORRECT_RULE, CODE_FIRST_DIAGNOSIS_PRINCIPLE, PROPAGATION_CHECK_RULE, READ_BEFORE_EDIT_RULE, HANDOFF_PAYLOAD_FORMAT, ITERATION_RECORD_FORMAT).
   - R1: eliminados ejemplos overfit a youtube-dl (`_parse_mpd_formats`, alias `ImportError`) y QuixBugs (`None, False, 0` enumeration) de orchestrator, mono_agent, planner_executor, handoff.
@@ -270,7 +278,7 @@
   - 229 tests pasando, lint limpio en archivos modificados.
 
 ## En curso
-- **SPEC-012 completado (SH1–SH7)**: Observability/Telemetry Refactor (ver plan en `.claude/plans/`).
+- **SPEC-012 completado (SH1–SH7, SH14–SH15)**: Observability/Telemetry Refactor + Trace Analysis Improvements (ver plan en `.claude/plans/`).
   - SH1: Tool metadata registry — cada tool APR tiene `ToolDescriptor` con summarize_args/result y classify_status.
   - SH2: Observer protocol flatten — `Observer.emit(event)`, `Emitter` + `IterationContext` reemplazan 3-tier `*Telemetry`.
   - SH3: Status taxonomy — `ToolStatus` enum (`ok/tool_error/sdk_error/empty/unknown`), retry_index en tool_calls, schema V6, `[!]` markers en live.md, truncación ampliada.
@@ -278,7 +286,7 @@
   - SH5: DB topology — per-run `run.db` como primario, per-batch `batch.db` auto-merge post-run, fix `summary_path` en rename.
   - SH6: Cross-batch aggregator CLI — `python -m llm_autofix_agents.observability.aggregate`, `make aggregate`.
   - SH7: Dead code removal — eliminados `telemetry.py`, `telemetry_models.py`, `telemetry_mapping.py`, `observable.py`; removidos `current_tool_args`, `make_observable`; `__init__.py` limpiado.
-  - 230 tests pasando (4 fallos preexistentes en `test_agent_flow.py` sin relación).
+  - SH14: Mejoras post-análisis trazas httpie — explorer max_turns=5, workspace tree injection, iteration_edit_count guard, per-iteration asyncio timeout, assertive no-edit task text.
 
 - Bloqueante modelo qwen3-coder:30b (ver SPEC-010). Para validar arquitecturas se requiere modelo con mejor razonamiento semántico.
 

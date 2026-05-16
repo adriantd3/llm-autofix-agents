@@ -2,7 +2,7 @@
 
 ## Metadata
 - Fecha: 2026-04-30
-- Estado: En curso
+- Estado: **Descartada** (2026-05-16)
 - Owner: adriantd3
 - Tipo: arquitectura multi-agente (handoff)
 
@@ -98,3 +98,25 @@ Roles, tools y criterio de handoff (v1):
 ## Preguntas abiertas
 - Roles finales del pipeline: mantener 4 o agregar un Writer separado.
 - Registro de eventos de handoff: aprovechar hooks del SDK o introducir evento propio.
+
+## Veredicto final (2026-05-16)
+
+Arquitectura **descartada** de la evaluación comparativa. Se mantiene el código implementado pero no se incluirá en batches ni en la memoria como arquitectura evaluada.
+
+### Razones técnicas
+
+1. **El pipeline nunca se ejecuta realmente.** Los casos marcados como éxito (QuixBugs 3/3) se produjeron gracias al fallback de `MaxTurnsExceeded`, no porque el pipeline triage→localizer→patcher→validator completara sus handoffs. El mecanismo de éxito es el mismo que el del mono-agente, no el del pipeline.
+
+2. **APR es intensivo en herramientas por naturaleza.** Cada agente del pipeline necesita leer código, buscar símbolos y ejecutar tests. Eso consume turnos antes de que el modelo llegue a invocar `transfer_to_<next>`. El handoff requiere que el modelo concluya una fase con pocas tool calls, lo cual es incompatible con la naturaleza exploratoria de APR.
+
+3. **El patrón requiere modelos con fuerte seguimiento de instrucciones.** Con modelos locales (qwen3.5:9b, qwen3-coder:30b vía Ollama) los agentes ignoran la instrucción de handoff o la producen como texto en lugar de llamar la herramienta. Con modelos frontier (GPT-4, Claude) el handoff funciona, pero eso cambia la variable experimental y no añade valor comparativo sobre el orquestador.
+
+4. **El orquestador cubre el mismo espacio de diseño con mejores resultados.** El patrón orchestrator (agents-as-tools) separa roles igualmente pero mantiene control central, evita inflación de historial y es más compatible con modelos locales. El propio `deep-research-report.md` recomienda orchestrator como mejor baseline multiagente para APR.
+
+### Valor como resultado negativo
+
+El fracaso de la arquitectura handoff es un hallazgo legítimo y documentable:
+- Confirma empíricamente la incompatibilidad entre pipelines de ownership fuerte y flujos APR intensivos en herramientas.
+- Refuerza la ventaja del orquestador al mantener control central.
+- Las lecciones aprendidas (ver `specs/lessons.md`) cubren los anti-patrones concretos que causan el fallo.
+- Este resultado apoya la conclusión de que la especialización por roles en APR debe implementarse como tools (orchestrator), no como transferencia de ownership (handoff).

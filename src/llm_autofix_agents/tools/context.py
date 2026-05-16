@@ -16,6 +16,7 @@ class APRToolContext:
     max_file_bytes: int = 512_000
     max_list_entries: int = 400
     default_test_timeout_seconds: int = 120
+    iteration_edit_count: int = 0
 
 
 def get_tool_context(wrapper: RunContextWrapper[APRToolContext]) -> APRToolContext:
