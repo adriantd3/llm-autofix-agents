@@ -1,0 +1,32 @@
+name: bugsinpy-full-fastapi-orchestrator
+description: Multi-agent orchestrator on BugsInPy fastapi - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - fastapi-1
+  - fastapi-2
+  - fastapi-3
+  - fastapi-4
+  - fastapi-5
+  - fastapi-6
+  - fastapi-7
+  - fastapi-8
+  - fastapi-9
+  - fastapi-10
+  - fastapi-11
+  - fastapi-12
+  - fastapi-13
+  - fastapi-14
+  - fastapi-15
+  - fastapi-16

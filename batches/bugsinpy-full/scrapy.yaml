@@ -1,0 +1,56 @@
+name: bugsinpy-full-scrapy-orchestrator
+description: Multi-agent orchestrator on BugsInPy scrapy - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - scrapy-1
+  - scrapy-2
+  - scrapy-3
+  - scrapy-4
+  - scrapy-5
+  - scrapy-6
+  - scrapy-7
+  - scrapy-8
+  - scrapy-9
+  - scrapy-10
+  - scrapy-11
+  - scrapy-12
+  - scrapy-13
+  - scrapy-14
+  - scrapy-15
+  - scrapy-16
+  - scrapy-17
+  - scrapy-18
+  - scrapy-19
+  - scrapy-20
+  - scrapy-21
+  - scrapy-22
+  - scrapy-23
+  - scrapy-24
+  - scrapy-25
+  - scrapy-26
+  - scrapy-27
+  - scrapy-28
+  - scrapy-29
+  - scrapy-30
+  - scrapy-31
+  - scrapy-32
+  - scrapy-33
+  - scrapy-34
+  - scrapy-35
+  - scrapy-36
+  - scrapy-37
+  - scrapy-38
+  - scrapy-39
+  - scrapy-40

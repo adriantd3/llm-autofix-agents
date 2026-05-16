@@ -1,0 +1,34 @@
+name: bugsinpy-full-ansible-orchestrator
+description: Multi-agent orchestrator on BugsInPy ansible - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - ansible-1
+  - ansible-2
+  - ansible-3
+  - ansible-4
+  - ansible-5
+  - ansible-6
+  - ansible-7
+  - ansible-8
+  - ansible-9
+  - ansible-10
+  - ansible-11
+  - ansible-12
+  - ansible-13
+  - ansible-14
+  - ansible-15
+  - ansible-16
+  - ansible-17
+  - ansible-18

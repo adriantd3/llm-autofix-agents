@@ -1,0 +1,46 @@
+name: bugsinpy-full-matplotlib-orchestrator
+description: Multi-agent orchestrator on BugsInPy matplotlib - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - matplotlib-1
+  - matplotlib-2
+  - matplotlib-3
+  - matplotlib-4
+  - matplotlib-5
+  - matplotlib-6
+  - matplotlib-7
+  - matplotlib-8
+  - matplotlib-9
+  - matplotlib-10
+  - matplotlib-11
+  - matplotlib-12
+  - matplotlib-13
+  - matplotlib-14
+  - matplotlib-15
+  - matplotlib-16
+  - matplotlib-17
+  - matplotlib-18
+  - matplotlib-19
+  - matplotlib-20
+  - matplotlib-21
+  - matplotlib-22
+  - matplotlib-23
+  - matplotlib-24
+  - matplotlib-25
+  - matplotlib-26
+  - matplotlib-27
+  - matplotlib-28
+  - matplotlib-29
+  - matplotlib-30

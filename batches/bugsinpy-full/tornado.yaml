@@ -1,0 +1,32 @@
+name: bugsinpy-full-tornado-orchestrator
+description: Multi-agent orchestrator on BugsInPy tornado - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - tornado-1
+  - tornado-2
+  - tornado-3
+  - tornado-4
+  - tornado-5
+  - tornado-6
+  - tornado-7
+  - tornado-8
+  - tornado-9
+  - tornado-10
+  - tornado-11
+  - tornado-12
+  - tornado-13
+  - tornado-14
+  - tornado-15
+  - tornado-16

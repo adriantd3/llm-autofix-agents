@@ -1,0 +1,48 @@
+name: bugsinpy-full-thefuck-orchestrator
+description: Multi-agent orchestrator on BugsInPy thefuck - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - thefuck-1
+  - thefuck-2
+  - thefuck-3
+  - thefuck-4
+  - thefuck-5
+  - thefuck-6
+  - thefuck-7
+  - thefuck-8
+  - thefuck-9
+  - thefuck-10
+  - thefuck-11
+  - thefuck-12
+  - thefuck-13
+  - thefuck-14
+  - thefuck-15
+  - thefuck-16
+  - thefuck-17
+  - thefuck-18
+  - thefuck-19
+  - thefuck-20
+  - thefuck-21
+  - thefuck-22
+  - thefuck-23
+  - thefuck-24
+  - thefuck-25
+  - thefuck-26
+  - thefuck-27
+  - thefuck-28
+  - thefuck-29
+  - thefuck-30
+  - thefuck-31
+  - thefuck-32

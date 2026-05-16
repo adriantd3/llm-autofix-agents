@@ -1,0 +1,61 @@
+name: bugsinpy-full-keras-orchestrator
+description: Multi-agent orchestrator on BugsInPy keras - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - keras-1
+  - keras-2
+  - keras-3
+  - keras-4
+  - keras-5
+  - keras-6
+  - keras-7
+  - keras-8
+  - keras-9
+  - keras-10
+  - keras-11
+  - keras-12
+  - keras-13
+  - keras-14
+  - keras-15
+  - keras-16
+  - keras-17
+  - keras-18
+  - keras-19
+  - keras-20
+  - keras-21
+  - keras-22
+  - keras-23
+  - keras-24
+  - keras-25
+  - keras-26
+  - keras-27
+  - keras-28
+  - keras-29
+  - keras-30
+  - keras-31
+  - keras-32
+  - keras-33
+  - keras-34
+  - keras-35
+  - keras-36
+  - keras-37
+  - keras-38
+  - keras-39
+  - keras-40
+  - keras-41
+  - keras-42
+  - keras-43
+  - keras-44
+  - keras-45

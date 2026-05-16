@@ -1,0 +1,49 @@
+name: bugsinpy-full-luigi-orchestrator
+description: Multi-agent orchestrator on BugsInPy luigi - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - luigi-1
+  - luigi-2
+  - luigi-3
+  - luigi-4
+  - luigi-5
+  - luigi-6
+  - luigi-7
+  - luigi-8
+  - luigi-9
+  - luigi-10
+  - luigi-11
+  - luigi-12
+  - luigi-13
+  - luigi-14
+  - luigi-15
+  - luigi-16
+  - luigi-17
+  - luigi-18
+  - luigi-19
+  - luigi-20
+  - luigi-21
+  - luigi-22
+  - luigi-23
+  - luigi-24
+  - luigi-25
+  - luigi-26
+  - luigi-27
+  - luigi-28
+  - luigi-29
+  - luigi-30
+  - luigi-31
+  - luigi-32
+  - luigi-33

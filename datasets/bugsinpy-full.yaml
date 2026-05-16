@@ -1,0 +1,2847 @@
+type: bugsinpy
+name: bugsinpy-full
+language: python
+
+tooling:
+  checkout_command_template: "bugsinpy-checkout -p {project} -v {version} -i {bug_id} -w {container_workspace}"
+  compile_command: "bugsinpy-compile"
+  test_command: "bugsinpy-test"
+  compile_required: true
+
+bugs:
+  # ansible (18 bugs, 1-18)
+  - id: ansible-1
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "1"
+      version: "0"
+  - id: ansible-2
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "2"
+      version: "0"
+  - id: ansible-3
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "3"
+      version: "0"
+  - id: ansible-4
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "4"
+      version: "0"
+  - id: ansible-5
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "5"
+      version: "0"
+  - id: ansible-6
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "6"
+      version: "0"
+  - id: ansible-7
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "7"
+      version: "0"
+  - id: ansible-8
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "8"
+      version: "0"
+  - id: ansible-9
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "9"
+      version: "0"
+  - id: ansible-10
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "10"
+      version: "0"
+  - id: ansible-11
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "11"
+      version: "0"
+  - id: ansible-12
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "12"
+      version: "0"
+  - id: ansible-13
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "13"
+      version: "0"
+  - id: ansible-14
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "14"
+      version: "0"
+  - id: ansible-15
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "15"
+      version: "0"
+  - id: ansible-16
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "16"
+      version: "0"
+  - id: ansible-17
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "17"
+      version: "0"
+  - id: ansible-18
+    program: ansible
+    metadata:
+      project: ansible
+      bug_id: "18"
+      version: "0"
+
+  # black (23 bugs, 1-23)
+  - id: black-1
+    program: black
+    metadata:
+      project: black
+      bug_id: "1"
+      version: "0"
+  - id: black-2
+    program: black
+    metadata:
+      project: black
+      bug_id: "2"
+      version: "0"
+  - id: black-3
+    program: black
+    metadata:
+      project: black
+      bug_id: "3"
+      version: "0"
+  - id: black-4
+    program: black
+    metadata:
+      project: black
+      bug_id: "4"
+      version: "0"
+  - id: black-5
+    program: black
+    metadata:
+      project: black
+      bug_id: "5"
+      version: "0"
+  - id: black-6
+    program: black
+    metadata:
+      project: black
+      bug_id: "6"
+      version: "0"
+  - id: black-7
+    program: black
+    metadata:
+      project: black
+      bug_id: "7"
+      version: "0"
+  - id: black-8
+    program: black
+    metadata:
+      project: black
+      bug_id: "8"
+      version: "0"
+  - id: black-9
+    program: black
+    metadata:
+      project: black
+      bug_id: "9"
+      version: "0"
+  - id: black-10
+    program: black
+    metadata:
+      project: black
+      bug_id: "10"
+      version: "0"
+  - id: black-11
+    program: black
+    metadata:
+      project: black
+      bug_id: "11"
+      version: "0"
+  - id: black-12
+    program: black
+    metadata:
+      project: black
+      bug_id: "12"
+      version: "0"
+  - id: black-13
+    program: black
+    metadata:
+      project: black
+      bug_id: "13"
+      version: "0"
+  - id: black-14
+    program: black
+    metadata:
+      project: black
+      bug_id: "14"
+      version: "0"
+  - id: black-15
+    program: black
+    metadata:
+      project: black
+      bug_id: "15"
+      version: "0"
+  - id: black-16
+    program: black
+    metadata:
+      project: black
+      bug_id: "16"
+      version: "0"
+  - id: black-17
+    program: black
+    metadata:
+      project: black
+      bug_id: "17"
+      version: "0"
+  - id: black-18
+    program: black
+    metadata:
+      project: black
+      bug_id: "18"
+      version: "0"
+  - id: black-19
+    program: black
+    metadata:
+      project: black
+      bug_id: "19"
+      version: "0"
+  - id: black-20
+    program: black
+    metadata:
+      project: black
+      bug_id: "20"
+      version: "0"
+  - id: black-21
+    program: black
+    metadata:
+      project: black
+      bug_id: "21"
+      version: "0"
+  - id: black-22
+    program: black
+    metadata:
+      project: black
+      bug_id: "22"
+      version: "0"
+  - id: black-23
+    program: black
+    metadata:
+      project: black
+      bug_id: "23"
+      version: "0"
+
+  # cookiecutter — EXCLUDED (proyecto completo)
+  # Root cause: todos los bugs usan `tox` como run_test.sh, que requiere py27/py33/py34/py35/pypy.
+  # tox siempre devuelve exit_code 1 (InterpreterNotFound) en el entorno Docker.
+  # Los tests reales nunca se ejecutan. Verificado en 2026-05-15.
+
+  # fastapi (16 bugs, 1-16)
+  - id: fastapi-1
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "1"
+      version: "0"
+  - id: fastapi-2
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "2"
+      version: "0"
+  - id: fastapi-3
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "3"
+      version: "0"
+  - id: fastapi-4
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "4"
+      version: "0"
+  - id: fastapi-5
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "5"
+      version: "0"
+  - id: fastapi-6
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "6"
+      version: "0"
+  - id: fastapi-7
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "7"
+      version: "0"
+  - id: fastapi-8
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "8"
+      version: "0"
+  - id: fastapi-9
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "9"
+      version: "0"
+  - id: fastapi-10
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "10"
+      version: "0"
+  - id: fastapi-11
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "11"
+      version: "0"
+  - id: fastapi-12
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "12"
+      version: "0"
+  - id: fastapi-13
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "13"
+      version: "0"
+  - id: fastapi-14
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "14"
+      version: "0"
+  - id: fastapi-15
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "15"
+      version: "0"
+  - id: fastapi-16
+    program: fastapi
+    metadata:
+      project: fastapi
+      bug_id: "16"
+      version: "0"
+
+  # httpie (5 bugs, 1-5)
+  - id: httpie-1
+    program: httpie
+    metadata:
+      project: httpie
+      bug_id: "1"
+      version: "0"
+  - id: httpie-2
+    program: httpie
+    metadata:
+      project: httpie
+      bug_id: "2"
+      version: "0"
+  - id: httpie-3
+    program: httpie
+    metadata:
+      project: httpie
+      bug_id: "3"
+      version: "0"
+  - id: httpie-4
+    program: httpie
+    metadata:
+      project: httpie
+      bug_id: "4"
+      version: "0"
+  - id: httpie-5
+    program: httpie
+    metadata:
+      project: httpie
+      bug_id: "5"
+      version: "0"
+
+  # keras (45 bugs, 1-45)
+  - id: keras-1
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "1"
+      version: "0"
+  - id: keras-2
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "2"
+      version: "0"
+  - id: keras-3
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "3"
+      version: "0"
+  - id: keras-4
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "4"
+      version: "0"
+  - id: keras-5
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "5"
+      version: "0"
+  - id: keras-6
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "6"
+      version: "0"
+  - id: keras-7
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "7"
+      version: "0"
+  - id: keras-8
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "8"
+      version: "0"
+  - id: keras-9
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "9"
+      version: "0"
+  - id: keras-10
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "10"
+      version: "0"
+  - id: keras-11
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "11"
+      version: "0"
+  - id: keras-12
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "12"
+      version: "0"
+  - id: keras-13
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "13"
+      version: "0"
+  - id: keras-14
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "14"
+      version: "0"
+  - id: keras-15
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "15"
+      version: "0"
+  - id: keras-16
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "16"
+      version: "0"
+  - id: keras-17
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "17"
+      version: "0"
+  - id: keras-18
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "18"
+      version: "0"
+  - id: keras-19
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "19"
+      version: "0"
+  - id: keras-20
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "20"
+      version: "0"
+  - id: keras-21
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "21"
+      version: "0"
+  - id: keras-22
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "22"
+      version: "0"
+  - id: keras-23
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "23"
+      version: "0"
+  - id: keras-24
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "24"
+      version: "0"
+  - id: keras-25
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "25"
+      version: "0"
+  - id: keras-26
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "26"
+      version: "0"
+  - id: keras-27
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "27"
+      version: "0"
+  - id: keras-28
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "28"
+      version: "0"
+  - id: keras-29
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "29"
+      version: "0"
+  - id: keras-30
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "30"
+      version: "0"
+  - id: keras-31
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "31"
+      version: "0"
+  - id: keras-32
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "32"
+      version: "0"
+  - id: keras-33
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "33"
+      version: "0"
+  - id: keras-34
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "34"
+      version: "0"
+  - id: keras-35
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "35"
+      version: "0"
+  - id: keras-36
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "36"
+      version: "0"
+  - id: keras-37
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "37"
+      version: "0"
+  - id: keras-38
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "38"
+      version: "0"
+  - id: keras-39
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "39"
+      version: "0"
+  - id: keras-40
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "40"
+      version: "0"
+  - id: keras-41
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "41"
+      version: "0"
+  - id: keras-42
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "42"
+      version: "0"
+  - id: keras-43
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "43"
+      version: "0"
+  - id: keras-44
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "44"
+      version: "0"
+  - id: keras-45
+    program: keras
+    metadata:
+      project: keras
+      bug_id: "45"
+      version: "0"
+
+  # luigi (33 bugs, 1-33)
+  - id: luigi-1
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "1"
+      version: "0"
+  - id: luigi-2
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "2"
+      version: "0"
+  - id: luigi-3
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "3"
+      version: "0"
+  - id: luigi-4
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "4"
+      version: "0"
+  - id: luigi-5
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "5"
+      version: "0"
+  - id: luigi-6
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "6"
+      version: "0"
+  - id: luigi-7
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "7"
+      version: "0"
+  - id: luigi-8
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "8"
+      version: "0"
+  - id: luigi-9
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "9"
+      version: "0"
+  - id: luigi-10
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "10"
+      version: "0"
+  - id: luigi-11
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "11"
+      version: "0"
+  - id: luigi-12
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "12"
+      version: "0"
+  - id: luigi-13
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "13"
+      version: "0"
+  - id: luigi-14
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "14"
+      version: "0"
+  - id: luigi-15
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "15"
+      version: "0"
+  - id: luigi-16
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "16"
+      version: "0"
+  - id: luigi-17
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "17"
+      version: "0"
+  - id: luigi-18
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "18"
+      version: "0"
+  - id: luigi-19
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "19"
+      version: "0"
+  - id: luigi-20
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "20"
+      version: "0"
+  - id: luigi-21
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "21"
+      version: "0"
+  - id: luigi-22
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "22"
+      version: "0"
+  - id: luigi-23
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "23"
+      version: "0"
+  - id: luigi-24
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "24"
+      version: "0"
+  - id: luigi-25
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "25"
+      version: "0"
+  - id: luigi-26
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "26"
+      version: "0"
+  - id: luigi-27
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "27"
+      version: "0"
+  - id: luigi-28
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "28"
+      version: "0"
+  - id: luigi-29
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "29"
+      version: "0"
+  - id: luigi-30
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "30"
+      version: "0"
+  - id: luigi-31
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "31"
+      version: "0"
+  - id: luigi-32
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "32"
+      version: "0"
+  - id: luigi-33
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "33"
+      version: "0"
+
+  # matplotlib (30 bugs, 1-30)
+  - id: matplotlib-1
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "1"
+      version: "0"
+  - id: matplotlib-2
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "2"
+      version: "0"
+  - id: matplotlib-3
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "3"
+      version: "0"
+  - id: matplotlib-4
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "4"
+      version: "0"
+  - id: matplotlib-5
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "5"
+      version: "0"
+  - id: matplotlib-6
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "6"
+      version: "0"
+  - id: matplotlib-7
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "7"
+      version: "0"
+  - id: matplotlib-8
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "8"
+      version: "0"
+  - id: matplotlib-9
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "9"
+      version: "0"
+  - id: matplotlib-10
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "10"
+      version: "0"
+  - id: matplotlib-11
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "11"
+      version: "0"
+  - id: matplotlib-12
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "12"
+      version: "0"
+  - id: matplotlib-13
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "13"
+      version: "0"
+  - id: matplotlib-14
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "14"
+      version: "0"
+  - id: matplotlib-15
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "15"
+      version: "0"
+  - id: matplotlib-16
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "16"
+      version: "0"
+  - id: matplotlib-17
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "17"
+      version: "0"
+  - id: matplotlib-18
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "18"
+      version: "0"
+  - id: matplotlib-19
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "19"
+      version: "0"
+  - id: matplotlib-20
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "20"
+      version: "0"
+  - id: matplotlib-21
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "21"
+      version: "0"
+  - id: matplotlib-22
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "22"
+      version: "0"
+  - id: matplotlib-23
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "23"
+      version: "0"
+  - id: matplotlib-24
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "24"
+      version: "0"
+  - id: matplotlib-25
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "25"
+      version: "0"
+  - id: matplotlib-26
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "26"
+      version: "0"
+  - id: matplotlib-27
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "27"
+      version: "0"
+  - id: matplotlib-28
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "28"
+      version: "0"
+  - id: matplotlib-29
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "29"
+      version: "0"
+  - id: matplotlib-30
+    program: matplotlib
+    metadata:
+      project: matplotlib
+      bug_id: "30"
+      version: "0"
+
+  # pandas (IDs: 1-7, 10-70, 100-169; bug 10 incluido para análisis de infra)
+  - id: pandas-1
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "1"
+      version: "0"
+  - id: pandas-2
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "2"
+      version: "0"
+  - id: pandas-3
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "3"
+      version: "0"
+  - id: pandas-4
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "4"
+      version: "0"
+  - id: pandas-5
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "5"
+      version: "0"
+  - id: pandas-6
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "6"
+      version: "0"
+  - id: pandas-7
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "7"
+      version: "0"
+  # pandas-8 y pandas-9 no existen en el repositorio BugsInPy
+  # pandas-10: C extension pandas._libs.interval no compila en este snapshot.
+  # Incluido para análisis de infra — se espera fallo de setup.
+  - id: pandas-10
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "10"
+      version: "0"
+  - id: pandas-11
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "11"
+      version: "0"
+  - id: pandas-12
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "12"
+      version: "0"
+  - id: pandas-13
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "13"
+      version: "0"
+  - id: pandas-14
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "14"
+      version: "0"
+  - id: pandas-15
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "15"
+      version: "0"
+  - id: pandas-16
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "16"
+      version: "0"
+  - id: pandas-17
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "17"
+      version: "0"
+  - id: pandas-18
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "18"
+      version: "0"
+  - id: pandas-19
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "19"
+      version: "0"
+  - id: pandas-20
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "20"
+      version: "0"
+  - id: pandas-21
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "21"
+      version: "0"
+  - id: pandas-22
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "22"
+      version: "0"
+  - id: pandas-23
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "23"
+      version: "0"
+  - id: pandas-24
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "24"
+      version: "0"
+  - id: pandas-25
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "25"
+      version: "0"
+  - id: pandas-26
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "26"
+      version: "0"
+  - id: pandas-27
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "27"
+      version: "0"
+  - id: pandas-28
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "28"
+      version: "0"
+  - id: pandas-29
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "29"
+      version: "0"
+  - id: pandas-30
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "30"
+      version: "0"
+  - id: pandas-31
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "31"
+      version: "0"
+  - id: pandas-32
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "32"
+      version: "0"
+  - id: pandas-33
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "33"
+      version: "0"
+  - id: pandas-34
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "34"
+      version: "0"
+  - id: pandas-35
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "35"
+      version: "0"
+  - id: pandas-36
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "36"
+      version: "0"
+  - id: pandas-37
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "37"
+      version: "0"
+  - id: pandas-38
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "38"
+      version: "0"
+  - id: pandas-39
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "39"
+      version: "0"
+  - id: pandas-40
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "40"
+      version: "0"
+  - id: pandas-41
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "41"
+      version: "0"
+  - id: pandas-42
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "42"
+      version: "0"
+  - id: pandas-43
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "43"
+      version: "0"
+  - id: pandas-44
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "44"
+      version: "0"
+  - id: pandas-45
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "45"
+      version: "0"
+  - id: pandas-46
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "46"
+      version: "0"
+  - id: pandas-47
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "47"
+      version: "0"
+  - id: pandas-48
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "48"
+      version: "0"
+  - id: pandas-49
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "49"
+      version: "0"
+  - id: pandas-50
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "50"
+      version: "0"
+  - id: pandas-51
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "51"
+      version: "0"
+  - id: pandas-52
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "52"
+      version: "0"
+  - id: pandas-53
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "53"
+      version: "0"
+  - id: pandas-54
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "54"
+      version: "0"
+  - id: pandas-55
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "55"
+      version: "0"
+  - id: pandas-56
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "56"
+      version: "0"
+  - id: pandas-57
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "57"
+      version: "0"
+  - id: pandas-58
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "58"
+      version: "0"
+  - id: pandas-59
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "59"
+      version: "0"
+  - id: pandas-60
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "60"
+      version: "0"
+  - id: pandas-61
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "61"
+      version: "0"
+  - id: pandas-62
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "62"
+      version: "0"
+  - id: pandas-63
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "63"
+      version: "0"
+  - id: pandas-64
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "64"
+      version: "0"
+  - id: pandas-65
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "65"
+      version: "0"
+  - id: pandas-66
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "66"
+      version: "0"
+  - id: pandas-67
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "67"
+      version: "0"
+  - id: pandas-68
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "68"
+      version: "0"
+  - id: pandas-69
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "69"
+      version: "0"
+  - id: pandas-70
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "70"
+      version: "0"
+  # pandas 71-99 no existen en el repositorio BugsInPy
+  - id: pandas-100
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "100"
+      version: "0"
+  - id: pandas-101
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "101"
+      version: "0"
+  - id: pandas-102
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "102"
+      version: "0"
+  - id: pandas-103
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "103"
+      version: "0"
+  - id: pandas-104
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "104"
+      version: "0"
+  - id: pandas-105
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "105"
+      version: "0"
+  - id: pandas-106
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "106"
+      version: "0"
+  - id: pandas-107
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "107"
+      version: "0"
+  - id: pandas-108
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "108"
+      version: "0"
+  - id: pandas-109
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "109"
+      version: "0"
+  - id: pandas-110
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "110"
+      version: "0"
+  - id: pandas-111
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "111"
+      version: "0"
+  - id: pandas-112
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "112"
+      version: "0"
+  - id: pandas-113
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "113"
+      version: "0"
+  - id: pandas-114
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "114"
+      version: "0"
+  - id: pandas-115
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "115"
+      version: "0"
+  - id: pandas-116
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "116"
+      version: "0"
+  - id: pandas-117
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "117"
+      version: "0"
+  - id: pandas-118
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "118"
+      version: "0"
+  - id: pandas-119
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "119"
+      version: "0"
+  - id: pandas-120
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "120"
+      version: "0"
+  - id: pandas-121
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "121"
+      version: "0"
+  - id: pandas-122
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "122"
+      version: "0"
+  - id: pandas-123
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "123"
+      version: "0"
+  - id: pandas-124
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "124"
+      version: "0"
+  - id: pandas-125
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "125"
+      version: "0"
+  - id: pandas-126
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "126"
+      version: "0"
+  - id: pandas-127
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "127"
+      version: "0"
+  - id: pandas-128
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "128"
+      version: "0"
+  - id: pandas-129
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "129"
+      version: "0"
+  - id: pandas-130
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "130"
+      version: "0"
+  - id: pandas-131
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "131"
+      version: "0"
+  - id: pandas-132
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "132"
+      version: "0"
+  - id: pandas-133
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "133"
+      version: "0"
+  - id: pandas-134
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "134"
+      version: "0"
+  - id: pandas-135
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "135"
+      version: "0"
+  - id: pandas-136
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "136"
+      version: "0"
+  - id: pandas-137
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "137"
+      version: "0"
+  - id: pandas-138
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "138"
+      version: "0"
+  - id: pandas-139
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "139"
+      version: "0"
+  - id: pandas-140
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "140"
+      version: "0"
+  - id: pandas-141
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "141"
+      version: "0"
+  - id: pandas-142
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "142"
+      version: "0"
+  - id: pandas-143
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "143"
+      version: "0"
+  - id: pandas-144
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "144"
+      version: "0"
+  - id: pandas-145
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "145"
+      version: "0"
+  - id: pandas-146
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "146"
+      version: "0"
+  - id: pandas-147
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "147"
+      version: "0"
+  - id: pandas-148
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "148"
+      version: "0"
+  - id: pandas-149
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "149"
+      version: "0"
+  - id: pandas-150
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "150"
+      version: "0"
+  - id: pandas-151
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "151"
+      version: "0"
+  - id: pandas-152
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "152"
+      version: "0"
+  - id: pandas-153
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "153"
+      version: "0"
+  - id: pandas-154
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "154"
+      version: "0"
+  - id: pandas-155
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "155"
+      version: "0"
+  - id: pandas-156
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "156"
+      version: "0"
+  - id: pandas-157
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "157"
+      version: "0"
+  - id: pandas-158
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "158"
+      version: "0"
+  - id: pandas-159
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "159"
+      version: "0"
+  - id: pandas-160
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "160"
+      version: "0"
+  - id: pandas-161
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "161"
+      version: "0"
+  - id: pandas-162
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "162"
+      version: "0"
+  - id: pandas-163
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "163"
+      version: "0"
+  - id: pandas-164
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "164"
+      version: "0"
+  - id: pandas-165
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "165"
+      version: "0"
+  - id: pandas-166
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "166"
+      version: "0"
+  - id: pandas-167
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "167"
+      version: "0"
+  - id: pandas-168
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "168"
+      version: "0"
+  - id: pandas-169
+    program: pandas
+    metadata:
+      project: pandas
+      bug_id: "169"
+      version: "0"
+
+  # PySnooper (3 bugs, 1-3)
+  - id: PySnooper-1
+    program: PySnooper
+    metadata:
+      project: PySnooper
+      bug_id: "1"
+      version: "0"
+  - id: PySnooper-2
+    program: PySnooper
+    metadata:
+      project: PySnooper
+      bug_id: "2"
+      version: "0"
+  - id: PySnooper-3
+    program: PySnooper
+    metadata:
+      project: PySnooper
+      bug_id: "3"
+      version: "0"
+
+  # sanic (5 bugs, 1-5)
+  - id: sanic-1
+    program: sanic
+    metadata:
+      project: sanic
+      bug_id: "1"
+      version: "0"
+  - id: sanic-2
+    program: sanic
+    metadata:
+      project: sanic
+      bug_id: "2"
+      version: "0"
+  - id: sanic-3
+    program: sanic
+    metadata:
+      project: sanic
+      bug_id: "3"
+      version: "0"
+  - id: sanic-4
+    program: sanic
+    metadata:
+      project: sanic
+      bug_id: "4"
+      version: "0"
+  - id: sanic-5
+    program: sanic
+    metadata:
+      project: sanic
+      bug_id: "5"
+      version: "0"
+
+  # scrapy (40 bugs, 1-40)
+  - id: scrapy-1
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "1"
+      version: "0"
+  - id: scrapy-2
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "2"
+      version: "0"
+  - id: scrapy-3
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "3"
+      version: "0"
+  - id: scrapy-4
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "4"
+      version: "0"
+  - id: scrapy-5
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "5"
+      version: "0"
+  - id: scrapy-6
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "6"
+      version: "0"
+  - id: scrapy-7
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "7"
+      version: "0"
+  - id: scrapy-8
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "8"
+      version: "0"
+  - id: scrapy-9
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "9"
+      version: "0"
+  - id: scrapy-10
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "10"
+      version: "0"
+  - id: scrapy-11
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "11"
+      version: "0"
+  - id: scrapy-12
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "12"
+      version: "0"
+  - id: scrapy-13
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "13"
+      version: "0"
+  - id: scrapy-14
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "14"
+      version: "0"
+  - id: scrapy-15
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "15"
+      version: "0"
+  - id: scrapy-16
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "16"
+      version: "0"
+  - id: scrapy-17
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "17"
+      version: "0"
+  - id: scrapy-18
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "18"
+      version: "0"
+  - id: scrapy-19
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "19"
+      version: "0"
+  - id: scrapy-20
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "20"
+      version: "0"
+  - id: scrapy-21
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "21"
+      version: "0"
+  - id: scrapy-22
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "22"
+      version: "0"
+  - id: scrapy-23
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "23"
+      version: "0"
+  - id: scrapy-24
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "24"
+      version: "0"
+  - id: scrapy-25
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "25"
+      version: "0"
+  - id: scrapy-26
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "26"
+      version: "0"
+  - id: scrapy-27
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "27"
+      version: "0"
+  - id: scrapy-28
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "28"
+      version: "0"
+  - id: scrapy-29
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "29"
+      version: "0"
+  - id: scrapy-30
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "30"
+      version: "0"
+  - id: scrapy-31
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "31"
+      version: "0"
+  - id: scrapy-32
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "32"
+      version: "0"
+  - id: scrapy-33
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "33"
+      version: "0"
+  - id: scrapy-34
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "34"
+      version: "0"
+  - id: scrapy-35
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "35"
+      version: "0"
+  - id: scrapy-36
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "36"
+      version: "0"
+  - id: scrapy-37
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "37"
+      version: "0"
+  - id: scrapy-38
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "38"
+      version: "0"
+  - id: scrapy-39
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "39"
+      version: "0"
+  - id: scrapy-40
+    program: scrapy
+    metadata:
+      project: scrapy
+      bug_id: "40"
+      version: "0"
+
+  # spacy (10 bugs, 1-10)
+  - id: spacy-1
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "1"
+      version: "0"
+  - id: spacy-2
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "2"
+      version: "0"
+  - id: spacy-3
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "3"
+      version: "0"
+  - id: spacy-4
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "4"
+      version: "0"
+  - id: spacy-5
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "5"
+      version: "0"
+  - id: spacy-6
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "6"
+      version: "0"
+  - id: spacy-7
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "7"
+      version: "0"
+  - id: spacy-8
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "8"
+      version: "0"
+  - id: spacy-9
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "9"
+      version: "0"
+  - id: spacy-10
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "10"
+      version: "0"
+
+  # thefuck (32 bugs, 1-32)
+  - id: thefuck-1
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "1"
+      version: "0"
+  - id: thefuck-2
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "2"
+      version: "0"
+  - id: thefuck-3
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "3"
+      version: "0"
+  - id: thefuck-4
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "4"
+      version: "0"
+  - id: thefuck-5
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "5"
+      version: "0"
+  - id: thefuck-6
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "6"
+      version: "0"
+  - id: thefuck-7
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "7"
+      version: "0"
+  - id: thefuck-8
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "8"
+      version: "0"
+  - id: thefuck-9
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "9"
+      version: "0"
+  - id: thefuck-10
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "10"
+      version: "0"
+  - id: thefuck-11
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "11"
+      version: "0"
+  - id: thefuck-12
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "12"
+      version: "0"
+  - id: thefuck-13
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "13"
+      version: "0"
+  - id: thefuck-14
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "14"
+      version: "0"
+  - id: thefuck-15
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "15"
+      version: "0"
+  - id: thefuck-16
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "16"
+      version: "0"
+  - id: thefuck-17
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "17"
+      version: "0"
+  - id: thefuck-18
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "18"
+      version: "0"
+  - id: thefuck-19
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "19"
+      version: "0"
+  - id: thefuck-20
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "20"
+      version: "0"
+  - id: thefuck-21
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "21"
+      version: "0"
+  - id: thefuck-22
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "22"
+      version: "0"
+  - id: thefuck-23
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "23"
+      version: "0"
+  - id: thefuck-24
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "24"
+      version: "0"
+  - id: thefuck-25
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "25"
+      version: "0"
+  - id: thefuck-26
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "26"
+      version: "0"
+  - id: thefuck-27
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "27"
+      version: "0"
+  - id: thefuck-28
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "28"
+      version: "0"
+  - id: thefuck-29
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "29"
+      version: "0"
+  - id: thefuck-30
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "30"
+      version: "0"
+  - id: thefuck-31
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "31"
+      version: "0"
+  - id: thefuck-32
+    program: thefuck
+    metadata:
+      project: thefuck
+      bug_id: "32"
+      version: "0"
+
+  # tornado (16 bugs, 1-16)
+  - id: tornado-1
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "1"
+      version: "0"
+  - id: tornado-2
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "2"
+      version: "0"
+  - id: tornado-3
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "3"
+      version: "0"
+  - id: tornado-4
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "4"
+      version: "0"
+  - id: tornado-5
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "5"
+      version: "0"
+  - id: tornado-6
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "6"
+      version: "0"
+  - id: tornado-7
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "7"
+      version: "0"
+  - id: tornado-8
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "8"
+      version: "0"
+  - id: tornado-9
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "9"
+      version: "0"
+  - id: tornado-10
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "10"
+      version: "0"
+  - id: tornado-11
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "11"
+      version: "0"
+  - id: tornado-12
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "12"
+      version: "0"
+  - id: tornado-13
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "13"
+      version: "0"
+  - id: tornado-14
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "14"
+      version: "0"
+  - id: tornado-15
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "15"
+      version: "0"
+  - id: tornado-16
+    program: tornado
+    metadata:
+      project: tornado
+      bug_id: "16"
+      version: "0"
+
+  # tqdm (9 bugs, 1-9)
+  - id: tqdm-1
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "1"
+      version: "0"
+  - id: tqdm-2
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "2"
+      version: "0"
+  - id: tqdm-3
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "3"
+      version: "0"
+  - id: tqdm-4
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "4"
+      version: "0"
+  - id: tqdm-5
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "5"
+      version: "0"
+  - id: tqdm-6
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "6"
+      version: "0"
+  - id: tqdm-7
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "7"
+      version: "0"
+  - id: tqdm-8
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "8"
+      version: "0"
+  - id: tqdm-9
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "9"
+      version: "0"
+
+  # youtube-dl (43 bugs, 1-43)
+  - id: youtube-dl-1
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "1"
+      version: "0"
+  - id: youtube-dl-2
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "2"
+      version: "0"
+  - id: youtube-dl-3
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "3"
+      version: "0"
+  - id: youtube-dl-4
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "4"
+      version: "0"
+  - id: youtube-dl-5
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "5"
+      version: "0"
+  - id: youtube-dl-6
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "6"
+      version: "0"
+  - id: youtube-dl-7
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "7"
+      version: "0"
+  - id: youtube-dl-8
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "8"
+      version: "0"
+  - id: youtube-dl-9
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "9"
+      version: "0"
+  - id: youtube-dl-10
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "10"
+      version: "0"
+  - id: youtube-dl-11
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "11"
+      version: "0"
+  - id: youtube-dl-12
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "12"
+      version: "0"
+  - id: youtube-dl-13
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "13"
+      version: "0"
+  - id: youtube-dl-14
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "14"
+      version: "0"
+  - id: youtube-dl-15
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "15"
+      version: "0"
+  - id: youtube-dl-16
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "16"
+      version: "0"
+  - id: youtube-dl-17
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "17"
+      version: "0"
+  - id: youtube-dl-18
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "18"
+      version: "0"
+  - id: youtube-dl-19
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "19"
+      version: "0"
+  - id: youtube-dl-20
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "20"
+      version: "0"
+  - id: youtube-dl-21
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "21"
+      version: "0"
+  - id: youtube-dl-22
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "22"
+      version: "0"
+  - id: youtube-dl-23
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "23"
+      version: "0"
+  - id: youtube-dl-24
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "24"
+      version: "0"
+  - id: youtube-dl-25
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "25"
+      version: "0"
+  - id: youtube-dl-26
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "26"
+      version: "0"
+  - id: youtube-dl-27
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "27"
+      version: "0"
+  - id: youtube-dl-28
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "28"
+      version: "0"
+  - id: youtube-dl-29
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "29"
+      version: "0"
+  - id: youtube-dl-30
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "30"
+      version: "0"
+  - id: youtube-dl-31
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "31"
+      version: "0"
+  - id: youtube-dl-32
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "32"
+      version: "0"
+  - id: youtube-dl-33
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "33"
+      version: "0"
+  - id: youtube-dl-34
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "34"
+      version: "0"
+  - id: youtube-dl-35
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "35"
+      version: "0"
+  - id: youtube-dl-36
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "36"
+      version: "0"
+  - id: youtube-dl-37
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "37"
+      version: "0"
+  - id: youtube-dl-38
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "38"
+      version: "0"
+  - id: youtube-dl-39
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "39"
+      version: "0"
+  - id: youtube-dl-40
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "40"
+      version: "0"
+  - id: youtube-dl-41
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "41"
+      version: "0"
+  - id: youtube-dl-42
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "42"
+      version: "0"
+  - id: youtube-dl-43
+    program: youtube-dl
+    metadata:
+      project: youtube-dl
+      bug_id: "43"
+      version: "0"

@@ -1,0 +1,39 @@
+name: bugsinpy-full-black-orchestrator
+description: Multi-agent orchestrator on BugsInPy black - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - black-1
+  - black-2
+  - black-3
+  - black-4
+  - black-5
+  - black-6
+  - black-7
+  - black-8
+  - black-9
+  - black-10
+  - black-11
+  - black-12
+  - black-13
+  - black-14
+  - black-15
+  - black-16
+  - black-17
+  - black-18
+  - black-19
+  - black-20
+  - black-21
+  - black-22
+  - black-23

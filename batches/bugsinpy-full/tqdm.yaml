@@ -1,0 +1,25 @@
+name: bugsinpy-full-tqdm-orchestrator
+description: Multi-agent orchestrator on BugsInPy tqdm - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - tqdm-1
+  - tqdm-2
+  - tqdm-3
+  - tqdm-4
+  - tqdm-5
+  - tqdm-6
+  - tqdm-7
+  - tqdm-8
+  - tqdm-9

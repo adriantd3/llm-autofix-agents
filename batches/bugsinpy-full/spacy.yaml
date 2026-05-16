@@ -1,0 +1,26 @@
+name: bugsinpy-full-spacy-orchestrator
+description: Multi-agent orchestrator on BugsInPy spacy - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - spacy-1
+  - spacy-2
+  - spacy-3
+  - spacy-4
+  - spacy-5
+  - spacy-6
+  - spacy-7
+  - spacy-8
+  - spacy-9
+  - spacy-10

@@ -1,0 +1,21 @@
+name: bugsinpy-full-sanic-orchestrator
+description: Multi-agent orchestrator on BugsInPy sanic - full dataset (preliminary analysis)
+
+dataset: ../../datasets/bugsinpy-full.yaml
+
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5:9b
+    max_turns: 20
+  max_iterations: 3
+  timeout_seconds: 600
+  capture_errors: true
+
+bugs:
+  - sanic-1
+  - sanic-2
+  - sanic-3
+  - sanic-4
+  - sanic-5
