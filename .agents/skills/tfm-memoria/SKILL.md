@@ -79,6 +79,24 @@ Las decisiones no son arbitrarias. El texto transmite que cada elección respond
 
 Guiar el avance del discurso con: *en primer lugar*, *posteriormente*, *también*, *por último*, *en concreto*, *además*, *finalmente*, *sin embargo*, *no obstante*, *asimismo*. Usarlos para marcar transiciones reales, no para rellenar.
 
+### Rayas como separadores — PROHIBIDO
+
+En español las rayas (`---`) no se usan como separadores de listas inline dentro del texto. Son un anglicismo tipográfico que queda muy forzado. En su lugar, usar comas o restructurar la frase. En vez de `---X, Y y Z---` escribir `X, Y y Z` directamente.
+
+### Citas con `\cite{}` — no repetir autores manualmente
+
+No escribir `Autor et al.~\cite{clave}` salvo que sea imprescindible nombrar a los autores por alguna razón narrativa concreta. Lo habitual es nombrar el sistema o el trabajo y poner la cita al final: `GenProg~\cite{legoues2012genprog}`, `En~\cite{prenner2022codex} se evaluó...`, o `el trabajo de~\cite{xia2023chatrepair} demostró...`. No duplicar la información que ya está en el número de la cita.
+
+### Ritmo y naturalidad — evitar el tono IA
+
+El texto no debe ser telegráfico ni avanzar a máxima velocidad de un concepto al siguiente. Antes de presentar un trabajo o una herramienta, conviene situar al lector: por qué surge, qué problema resuelve, en qué contexto aparece. Evitar:
+- Frases que empiezan directamente con la definición del concepto sin contexto previo.
+- Párrafos de dos o tres frases que equivalen a un titular, sin desarrollo.
+- Vocabulario excesivamente formal o técnico-clínico que delata un registro de experto o de IA: *sintomatología*, *cualitativamente superior*, *de naturaleza metodológica*, *implicaciones directas*, *resulta fundamental destacar*, *convergencia de líneas de investigación*. Usar el equivalente más sencillo: *los efectos del error*, *mejor que*, *algo metodológico*, *afecta directamente a*.
+- Construir cada párrafo con la misma estructura mecánica.
+
+El registro es el de un estudiante técnico serio: formal pero no pretencioso, capaz de explicar algo complejo con palabras directas.
+
 ### Frases
 
 Las frases tienden a ser largas, con varias aclaraciones en la misma oración: explicación, causa y consecuencia juntas. Esto aporta densidad informativa, pero puede volverse pesado si se abusa. Alternar frases largas con otras más cortas para dar ritmo al texto.

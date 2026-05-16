@@ -213,6 +213,7 @@ __marimo__/
 .specify/*.json
 
 .opencode/
+.claude
 
 openai-examples/
 results/
