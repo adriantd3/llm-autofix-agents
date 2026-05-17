@@ -128,6 +128,11 @@ class APRRunHooks(RunHooks[Any]):
         self._pending_starts.setdefault(tool_name_str, []).append(
             (self._seq, utc_now_iso(), count)
         )
+        # Update the shared tool-call counter so dynamic instructions can
+        # detect exploration-without-editing patterns per LLM turn.
+        tool_ctx = getattr(context, "context", None)
+        if tool_ctx is not None and hasattr(tool_ctx, "iteration_tool_call_count"):
+            tool_ctx.iteration_tool_call_count += 1
 
     async def on_tool_end(
         self,

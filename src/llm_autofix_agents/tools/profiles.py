@@ -94,16 +94,6 @@ APR_ORCHESTRATOR_TEST_RUNNER_TOOLS = [
     read_file,
 ]
 
-# main orchestrator: write tools + targeted search + direct test execution.
-# Intentionally EXCLUDED to prevent exploration procrastination loops:
-#   - execute_command: forces structured tool use, no cat/ls/grep
-#   - get_workspace_info: full-workspace dump, too broad
-#   - git_status_summary, git_diff_summary: unnecessary overhead in fix loop
-# list_files is included for targeted directory lookups (e.g. listing testdata/)
-# — without it the agent wastes turns using search_files as a filename finder.
-# search_files is for content/symbol lookup; list_files is for file discovery.
-# run_test_target is included DIRECTLY (no sub-agent) to avoid second LLM call
-# on a local single-slot Ollama instance, which causes "An error occurred" failures.
 APR_ORCHESTRATOR_MAIN_TOOLS = [
     list_files,
     search_files,
@@ -111,7 +101,6 @@ APR_ORCHESTRATOR_MAIN_TOOLS = [
     write_file,
     replace_in_file,
     replace_lines,
-    run_test_target,
 ]
 
 # Planner-Executor architecture tool profiles

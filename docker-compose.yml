@@ -24,9 +24,11 @@ services:
     environment:
       HOME: /tmp
       UV_CACHE_DIR: /tmp/.uv-cache
+      PIP_CACHE_DIR: /pip-cache
     volumes:
       - ./results:/results
       - ./benchmark-workspaces:/benchmark-workspaces
       - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+      - ./pip-cache:/pip-cache
     extra_hosts:
       - "host.docker.internal:host-gateway"

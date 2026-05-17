@@ -219,5 +219,6 @@ openai-examples/
 results/
 benchmark-workspaces/
 prompts/
+pip-cache/
 
 memoria/

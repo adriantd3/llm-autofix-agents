@@ -284,9 +284,17 @@ class OpenAIAgentsSDKProvider:
                     confidence=0.0,
                     notes="Model final_output was None",
                 )
+            elif isinstance(output, AgentFixIterationRecord):
+                # max_turns handler returned the wrong wrapper type (should be
+                # AgentFixIterationResult, not AgentFixIterationRecord).
+                agent_proposal = output.proposal
             else:
+                # Last resort: serialize via model_dump() for Pydantic models,
+                # then fall back to json.dumps for anything else.
+                dump_fn = getattr(output, "model_dump", None)
+                raw = dump_fn() if callable(dump_fn) else output
                 agent_proposal = AgentFixIterationResult.model_validate_json(
-                    json.dumps(output, ensure_ascii=True)
+                    json.dumps(raw, ensure_ascii=True)
                 )
         except Exception as exc:
             raise RuntimeError("Model returned invalid structured output for APR proposal") from exc
@@ -557,15 +565,17 @@ def _make_max_turns_handler(max_turns: int):
     """
     def _on_max_turns(data: RunErrorHandlerInput[Any]) -> RunErrorHandlerResult:
         notes = _extract_research_context(data.run_data, max_turns)
-        proposal = AgentFixIterationRecord(
-            proposal=AgentFixIterationResult(
+        # final_output must be AgentFixIterationResult (the agent's output_type),
+        # NOT AgentFixIterationRecord — the wrapper is built by the caller.
+        return RunErrorHandlerResult(
+            final_output=AgentFixIterationResult(
                 status="done",
                 reasoning_summary="Agent exceeded maximum turns; assuming completion based on tool usage",
                 confidence=0.5,
                 notes=notes,
             ),
+            include_in_history=False,
         )
-        return RunErrorHandlerResult(final_output=proposal, include_in_history=False)
 
     return _on_max_turns
 

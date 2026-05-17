@@ -700,9 +700,9 @@ class MaxTurnsHandlerTests(unittest.TestCase):
         self.assertIsInstance(result, RunErrorHandlerResult)
         self.assertFalse(result.include_in_history)
         proposal = result.final_output
-        self.assertIsInstance(proposal, AgentFixIterationRecord)
-        self.assertEqual(proposal.proposal.status, "done")
-        self.assertIn("foo.py:42", proposal.proposal.notes or "")
+        self.assertIsInstance(proposal, AgentFixIterationResult)
+        self.assertEqual(proposal.status, "done")
+        self.assertIn("foo.py:42", proposal.notes or "")
 
     @patch("llm_autofix_agents.llm.provider.set_tracing_disabled")
     @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)

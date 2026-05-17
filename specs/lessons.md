@@ -345,3 +345,20 @@
 - Alternativa recomendada: (1) escalar a un modelo con mejor razonamiento (GPT-4, Claude, Gemini), (2) para modelos locales más grandes (70B+), re-evaluar capacidad de razonamiento semántico, (3) considerar few-shot examples en el prompt con el patrón correcto.
 - Regla preventiva para futuras specs: al evaluar éxito de arquitecturas, separar siempre "la arquitectura funciona" de "el modelo puede resolver el bug"; usar benchmarks con distintos niveles de dificultad de razonamiento.
 - Regla preventiva para futuras specs: cualquier operación destrutiva sobre filesystem/Git debe tener (a) guardrail que bloquee el proyecto de desarrollo, (b) aislamiento por defecto en tests, y (c) mocks defensivos en la capa de integración.
+
+## 2026-05-17 (context hygiene via sub-agent y límites de modelo 9b)
+- Contexto: SPEC-014 conectó el TestRunner sub-agent (patrón as_tool) para que el orquestador reciba resúmenes markdown limpios en vez de JSON crudo con stdout completo. Evaluación comparativa con qwen3.5:27b y qwen3.5:9b sobre httpie.
+- Anti-patrón detectado: inyectar stdout completo de pytest (miles de chars) en el contexto del orquestador provoca loops de exploración y waste de tokens. Un sub-agent que interprete y resuma elimina este ruido.
+- Qué no hay que hacer: esperar que un modelo 9B local produzca JSON estructurado (AgentFixIterationResult) confiablemente. qwen3.5:9b falla en 4/5 bugs por "invalid structured output" — el modelo no puede completar el schema JSON requerido.
+- Por qué estuvo mal: el modelo 9B genera texto plano en vez del JSON con campos status/notes/confidence. También falla en `replace_in_file` (old_text_not_found) porque no trackea el estado de archivos correctamente.
+- Alternativa recomendada: para modelos <27B, considerar output_schema=None (texto libre) con parsing posterior. Para modelos 27B+, el JSON estructurado funciona.
+- Impacto: con qwen3.5:27b, la arquitectura TestRunner mejora eficiencia -64% duración y -69% tool calls en bugs exitosos vs. baseline directo.
+- Regla preventiva para futuras specs: siempre evaluar la capacidad del modelo para output estructurado ANTES de diseñar la arquitectura alrededor de él. El `max_turns` del sub-agent TestRunner debe ser ≥5 (3 es insuficiente: el sub-agent puede necesitar run_test + read_file si el test output es ambiguo).
+
+## 2026-05-17 (CUDA OOM en Ollama = error no-retryable)
+- Contexto: durante la evaluación de SPEC-014, httpie-1 y httpie-5 fallaron con CUDA Out-of-Memory en la GPU del servidor Ollama. El error aparece como HTTP 500 `InternalServerError`, que `_is_retryable_provider_error` clasifica como retryable. El sistema reintentó 6 veces con backoff exponencial, desperdiciando ~5 minutos por fallo sin posibilidad de recuperación.
+- Anti-patrón detectado: clasificar todos los HTTP 500 como retryable sin inspeccionar el mensaje de error. Un CUDA OOM (`"CUDA error: out of memory"`) es un problema de capacidad que no se resuelve con esperas — el mismo modelo que acaba de fallar por falta de VRAM fallará inmediatamente otra vez.
+- Qué no hay que hacer: reintentar automáticamente un error de capacidad (OOM) con backoff exponencial. El único efecto es desperdiciar tiempo.
+- Por qué estuvo mal: la raíz del problema fue que el modelo `qwen3.5:9b` (6.6GB) seguía cargado en VRAM cuando el batch de `qwen3.5:27b` (17GB) arrancó, y después de 3 runs exitosos, la KV cache acumulada causó que el 5º bug también hiciese OOM.
+- Alternativa recomendada: (1) evictar modelos de Ollama que no son el target antes de cada batch — implementado en `BatchRunner._evict_stale_ollama_models()`. (2) Considerar detectar "CUDA error: out of memory" en el mensaje de error y clasificarlo como non-retryable en `_is_retryable_provider_error`.
+- Regla preventiva para futuras specs: antes de ejecutar un batch con un modelo diferente, siempre evictar modelos stale del servidor OLLama. Implementado como paso automático en `BatchRunner.run_batch()`.

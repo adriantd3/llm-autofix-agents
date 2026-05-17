@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 from agents import Agent, AgentOutputSchema, OpenAIChatCompletionsModel, Tool
 from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 from openai import AsyncOpenAI
 
+from llm_autofix_agents.agents.instructions.builder import PromptBuilder
 from llm_autofix_agents.llm.provider import AgentFixIterationResult
 from llm_autofix_agents.llm.settings import LLMSettings
 
@@ -22,7 +23,7 @@ def build_agent(
     *,
     settings: LLMSettings,
     name: str,
-    instructions: str,
+    instructions: str | PromptBuilder | Callable[..., str],
     tools: Sequence[object],
     model_override: str | None = None,
     output_schema: AgentOutputSchema | None | _Missing = _DEFAULT_OUTPUT_SCHEMA,
@@ -42,7 +43,13 @@ def build_agent(
     # Prepend SDK-recommended handoff instructions when the agent participates
     # in a handoff chain. This teaches the model to call transfer_to_<name>
     # tools rather than writing about handoffs in its text output.
-    resolved_instructions = prompt_with_handoff_instructions(instructions) if handoffs else instructions
+    if handoffs:
+        if isinstance(instructions, PromptBuilder):
+            resolved_instructions = instructions.with_handoff_prefix()
+        else:
+            resolved_instructions = prompt_with_handoff_instructions(instructions)
+    else:
+        resolved_instructions = instructions
 
     agent_kwargs: dict[str, Any] = {
         "name": name,

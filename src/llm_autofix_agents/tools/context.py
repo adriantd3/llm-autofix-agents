@@ -17,6 +17,9 @@ class APRToolContext:
     max_list_entries: int = 400
     default_test_timeout_seconds: int = 120
     iteration_edit_count: int = 0
+    # Incremented by lifecycle hooks on every tool call; used by dynamic
+    # instructions to detect agents that explore without ever editing.
+    iteration_tool_call_count: int = 0
 
 
 def get_tool_context(wrapper: RunContextWrapper[APRToolContext]) -> APRToolContext:

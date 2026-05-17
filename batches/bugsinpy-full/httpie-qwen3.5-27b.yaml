@@ -1,5 +1,5 @@
-name: bugsinpy-full-httpie-orchestrator
-description: Multi-agent orchestrator on BugsInPy httpie - full dataset (preliminary analysis)
+name: bugsinpy-full-httpie-qwen3.5-27b
+description: Multi-agent orchestrator on BugsInPy httpie - qwen3.5:27b comparison
 
 dataset: ../../datasets/bugsinpy-full.yaml
 
@@ -7,7 +7,7 @@ global:
   architecture: multi_agent_orchestrator
   llm:
     provider: ollama
-    model: qwen3.5:27b 
+    model: qwen3.5:27b
     max_turns: 20
   max_iterations: 3
   timeout_seconds: 900

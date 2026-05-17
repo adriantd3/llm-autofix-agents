@@ -58,8 +58,10 @@ class BugsInPyAdapter:
         host_case_root.mkdir(parents=True, exist_ok=True)
 
         try:
+            logger.info("Checking out '%s' (project=%s, bug_id=%s)...", bug.id, project, bug_id)
             self._checkout(dataset, bug, context, container_case_root, project, bug_id, version)
             self._validate_checkout(host_project_workspace, bug.id)
+            logger.info("Compiling '%s' (may take several minutes on first run)...", bug.id)
             self._compile(dataset, bug, context, container_project_workspace)
             self._validate_compile(host_project_workspace, bug.id, dataset.tooling.get("compile_required", True))
         except Exception:
@@ -111,7 +113,7 @@ class BugsInPyAdapter:
             host_workspace=str(context.host_workspace_root / bug.id),
             container_workspace=container_case_root,
         )
-        result = self._run_in_bugsinpy_container(context, command, cwd=container_case_root)
+        result = self._run_in_bugsinpy_container(context, command, cwd=container_case_root, timeout_seconds=120)
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             raise RuntimeError(f"Checkout failed for '{bug.id}': {stderr}")
@@ -136,7 +138,7 @@ class BugsInPyAdapter:
         compile_command = dataset.tooling.get("compile_command")
         if not compile_command:
             return
-        result = self._run_in_bugsinpy_container(context, compile_command, cwd=container_project_workspace)
+        result = self._run_in_bugsinpy_container(context, compile_command, cwd=container_project_workspace, timeout_seconds=900)
         if result.returncode != 0:
             compile_required = dataset.tooling.get("compile_required", True)
             stderr = (result.stderr or "").strip()
@@ -167,6 +169,7 @@ class BugsInPyAdapter:
         context: DatasetPreparationContext,
         command: str,
         cwd: str | None = None,
+        timeout_seconds: int = 300,
     ) -> subprocess.CompletedProcess[str]:
         import os
 
@@ -191,13 +194,17 @@ class BugsInPyAdapter:
         else:
             wrapped = command
         cmd.append(wrapped)
-        return subprocess.run(
-            cmd,
-            cwd=str(context.project_dir),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            return subprocess.run(
+                cmd,
+                cwd=str(context.project_dir),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Container preparation timed out after {timeout_seconds}s running: {command[:200]}")
 
     def _resolve_test_command(self, dataset: DatasetConfig, bug: BugEntry) -> str:
         if bug.test_command is not None:

@@ -24,10 +24,15 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir uv
 
 # Install BugsInPy tools
+# Patch bugsinpy-compile to use `pip install -r <file>` instead of
+# `xargs -I {} pip install {}` (92 separate pip processes → ~5 min;
+# batch install with -r → ~30 s when wheels are cached).
+COPY docker/patch-bugsinpy-compile.py /tmp/patch-bugsinpy-compile.py
 RUN git clone --depth 1 https://github.com/soarsmu/BugsInPy.git /opt/bugsinpy \
     && chmod +x /opt/bugsinpy/framework/bin/* \
     && git config --system --add safe.directory /opt/bugsinpy \
-    && chmod -R a+w /opt/bugsinpy
+    && chmod -R a+w /opt/bugsinpy \
+    && python3 /tmp/patch-bugsinpy-compile.py
 ENV PATH="/opt/bugsinpy/framework/bin:${PATH}"
 
 WORKDIR /workspace

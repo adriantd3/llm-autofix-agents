@@ -7,7 +7,7 @@ global:
   architecture: mono_agent
   llm:
     provider: ollama
-    model: qwen3.5:9b
+    model: gemma4:26b
     max_turns: 20
   max_iterations: 3
   timeout_seconds: 300

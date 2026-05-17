@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from llm_autofix_agents.batch.config import (
     BatchConfig,
     BugEntry,
@@ -61,6 +63,14 @@ class BatchRunner:
 
         service = "bugsinpy-runner" if dataset.type == "bugsinpy" else "runner"
         self._docker_build(service)
+
+        settings = config.global_settings
+        target_model = settings.llm.model
+        all_models = [target_model]
+        if settings.llm.agent_models:
+            all_models.extend(settings.llm.agent_models.values())
+        all_models = list(dict.fromkeys(all_models))
+        self._evict_stale_ollama_models(all_models)
 
         adapter = get_adapter(dataset.type)
         context = DatasetPreparationContext(
@@ -221,6 +231,60 @@ class BatchRunner:
             logger.error("Docker build failed:\n%s", result.stderr)
             raise RuntimeError(f"Docker build failed: {result.stderr[:500]}")
         logger.info("Docker image for service '%s' built successfully", service)
+
+    def _evict_stale_ollama_models(self, keep_models: list[str]) -> None:
+        """Stop any Ollama models that are NOT in keep_models to free GPU VRAM.
+
+        Prevents CUDA OOM when switching between models of different sizes
+        (e.g., qwen3.5:9b still loaded when qwen3.5:27b tries to start).
+        Uses the native Ollama API on localhost:11434 (not the Docker-forwarded
+        OpenAI-compatible proxy on port 11500).
+        """
+        dotenv_values = _load_dotenv_values(Path(".env"))
+        combined_env = {**dotenv_values, **os.environ}
+        provider_raw = combined_env.get("LLM_PROVIDER", "ollama").strip().lower()
+        if provider_raw != "ollama":
+            return
+
+        ollama_host = combined_env.get("OLLAMA_HOST", "http://localhost:11434")
+        if not ollama_host.startswith(("http://", "https://")):
+            ollama_host = f"http://{ollama_host}"
+        ps_url = f"{ollama_host.rstrip('/')}/api/ps"
+
+        try:
+            resp = httpx.get(ps_url, timeout=5)
+            resp.raise_for_status()
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+            logger.warning("Could not query Ollama for loaded models: %s", exc)
+            return
+        except Exception as exc:
+            logger.warning("Could not query Ollama for loaded models: %s", exc)
+            return
+
+        loaded = resp.json().get("models", [])
+        if not loaded:
+            return
+
+        keep_normalized = {m.split(":")[0].lower(): m for m in keep_models}
+        keep_full = {m.lower() for m in keep_models}
+        evicted = []
+        for model_info in loaded:
+            name = model_info.get("name", "")
+            if not name:
+                continue
+            name_lower = name.lower()
+            base_name = name.split(":")[0].lower()
+            if name_lower in keep_full or base_name in keep_normalized:
+                continue
+            unload_url = f"{ollama_host.rstrip('/')}/api/unload"
+            try:
+                httpx.post(unload_url, json={"model": name}, timeout=10)
+                evicted.append(name)
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+                logger.warning("Failed to evict Ollama model '%s': %s", name, exc)
+
+        if evicted:
+            logger.info("Evicted stale Ollama models to free VRAM: %s", ", ".join(evicted))
 
     def _docker_run(
         self,

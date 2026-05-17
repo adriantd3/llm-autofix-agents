@@ -2,6 +2,14 @@
 
 ## En curso
 
+- **SPEC-014 completado: Agent Effectiveness — TestRunner Sub-Agent + Model Comparison (2026-05-17)**:
+  - TestRunner sub-agent conectado al orquestador (patrón as_tool, contexto limpio).
+  - `run_tests` reemplaza `run_test_target` directo en el perfil orchestrator_main.
+  - Batch comparison: qwen3.5:27b 3/5 (2 CUDA OOM infra failures), qwen3.5:9b 1/5 (modelo insuficiente para JSON estructurado).
+  - Eficiencia mejorada con 27b: -64% duración, -30% tokens, -69% tool calls en bugs exitosos vs baseline.
+  - qwen3.5:9b descartado para esta arquitectura: no puede generar AgentFixIterationResult JSON confiablemente.
+  - Root cause de CUDA OOM: modelo 9b stale en VRAM + KV cache acumulada. Mitigado con `_evict_stale_ollama_models()` en BatchRunner.
+
 - **SPEC-003 descartada — Arquitectura handoff (2026-05-16)**:
   - Decisión: la arquitectura `multi_agent_handoff` queda excluida de la evaluación comparativa.
   - El pipeline nunca ejecuta realmente: los éxitos en QuixBugs son producto del fallback `MaxTurnsExceeded`, no de handoffs completados.

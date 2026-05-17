@@ -163,6 +163,7 @@ class IterationRunner:
         before_snapshot = self.workspace.snapshot(cfg.repo_root)
         state.validation_feedback = None
         cfg.agent_context.iteration_edit_count = 0
+        cfg.agent_context.iteration_tool_call_count = 0
 
         return _IterationPrep(
             identity=identity,

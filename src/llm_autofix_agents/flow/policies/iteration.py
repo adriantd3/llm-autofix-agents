@@ -23,7 +23,7 @@ _FAILURE_DRIVEN_INTRO = (
     "(from 'def test_...' to the next 'def ') to see ALL assertions, not just the failing line.\n"
     "- Before proposing a fix, consider ALL assertions in the test function that involve the code you will change.\n"
     "- Do NOT use execute_command to test Python logic or validate your fix with a subprocess. "
-    "Apply your fix directly with replace_in_file, then call run_test_target with the Focused test command.\n\n"
+    "Apply your fix directly with replace_in_file, then validate with the test tool.\n\n"
     "- In your final response, populate 'notes' with short bullets: inspected, attempted, changes, results, next.\n\n"
     "You must use tools for evidence; do not report edits or passing tests without tool outputs."
 )
@@ -95,7 +95,7 @@ def build_iteration_input(
     test_command_reminder = ""
     if test_command and test_command.strip():
         test_command_reminder = (
-            f"\n\nFocused test command (pass verbatim as `runner` to run_test_target with `cwd=\"\"`):\n"
+            f"\n\nFocused test command (pass to your test validation tool):\n"
             f"{test_command.strip()}\n"
         )
 
@@ -158,7 +158,7 @@ def build_continuation_snapshot(
     if not changed_files:
         lines.append(
             "⚠ WARNING: No source files were modified in the previous iteration. "
-            "You MUST apply at least one code change before calling run_tests. "
+            "You MUST apply at least one code change before validating. "
             "Investigate the root cause and edit the relevant source file."
         )
     if changes.diff:

@@ -13,6 +13,7 @@ from llm_autofix_agents.agents.instructions import (
     HANDOFF_TRIAGE_INSTRUCTIONS,
     HANDOFF_VALIDATOR_INSTRUCTIONS,
 )
+from llm_autofix_agents.agents.instructions._dynamic import make_action_biased_instructions
 from llm_autofix_agents.architectures.config import BuiltArchitecture, SubAgentDescriptor
 from llm_autofix_agents.llm.agent_factory import build_agent
 from llm_autofix_agents.llm.agent_models import resolve_agent_model
@@ -142,7 +143,7 @@ def build_multi_agent_handoff_architecture(
         patcher_agent = build_agent(
             settings=settings,
             name="patcher",
-            instructions=HANDOFF_PATCHER_INSTRUCTIONS,
+            instructions=make_action_biased_instructions(HANDOFF_PATCHER_INSTRUCTIONS),
             tools=patcher_tools,
             model_override=patcher_model,
             output_schema=None,

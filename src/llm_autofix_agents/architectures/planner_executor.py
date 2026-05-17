@@ -20,6 +20,7 @@ from llm_autofix_agents.agents.instructions import (
     EXECUTOR_INSTRUCTIONS,
     PLANNER_INSTRUCTIONS,
 )
+from llm_autofix_agents.agents.instructions._dynamic import make_action_biased_instructions
 from llm_autofix_agents.architectures.config import BuiltArchitecture, SubAgentDescriptor
 from llm_autofix_agents.flow.strategy import IterationStrategy, PhasedIterationStrategy, PlannerStopPolicy
 from llm_autofix_agents.llm.agent_factory import build_agent
@@ -79,7 +80,7 @@ def build_planner_executor_architecture(
         return build_agent(
             settings=settings,
             name="executor",
-            instructions=EXECUTOR_INSTRUCTIONS,
+            instructions=make_action_biased_instructions(EXECUTOR_INSTRUCTIONS),
             tools=executor_tools,
             model_override=executor_model,
             output_schema=None,
