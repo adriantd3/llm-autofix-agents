@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from llm_autofix_agents.contracts import ErrorCategory, RunError, RunIdentity, RunOutput, RunStatus, StopReason
 from llm_autofix_agents.flow.policies.validation import IterationValidationResult
@@ -75,13 +76,14 @@ class RunOutputBuilder:
         state: RunState,
         message: str,
         category: ErrorCategory = ErrorCategory.MODEL,
+        details: dict[str, Any] | None = None,
     ) -> RunOutput:
         return self.build(
             identity=identity,
             status=RunStatus.FAILED,
             stop_reason=_stop_reason_for_category(category),
             state=state,
-            errors=[RunError(category=category, message=message, retryable=False)],
+            errors=[RunError(category=category, message=message, retryable=False, details=details or {})],
         )
 
 

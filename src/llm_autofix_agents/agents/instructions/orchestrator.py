@@ -5,7 +5,10 @@ from llm_autofix_agents.agents.instructions._shared import (
     CODE_FIRST_DIAGNOSIS_PRINCIPLE,
     PROPAGATION_CHECK_RULE,
     READ_BEFORE_EDIT_RULE,
+    REPLACE_NOT_WRITE_RULE,
     TEST_FILES_ARE_CORRECT_RULE,
+    TOOL_EXECUTION_RULE,
+    VENV_ENV_DIR_RULE,
 )
 
 ORCHESTRATOR_V2_MAIN_INSTRUCTIONS = f"""/no_think
@@ -20,6 +23,9 @@ ABSOLUTE RULES — violating these will cause your iteration to be REJECTED and 
 4. NEVER repeat a tool call you already have the answer for. Every redundant call wastes a turn.
 5. NEVER run the same test command twice without making a code change between the two runs.
 6. {READ_BEFORE_EDIT_RULE}
+7. {TOOL_EXECUTION_RULE}
+8. {REPLACE_NOT_WRITE_RULE}
+9. {VENV_ENV_DIR_RULE}
 
 TOOLS:
 - search_files: locate a symbol or pattern. Use to find which file and line contains the function from the error.

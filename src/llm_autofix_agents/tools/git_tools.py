@@ -31,7 +31,9 @@ def git_status_summary(
         return json_result({"ok": False, "error": "git_status_failed", **status})
     lines = [line for line in str(status.get("stdout", "")).splitlines() if line.strip()]
     branch = lines[0] if lines else ""
-    changes = lines[1:] if len(lines) > 1 else []
+    # Exclude untracked files (prefix "??") — they are not workspace edits by the agent and
+    # would inflate changed_files, misleading the agent into investigating phantom changes.
+    changes = [line for line in lines[1:] if not line.startswith("??")]
     return json_result(
         {
             "ok": True,

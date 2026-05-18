@@ -4,7 +4,13 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+_SNAPSHOT_SIGNATURE_RE = re.compile(r"-\s+signature:\s+([a-f0-9]+)")
+
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
+
+# An "in_progress" status at iteration boundary means the agent was cut off by max_turns
+# rather than finishing cleanly — it never set status="done" or "stuck".
+_IN_PROGRESS_STATUS = "in_progress"
 from llm_autofix_agents.llm.provider import AgentFixIterationRecord
 from llm_autofix_agents.tools.text import compact_test_output
 
@@ -23,7 +29,11 @@ _FAILURE_DRIVEN_INTRO = (
     "(from 'def test_...' to the next 'def ') to see ALL assertions, not just the failing line.\n"
     "- Before proposing a fix, consider ALL assertions in the test function that involve the code you will change.\n"
     "- Do NOT use execute_command to test Python logic or validate your fix with a subprocess. "
-    "Apply your fix directly with replace_in_file, then validate with the test tool.\n\n"
+    "Apply your fix directly with replace_in_file, then validate with the test tool.\n"
+    "- Writing a fix in your reasoning does NOT apply it. "
+    "You MUST call replace_in_file for every change. Describing the fix without calling the tool leaves the codebase unchanged.\n"
+    "- Use replace_in_file for files that already exist. "
+    "write_file overwrites the ENTIRE file — only use it to create files that do not exist yet.\n\n"
     "- In your final response, populate 'notes' with short bullets: inspected, attempted, changes, results, next.\n\n"
     "You must use tools for evidence; do not report edits or passing tests without tool outputs."
 )
@@ -58,6 +68,8 @@ def build_iteration_input(
     test_command: str | None,
     validation_feedback: str | None = None,
     repo_root: Path | None = None,
+    latest_test_execution: TestExecution | None = None,
+    previous_proposal_status: str | None = None,
 ) -> str:
     feedback_prefix = ""
     if validation_feedback:
@@ -106,12 +118,27 @@ def build_iteration_input(
     )
 
     no_edit_previous = latest_snapshot is not None and _NO_EDIT_SNAPSHOT_SIGNAL in latest_snapshot
-    task_block = _ASSERTIVE_NO_EDIT_TASK if no_edit_previous else (
-        "Task:\n"
-        "Continue improving the repair strategy. Use tools to inspect and edit, "
-        "then validate with the test command.\n"
-        "IMPORTANT: If your last fix broke a different assertion, you need a fix "
-        "that satisfies ALL constraints simultaneously."
+
+    # Workspace tree — repeated in every iteration since each agent run starts fresh
+    # without conversation history from previous runs.
+    workspace_tree_block = ""
+    if repo_root is not None:
+        workspace_tree_block = _build_workspace_tree(repo_root)
+
+    # When the previous iteration made no edits, attempt to re-localize: re-extract
+    # the source function from the latest test output and inject it as a concrete
+    # starting point. This reuses the same localization machinery as iteration 1.
+    recovery_source_block = ""
+    if no_edit_previous and repo_root is not None and latest_test_execution is not None:
+        recovery_source_block = _extract_source_function_under_test(
+            test_output=latest_test_execution.output,
+            repo_root=repo_root,
+        )
+
+    task_block = _build_task_block(
+        no_edit_previous=no_edit_previous,
+        previous_proposal_status=previous_proposal_status,
+        has_recovery_source=bool(recovery_source_block),
     )
 
     return (
@@ -121,7 +148,9 @@ def build_iteration_input(
         f"Previous attempt summary (agent-reported):\n{previous_message}"
         f"{snapshot_block}"
         f"{baseline_reminder}"
-        f"{test_command_reminder}\n\n"
+        f"{test_command_reminder}"
+        f"{workspace_tree_block}"
+        f"{recovery_source_block}\n\n"
         f"{task_block}"
     )
 
@@ -132,6 +161,7 @@ def build_continuation_snapshot(
     changes: WorkspaceChangeSet,
     test_execution: TestExecution,
     repo_root: Path | None = None,
+    previous_test_signature: str | None = None,
 ) -> str:
     compact_output = compact_test_output(test_execution.output, max_chars=_MAX_SNAPSHOT_OUTPUT_CHARS)
     output_block = _indent_block(compact_output or "(no output)", prefix="    ")
@@ -160,6 +190,18 @@ def build_continuation_snapshot(
             "⚠ WARNING: No source files were modified in the previous iteration. "
             "You MUST apply at least one code change before validating. "
             "Investigate the root cause and edit the relevant source file."
+        )
+    # Signal when the test failure is unchanged — the edit had no effect on the failing path.
+    if (
+        previous_test_signature is not None
+        and test_execution.exit_code != 0
+        and test_execution.signature == previous_test_signature
+    ):
+        lines.append(
+            "⚠ ERROR UNCHANGED: The test failure signature is identical to the previous iteration. "
+            "Your edit had no effect on the failing code path.\n"
+            "  • If you modified the right file, the fix logic is incorrect — try a different approach.\n"
+            "  • If you haven't located the failing code path yet, search more broadly."
         )
     if changes.diff:
         diff_preview = changes.diff[:800]
@@ -227,6 +269,14 @@ def _build_first_iteration_input(
     )
 
 
+def extract_snapshot_test_signature(snapshot: str | None) -> str | None:
+    """Parse the test signature hash from a continuation snapshot string."""
+    if not snapshot:
+        return None
+    m = _SNAPSHOT_SIGNATURE_RE.search(snapshot)
+    return m.group(1) if m else None
+
+
 def is_no_progress(
     *,
     previous_message: str | None,
@@ -280,6 +330,65 @@ def proposal_signature(proposal: AgentFixIterationRecord) -> str:
     reasoning_summary = _normalize(p.reasoning_summary)
     notes = _normalize(p.notes or "")
     return f"status={status}|reasoning_summary={reasoning_summary}|notes={notes}"
+
+
+def _build_task_block(
+    *,
+    no_edit_previous: bool,
+    previous_proposal_status: str | None,
+    has_recovery_source: bool,
+) -> str:
+    """Return the task directive for a continuation iteration.
+
+    Three cases:
+    - No prior no-edit: standard "continue improving" directive.
+    - 0 edits + agent was cut off by max_turns (in_progress status): re-localization recovery.
+    - 0 edits + agent chose to stop (stuck/done): assertive "you must edit" directive.
+    """
+    if not no_edit_previous:
+        return (
+            "Task:\n"
+            "Continue improving the repair strategy. Use tools to inspect and edit, "
+            "then validate with the test command.\n"
+            "IMPORTANT: If your last fix broke a different assertion, you need a fix "
+            "that satisfies ALL constraints simultaneously."
+        )
+
+    was_cut_off = (
+        previous_proposal_status is not None
+        and previous_proposal_status.strip().lower() == _IN_PROGRESS_STATUS
+    )
+
+    if was_cut_off and has_recovery_source:
+        return (
+            "Task:\n"
+            "The previous iteration exhausted all its turns without making any edit — "
+            "the search went in the wrong direction.\n"
+            "The source function shown above is extracted directly from the failing traceback. "
+            "Start by reading it. Identify the exact line that is wrong. "
+            "Call replace_in_file to apply the fix. Do NOT begin with broad searches — "
+            "you already have the target function above."
+        )
+
+    if was_cut_off:
+        return (
+            "Task:\n"
+            "The previous iteration exhausted all its turns without making any edit. "
+            "You MUST apply a code change this iteration. "
+            "Use the traceback in the snapshot to find the source file, read the relevant lines, "
+            "then call replace_in_file. Do not spend more than 3 tool calls on discovery."
+        )
+
+    # Agent chose to stop (stuck or no hypothesis) without editing
+    if has_recovery_source:
+        return (
+            "Task:\n"
+            "You MUST apply a code change this iteration. "
+            "The source function shown above is your starting point — read it, fix it, validate it. "
+            "Do NOT start with broad searches."
+        )
+
+    return _ASSERTIVE_NO_EDIT_TASK
 
 
 def _normalize(text: str) -> str:
@@ -444,7 +553,10 @@ def _resolve_path_under_root(raw_path: str, repo_root: Path) -> Path | None:
     # heuristic: drop leading path components until we find a match under repo_root
     parts = list(test_path.parts)
     for i in range(len(parts)):
-        possible = repo_root / Path(*parts[i:])
+        suffix = Path(*parts[i:])
+        if suffix.is_absolute():
+            continue  # Path('/') + absolute discards repo_root; skip
+        possible = repo_root / suffix
         if possible.exists():
             return possible
     return None
@@ -565,6 +677,10 @@ def _extract_source_function_under_test(*, test_output: str, repo_root: Path) ->
             continue
         candidate = _resolve_path_under_root(raw_path, repo_root)
         if candidate is None or not candidate.exists():
+            continue
+        try:
+            candidate.relative_to(repo_root)
+        except ValueError:
             continue
         try:
             source = candidate.read_text(encoding="utf-8")

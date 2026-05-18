@@ -17,6 +17,7 @@ from llm_autofix_agents.flow.policies.decision import decide_iteration_outcome
 from llm_autofix_agents.flow.policies.iteration import (
     build_continuation_snapshot,
     build_iteration_input,
+    extract_snapshot_test_signature,
 )
 from llm_autofix_agents.flow.policies.stop import StopPolicy
 from llm_autofix_agents.flow.policies.validation import validate_iteration
@@ -203,6 +204,8 @@ class IterationRunner:
                 test_command=run_input.test_command,
                 validation_feedback=state.validation_feedback,
                 repo_root=cfg.repo_root,
+                latest_test_execution=state.latest_test_execution,
+                previous_proposal_status=state.previous_proposal_status,
             ),
             max_turns=cfg.settings.max_turns,
             iteration_timeout_seconds=cfg.iteration_timeout_seconds,
@@ -326,11 +329,14 @@ class IterationRunner:
         state.final_message = render_final_message(proposal, observed_files=observed_files)
         state.latest_diff = observation.changes.diff
         state.latest_tests = to_test_results(observation.test_execution)
+        state.latest_test_execution = observation.test_execution
+        previous_test_signature = extract_snapshot_test_signature(state.latest_snapshot)
         state.latest_snapshot = build_continuation_snapshot(
             proposal=proposal,
             changes=observation.changes,
             test_execution=observation.test_execution,
             repo_root=repo_root,
+            previous_test_signature=previous_test_signature,
         )
         state.latest_observed_files = observed_files
         state.max_changed_files_count = max(state.max_changed_files_count, len(observed_files))

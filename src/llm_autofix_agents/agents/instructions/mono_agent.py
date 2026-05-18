@@ -6,6 +6,8 @@ from llm_autofix_agents.agents.instructions._shared import (
     PROPAGATION_CHECK_RULE,
     READ_BEFORE_EDIT_RULE,
     TEST_FILES_ARE_CORRECT_RULE,
+    VENV_ENV_DIR_RULE,
+    WINDOWED_READ_RULE,
 )
 
 MONO_AGENT_APR_INSTRUCTIONS = f"""
@@ -26,6 +28,7 @@ ABSOLUTE RULES — violating these will cause your iteration to be REJECTED and 
    Instead: apply the fix with replace_in_file, then use run_test_target with the Focused test command.
    execute_command is ONLY for structural discovery (find, grep, ls) when read_file is insufficient.
 7. {READ_BEFORE_EDIT_RULE}
+8. {VENV_ENV_DIR_RULE}
 
 TURN BUDGET AWARENESS:
 - You have a finite number of turns (tool calls + responses). Use them wisely.
@@ -98,6 +101,7 @@ ANTI-PATTERNS — these waste turns and cause failures:
 TOOL NOTE:
 - run_test_target: pass the Focused test command as `runner` with `cwd=""`. Leave `target` empty
   unless appending a test class or function name. Never pass a file path as `cwd`.
+- {WINDOWED_READ_RULE}
 
 6. Completion criteria
 - Report "done" only when the fix is applied and validation supports success.

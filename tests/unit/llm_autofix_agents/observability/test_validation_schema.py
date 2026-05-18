@@ -32,8 +32,8 @@ def _insert_minimal_run(db_path: Path, run_id: str) -> None:
 
 
 class TestSchemaVersion(unittest.TestCase):
-    def test_version_is_7(self) -> None:
-        self.assertEqual(SCHEMA_VERSION, 7)
+    def test_version_is_8(self) -> None:
+        self.assertEqual(SCHEMA_VERSION, 8)
 
     def test_fresh_db_has_run_validations_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -42,12 +42,12 @@ class TestSchemaVersion(unittest.TestCase):
                 tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             self.assertIn("run_validations", tables)
 
-    def test_fresh_db_user_version_is_7(self) -> None:
+    def test_fresh_db_user_version_is_8(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = _make_store(Path(tmp))
             with sqlite3.connect(str(store.db_path)) as conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
-            self.assertEqual(version, 7)
+            self.assertEqual(version, 8)
 
 
 class TestUpsertRunValidation(unittest.TestCase):

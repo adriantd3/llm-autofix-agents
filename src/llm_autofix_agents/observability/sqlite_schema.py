@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS runs (
   live_log_path TEXT,
   summary_path TEXT,
   diff_path TEXT,
+  error_type TEXT NULL,
+  error_message TEXT NULL,
+  error_category TEXT NULL,
+  error_traceback TEXT NULL,
   FOREIGN KEY (architecture_id) REFERENCES architectures(architecture_id)
 );
 
@@ -267,6 +271,14 @@ ALTER TABLE agent_handoffs ADD COLUMN handoff_note_json TEXT;
 MIGRATION_V5_TO_V6 = """
 ALTER TABLE tool_calls ADD COLUMN retry_index INTEGER;
 ALTER TABLE tool_calls DROP COLUMN result_excerpt;
+"""
+
+
+MIGRATION_V7_TO_V8 = """
+ALTER TABLE runs ADD COLUMN error_type TEXT NULL;
+ALTER TABLE runs ADD COLUMN error_message TEXT NULL;
+ALTER TABLE runs ADD COLUMN error_category TEXT NULL;
+ALTER TABLE runs ADD COLUMN error_traceback TEXT NULL;
 """
 
 

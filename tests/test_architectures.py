@@ -260,10 +260,10 @@ class MultiAgentOrchestratorArchitectureTests(unittest.TestCase):
         self.assertEqual(len(as_tool_calls), 2)
         self.assertEqual(as_tool_calls[0]["agent_name"], "explorer")
         self.assertEqual(as_tool_calls[0]["tool_name"], "explore_code")
-        self.assertEqual(as_tool_calls[0]["max_turns"], 5)
+        self.assertEqual(as_tool_calls[0]["max_turns"], 10)
         self.assertEqual(as_tool_calls[1]["agent_name"], "test_runner")
         self.assertEqual(as_tool_calls[1]["tool_name"], "run_tests")
-        self.assertEqual(as_tool_calls[1]["max_turns"], 5)
+        self.assertEqual(as_tool_calls[1]["max_turns"], 10)
 
 
 class PlannerExecutorArchitectureTests(unittest.TestCase):

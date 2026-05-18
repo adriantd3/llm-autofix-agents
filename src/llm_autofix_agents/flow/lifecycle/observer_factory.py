@@ -52,4 +52,5 @@ def build_observer(
         emitter=emitter,
         sqlite_store=sqlite_store,
         live_observer=live_observer,
+        base_results_dir=config.results_dir,
     )

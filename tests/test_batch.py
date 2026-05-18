@@ -547,10 +547,9 @@ class TestBugsInPyAdapter(unittest.TestCase):
 
     def _create_compile_artifacts(self, project_dir: Path) -> None:
         for name in BugsInPyAdapter._COMPILE_REQUIRED_FILES:
-            if name == "env":
-                (project_dir / name).mkdir(parents=True, exist_ok=True)
-            else:
-                (project_dir / name).write_text("", encoding="utf-8")
+            path = project_dir / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("", encoding="utf-8")
 
     def _make_side_effect_with_artifacts(
         self,
@@ -622,7 +621,7 @@ class TestBugsInPyAdapter(unittest.TestCase):
             self.assertEqual(case.case_id, "youtube-dl-2")
             self.assertEqual(case.dataset_type, "bugsinpy")
             self.assertIn("bugsinpy_run_test.sh", case.test_command)
-            self.assertIn("env/bin/activate", case.test_command)
+            self.assertIn("env/bin/python", case.test_command)
             self.assertEqual(case.runner_service, "bugsinpy-runner")
             self.assertIn("project", case.prompt_variables)
             self.assertEqual(case.prompt_variables["project"], "youtube-dl")
@@ -877,7 +876,9 @@ class TestBugsInPyAdapter(unittest.TestCase):
         cmd = adapter._resolve_test_command(dataset, bug)
         self.assertIn("bugsinpy_run_test.sh", cmd)
         self.assertIn("bugsinpy_compile_flag", cmd)
-        self.assertIn("env/bin/activate", cmd)
+        self.assertIn("env/bin/python", cmd)
+        self.assertIn("env/bin/pip", cmd)
+        self.assertNotIn(". env/bin/activate", cmd)
 
     def test_resolve_test_command_respects_bug_override(self):
         adapter = BugsInPyAdapter()
@@ -902,9 +903,8 @@ class TestBugsInPyAdapter(unittest.TestCase):
         )
         bug = dataset.bugs[0]
         cmd = adapter._resolve_test_command(dataset, bug)
-        # Venv is activated directly; tooling.test_command is ignored
-        # because the default command uses env/bin/activate + bugsinpy_run_test.sh.
-        self.assertIn("env/bin/activate", cmd)
+        # tooling.test_command is ignored; default command uses env/bin/ directly.
+        self.assertIn("env/bin/python", cmd)
         self.assertIn("bugsinpy_run_test.sh", cmd)
 
 

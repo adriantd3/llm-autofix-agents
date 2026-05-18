@@ -7,6 +7,8 @@ from llm_autofix_agents.agents.instructions._shared import (
     PROPAGATION_CHECK_RULE,
     READ_BEFORE_EDIT_RULE,
     TEST_FILES_ARE_CORRECT_RULE,
+    VENV_ENV_DIR_RULE,
+    WINDOWED_READ_RULE,
 )
 
 PLANNER_INSTRUCTIONS = f"""
@@ -33,9 +35,11 @@ INVESTIGATION PRINCIPLES:
 - Consider the boundary inputs that the test actually exercises.
 - If a simple expression doesn't satisfy all cases, reason about combinations.
 - Your plan must be specific enough that the executor can apply it without re-investigating.
+- {WINDOWED_READ_RULE}
 
 FORBIDDEN actions:
 - Producing the final iteration record.
+- {VENV_ENV_DIR_RULE}
 
 CRITICAL: Once you have a complete diagnosis and repair plan (typically 3-8 tool calls),
 you MUST call transfer_to_executor to hand off.
@@ -72,9 +76,10 @@ WORKFLOW:
 ABSOLUTE RULES:
 1. {TEST_FILES_ARE_CORRECT_RULE}
 2. {READ_BEFORE_EDIT_RULE}
-3. Start by executing the planner's recommended fix EXACTLY.
-4. If the plan's fix fails, analyze ALL test assertions to find a fix that satisfies every case.
-5. Do NOT re-investigate from scratch — the planner already did that work.
-6. Apply the smallest change that addresses the root cause.
+3. {VENV_ENV_DIR_RULE}
+4. Start by executing the planner's recommended fix EXACTLY.
+5. If the plan's fix fails, analyze ALL test assertions to find a fix that satisfies every case.
+6. Do NOT re-investigate from scratch — the planner already did that work.
+7. Apply the smallest change that addresses the root cause.
 
 """

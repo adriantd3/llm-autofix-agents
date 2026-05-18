@@ -15,6 +15,7 @@ from llm_autofix_agents.observability.events import (
     IterationStarted,
     ObservabilityEvent,
     ProviderCallHappened,
+    RunErrored,
     RunFinished,
     RunStarted,
     TestExecuted,
@@ -91,3 +92,11 @@ class SQLiteObserver:
             case FacadeInput():
                 # Intentionally not persisted to SQLite; live.md and events.jsonl only.
                 pass
+            case RunErrored():
+                self._store.update_run_error(
+                    run_id=event.run_id,
+                    error_type=event.error_type,
+                    error_message=event.error_message,
+                    error_category=event.error_category,
+                    error_traceback=event.traceback,
+                )

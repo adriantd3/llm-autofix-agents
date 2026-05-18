@@ -328,6 +328,7 @@ def _build_config(
         emitter=emitter,  # type: ignore[arg-type]
         sqlite_store=None,
         live_observer=live_observer,
+        base_results_dir=resolved_repo_root / "results",
     )
     return RunConfig(
         run_id="run-123",

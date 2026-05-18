@@ -73,7 +73,7 @@ def build_multi_agent_orchestrator_architecture(
                     "call chain originates. Do NOT use when you already know the file name or "
                     "symbol name: use read_file + search_files directly instead."
                 ),
-                max_turns=5,
+                max_turns=10,
             ),
             test_runner_agent.as_tool(
                 tool_name="run_tests",
@@ -83,7 +83,7 @@ def build_multi_agent_orchestrator_architecture(
                     "trace. Use this AFTER applying a fix to validate it. "
                     "Pass the test command as the input argument."
                 ),
-                max_turns=5,
+                max_turns=10,
             ),
         ]
 
@@ -105,7 +105,7 @@ def build_multi_agent_orchestrator_architecture(
         agent_model=orchestrator_model,
         instructions=ORCHESTRATOR_V2_MAIN_INSTRUCTIONS,
         tool_profile="orchestrator_main",
-        tool_count=len(build_apr_tools("orchestrator_main")) + 2,  # +2 for explore_code + run_tests
+        tool_count=len(build_apr_tools("orchestrator_main")) + 2,  # +2 for explore_code + run_tests (write_file excluded)
         sub_agents=(
             SubAgent(
                 agent_name="explorer",

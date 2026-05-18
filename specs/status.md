@@ -2,6 +2,13 @@
 
 ## En curso
 
+- **SPEC-017 completado: Harness Hardening & Observability (2026-05-17)**:
+  - A: BugsInPy venv hardening — `_COMPILE_REQUIRED_FILES` usa `env/bin/activate` (no symlink roto en host); test command con `PATH=env/bin:$PATH` + pytest availability guard para venvs sin `env/bin/pytest`.
+  - B: infra_failure diagnosis — pipeline `RunErrored` completo: orquestador captura traceback → `exception_failure(details=...)` → finalizer drena `artifacts["errors"]` → emitter → JSONL (`event="run_errored"`) + SQLite (`error_type/message/category/traceback` en `runs`, schema v8, migración v7→v8).
+  - C: Context engineering parity — `WINDOWED_READ_RULE` y `VENV_ENV_DIR_RULE` añadidos a `_shared.py` e importados en mono_agent, orchestrator, planner_executor.
+  - D: Bug fixes — `git_status_summary` filtra `??` untracked (black-6 phantom changes); `_resolve_path_under_root` salta paths absolutos (crash en stdlib); `_is_test_file`/`_is_test_file_path` detectan `tests_*.py` (tqdm/tests/tests_contrib.py).
+  - 322 tests passing, 0 regresiones.
+
 - **SPEC-014 completado: Agent Effectiveness — TestRunner Sub-Agent + Model Comparison (2026-05-17)**:
   - TestRunner sub-agent conectado al orquestador (patrón as_tool, contexto limpio).
   - `run_tests` reemplaza `run_test_target` directo en el perfil orchestrator_main.

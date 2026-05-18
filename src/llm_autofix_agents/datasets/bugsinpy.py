@@ -31,9 +31,11 @@ class BugsInPyAdapter:
     )
 
     # Files expected after a successful compile
+    # env/bin/python is a symlink to /usr/local/bin/python3 (inside Docker) — broken on host.
+    # env/bin/activate is a regular shell script; its presence confirms the venv was compiled.
     _COMPILE_REQUIRED_FILES = (
         "bugsinpy_compile_flag",
-        "env",
+        "env/bin/activate",
     )
 
     def prepare_case(
@@ -218,8 +220,14 @@ class BugsInPyAdapter:
         # where the editable install points at env/src/<project> (a separate git clone)
         # instead of the workspace root, causing agent edits to be invisible at test time.
         return (
-            "test -f bugsinpy_run_test.sh && test -f bugsinpy_compile_flag || exit 2; "
-            ". env/bin/activate && (pip install -e . --no-deps -q 2>/dev/null || true) && bash bugsinpy_run_test.sh"
+            "test -x env/bin/python && test -f bugsinpy_run_test.sh && test -f bugsinpy_compile_flag || exit 2; "
+            "env/bin/pip install -e . --no-deps -q 2>/dev/null || true; "
+            # Some compiled venvs (e.g. luigi-1) are missing env/bin/pytest — env/bin/python
+            # is present but pytest was not pinned by bugsinpy-compile.  Ensure it is available
+            # before running the test script so bash bugsinpy_run_test.sh resolves the correct
+            # env/bin/pytest rather than falling back to the system uv-managed Python 3.14.
+            "(env/bin/python -m pytest --version >/dev/null 2>&1 || env/bin/pip install pytest -q 2>/dev/null || true); "
+            'PATH="$(pwd)/env/bin:$PATH" VIRTUAL_ENV="$(pwd)/env" bash bugsinpy_run_test.sh'
         )
 
 

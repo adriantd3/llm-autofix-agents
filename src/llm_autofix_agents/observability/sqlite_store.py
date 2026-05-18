@@ -25,6 +25,7 @@ from llm_autofix_agents.observability.sqlite_schema import (
     MIGRATION_V4_TO_V5,
     MIGRATION_V5_TO_V6,
     MIGRATION_V6_TO_V7,
+    MIGRATION_V7_TO_V8,
     SCHEMA_VERSION,
     schema_init_sql,
 )
@@ -58,6 +59,8 @@ class SQLiteObservabilityStore:
                     conn.executescript(MIGRATION_V5_TO_V6)
                 if current_version < 7:
                     conn.executescript(MIGRATION_V6_TO_V7)
+                if current_version < 8:
+                    conn.executescript(MIGRATION_V7_TO_V8)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def upsert_architecture(self, name: str, description: str | None = None) -> str:
@@ -230,6 +233,29 @@ class SQLiteObservabilityStore:
                     record.diff_path,
                     record.run_id,
                 ),
+            )
+
+    def update_run_error(
+        self,
+        *,
+        run_id: str,
+        error_type: str,
+        error_message: str,
+        error_category: str,
+        error_traceback: str | None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE runs
+                SET
+                    error_type = ?,
+                    error_message = ?,
+                    error_category = ?,
+                    error_traceback = ?
+                WHERE run_id = ?
+                """,
+                (error_type, error_message, error_category, error_traceback, run_id),
             )
 
     def insert_iteration(self, record: IterationRecord) -> None:

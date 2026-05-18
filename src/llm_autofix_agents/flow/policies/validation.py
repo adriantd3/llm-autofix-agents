@@ -116,13 +116,20 @@ def _normalize_paths(paths: list[str]) -> list[str]:
 
 
 def _is_test_file(path: str) -> bool:
-    """Return True if the path looks like a test file."""
+    """Return True if the path looks like a test file.
+
+    Catches: test/, tests/ roots; any directory named test or tests anywhere
+    in the path (e.g. tqdm/tests/); filenames starting with test_ or tests_,
+    or ending with _test (e.g. tests_contrib.py, foo_test.py).
+    """
     lowered = path.lower().replace("\\", "/")
     if lowered.startswith("test/") or lowered.startswith("tests/"):
         return True
     parts = lowered.split("/")
     for part in parts:
         stem = part.rsplit(".", 1)[0] if "." in part else part
-        if stem.startswith("test_") or stem.endswith("_test"):
+        if stem in ("test", "tests"):
+            return True
+        if stem.startswith("test_") or stem.startswith("tests_") or stem.endswith("_test"):
             return True
     return False

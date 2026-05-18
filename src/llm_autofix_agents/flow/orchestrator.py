@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import traceback as _traceback
+
 from llm_autofix_agents.architectures.config import BuiltArchitecture
 from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
@@ -89,8 +91,12 @@ class RunOrchestrator:
                     run_id=cfg.run_id,
                 ),
                 state=state,
-                message=str(exc),
+                message=f"{type(exc).__name__}: {exc}",
                 category=error_category_from_exception(exc),
+                details={
+                    "exception_type": type(exc).__name__,
+                    "traceback": _traceback.format_exc(),
+                },
             )
             self._workspace.restore_temp_branch_for_debug(
                 repo_root=cfg.repo_root,

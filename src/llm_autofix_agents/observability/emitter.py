@@ -22,6 +22,7 @@ from llm_autofix_agents.observability.events import (
     IterationStarted,
     ObservabilityEvent,
     ProviderCallHappened,
+    RunErrored,
     RunFinished,
     RunStarted,
     TestExecuted,
@@ -400,6 +401,25 @@ class Emitter:
 
     def emit_agent_handoff(self, *, ctx: IterationContext, handoff_index: int, record: AgentHandoffRecord) -> None:
         self._observer.emit(AgentHandoff(record=record))
+
+    def record_run_error(
+        self,
+        *,
+        error_type: str,
+        error_message: str,
+        error_category: str,
+        traceback: str | None,
+    ) -> None:
+        self._observer.emit(
+            RunErrored(
+                run_id=self._run_id,
+                error_type=error_type,
+                error_message=error_message,
+                error_category=error_category,
+                traceback=traceback,
+                occurred_at=utc_now_iso(),
+            )
+        )
 
     def emit_raw(self, event: ObservabilityEvent) -> None:
         """Direct emit for hooks that already have the full event."""

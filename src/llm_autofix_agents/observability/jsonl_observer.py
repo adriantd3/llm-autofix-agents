@@ -16,6 +16,7 @@ from llm_autofix_agents.observability.events import (
     IterationStarted,
     ObservabilityEvent,
     ProviderCallHappened,
+    RunErrored,
     RunFinished,
     RunStarted,
     TestExecuted,
@@ -84,3 +85,16 @@ class JsonlEventObserver:
                 self._append(_serialize(event.record, "agent_handoff"))
             case FacadeInput():
                 self._append(_serialize(event.record, "facade_input"))
+            case RunErrored():
+                self._append(
+                    {
+                        "event": "run_errored",
+                        "run_id": event.run_id,
+                        "error_type": event.error_type,
+                        "error_message": event.error_message,
+                        "error_category": event.error_category,
+                        "traceback": event.traceback,
+                        "occurred_at": event.occurred_at,
+                        "ts": utc_now_iso(),
+                    }
+                )

@@ -105,6 +105,17 @@ class FacadeInput:
     event_type: Literal["facade_input"] = field(default="facade_input", init=False)
 
 
+@dataclass(frozen=True)
+class RunErrored:
+    run_id: str
+    error_type: str
+    error_message: str
+    error_category: str
+    traceback: str | None
+    occurred_at: str
+    event_type: Literal["run_errored"] = field(default="run_errored", init=False)
+
+
 ObservabilityEvent = (
     RunStarted
     | RunFinished
@@ -119,4 +130,5 @@ ObservabilityEvent = (
     | FileChanged
     | AgentHandoff
     | FacadeInput
+    | RunErrored
 )

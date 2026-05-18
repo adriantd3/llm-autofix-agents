@@ -10,6 +10,12 @@ from llm_autofix_agents.tools.context import APRToolContext
 #   youtube_dl/extractor/foo.py:39: SyntaxWarning: "is not" with a literal.
 _PYTHON_WARNING_LINE_RE = re.compile(r"^[^\s].*:\d+: \w*Warning: ")
 
+# Matches pytest session header / platform lines that precede the actual failures.
+# These lines add noise without helping diagnose the bug.
+_PYTEST_HEADER_LINE_RE = re.compile(
+    r"^(={3,}.*={3,}|platform\s|rootdir:|plugins:|cachedir:|collected\s+\d+)"
+)
+
 
 def is_probably_text(path: Path) -> bool:
     mime, _ = mimetypes.guess_type(path.name)
@@ -40,6 +46,7 @@ def compact_test_output(text: str, max_chars: int = 4000) -> str:
 
     lines = text.splitlines()
     lines = _filter_python_warnings(lines)
+    lines = _filter_pytest_header(lines)
     lines = _collapse_repeated_blocks(lines)
     lines = _collapse_repeated_lines(lines)
     compacted = "\n".join(lines)
@@ -65,6 +72,25 @@ def _filter_python_warnings(lines: list[str]) -> list[str]:
                 continue
         if _PYTHON_WARNING_LINE_RE.match(line):
             skip_indented = True
+            continue
+        result.append(line)
+    return result
+
+
+def _filter_pytest_header(lines: list[str]) -> list[str]:
+    """Strip pytest session-header lines that precede the actual test failures.
+
+    These lines (platform info, rootdir, plugin list, collected-items banner) do not
+    help diagnose the bug and consume prompt tokens that could hold failure details.
+    The separator lines (===...===) are kept only when they delimit a named section
+    (e.g., "FAILURES", "short test summary info") so the model sees section structure.
+    """
+    result: list[str] = []
+    for line in lines:
+        if _PYTEST_HEADER_LINE_RE.match(line):
+            # Keep section delimiters that name a section (e.g. "===== FAILURES =====")
+            if re.search(r"[A-Z][A-Z ]", line):
+                result.append(line)
             continue
         result.append(line)
     return result

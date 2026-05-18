@@ -60,6 +60,39 @@
   agente siempre parte de los síntomas.
 
 
+## 2026-05-17 (Path.exists() sigue symlinks — nunca usar para validar venvs de Docker en el host)
+
+- **Contexto**: Cambié `_COMPILE_REQUIRED_FILES` de `"env"` a `"env/bin/python"` para validar el venv más estrictamente. Esto rompió los 12/12 bugs (todos `infra_failure`).
+- **Anti-patrón detectado**: `Path.exists()` sigue symlinks. `env/bin/python → python3 → /usr/local/bin/python3` — una ruta Docker absoluta. En el host, el symlink apunta al vacío y `exists()` devuelve False. Usar `Path.exists()` para comprobar archivos dentro de venvs compilados en Docker siempre falla en el host.
+- **Qué no hay que hacer**: Validar la presencia de binarios de venv usando `Path.exists()` sobre symlinks creados en un contenedor Docker.
+- **Por qué estuvo mal**: El symlink se creó con una ruta absoluta del contenedor (`/usr/local/bin/python3.8`). En el host, esa ruta no existe. El error es silencioso — produce `infra_failure` sin mensaje claro.
+- **Alternativa recomendada**: Comprobar `env/bin/activate` (script regular, no symlink) como señal de que el venv fue compilado correctamente.
+- **Regla preventiva**: Para validar artefactos compilados dentro de Docker, usar solo archivos regulares (scripts, flags), nunca binarios que son symlinks a rutas del contenedor.
+
+## 2026-05-17 (env/bin/pytest puede estar ausente en venvs compilados por bugsinpy-compile)
+
+- **Contexto**: luigi-1 ejecutaba pytest bajo Python 3.14 a pesar del fix de PATH. El traceback mostraba `/opt/uv-python/cpython-3.14.5.../importlib/__init__.py`, no la ruta del venv.
+- **Anti-patrón detectado**: `bugsinpy-compile` instala las dependencias del proyecto pero no siempre instala `pytest` en el venv. Sin `env/bin/pytest`, `bash bugsinpy_run_test.sh` encuentra el pytest del sistema (Python 3.14) aunque `PATH="$(pwd)/env/bin:$PATH"` esté activo.
+- **Qué no hay que hacer**: Asumir que `env/bin/pytest` existe solo porque el venv fue compilado correctamente.
+- **Alternativa recomendada**: Antes de ejecutar el script de test, comprobar `env/bin/python -m pytest --version`. Si falla, instalar pytest via `env/bin/pip install pytest -q`.
+- **Regla preventiva**: Cuando un test usa `pytest` como comando no cualificado, garantizar que `env/bin/pytest` existe antes de ejecutar el script, o reemplazar `pytest` por `env/bin/python -m pytest` explícitamente.
+
+## 2026-05-17 (git status --short incluye ?? untracked — inflaciona changed_files)
+
+- **Contexto**: black-6 mostraba `changed_files: 10` al iniciar el agente. El agente pasó 21 de sus 21 turnos investigando esos "cambios" sin llegar a editar el código real.
+- **Anti-patrón detectado**: `git status --short --branch` incluye líneas `??` para archivos no rastreados. Los metadatos de BugsInPy (`bugsinpy_run_test.sh`, `bugsinpy_compile_flag`, `env/`, etc.) son untracked en el checkout del workspace. Contarlos como `changed_files` engaña al agente haciéndole pensar que ya hay cambios pendientes.
+- **Qué no hay que hacer**: Usar el conteo de líneas de `git status --short` sin filtrar las prefijadas con `??`.
+- **Alternativa recomendada**: Filtrar `[line for line in lines[1:] if not line.startswith("??")]`.
+- **Regla preventiva**: Cualquier herramienta que resuma estado de git debe separar archivos rastreados modificados de archivos no rastreados. El agente solo debería ver cambios que él mismo introdujo.
+
+## 2026-05-17 (Path('/repo') / Path('/abs') descarta el prefijo — nunca combinar Path con rutas absolutas)
+
+- **Contexto**: `_resolve_path_under_root` crasheaba con `ValueError: '...unittest/mock.py' is not in the subpath` en black-6 y scrapy-33. El traceback del test contenía paths de stdlib como `/opt/uv-python/.../importlib/__init__.py`.
+- **Anti-patrón detectado**: El loop de heurística construía `Path(*parts[i:])` donde `parts[0]=""` (path absoluto). En Python, `Path('/repo') / Path('/abs')` silenciosamente devuelve `Path('/abs')` — el prefijo `repo_root` se descarta. La función devolvía un path de stdlib en lugar de `None`.
+- **Qué no hay que hacer**: Usar `repo_root / suffix` sin comprobar si `suffix` es absoluto.
+- **Alternativa recomendada**: `if suffix.is_absolute(): continue` antes de intentar `repo_root / suffix`. Añadir también `candidate.relative_to(repo_root)` como guard final.
+- **Regla preventiva**: Antes de combinar `Path` base con cualquier sufijo extraído de texto externo (tracebacks, rutas de archivos de test), verificar que el sufijo es relativo.
+
 ## 2026-05-16 (la arquitectura de agentes es un factor secundario en APR test-guided)
 
 - **Contexto:** Tras múltiples experimentos con QuixBugs y BugsInPy comparando mono-agente,

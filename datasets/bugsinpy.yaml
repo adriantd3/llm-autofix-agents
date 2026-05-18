@@ -452,3 +452,43 @@ bugs:
       project: fastapi
       bug_id: "1"
       version: "0"
+
+  # luigi
+  - id: luigi-1
+    program: luigi
+    metadata:
+      project: luigi
+      bug_id: "1"
+      version: "0"
+
+  # PySnooper
+  - id: pysnooper-1
+    program: pysnooper
+    metadata:
+      project: PySnooper
+      bug_id: "1"
+      version: "0"
+
+  # sanic
+  - id: sanic-1
+    program: sanic
+    metadata:
+      project: sanic
+      bug_id: "1"
+      version: "0"
+
+  # spacy
+  - id: spacy-1
+    program: spacy
+    metadata:
+      project: spacy
+      bug_id: "1"
+      version: "0"
+
+  # tqdm
+  - id: tqdm-1
+    program: tqdm
+    metadata:
+      project: tqdm
+      bug_id: "1"
+      version: "0"

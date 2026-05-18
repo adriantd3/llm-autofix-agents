@@ -6,7 +6,7 @@ flow/runtime/ or flow/lifecycle/ to avoid circular dependencies.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from llm_autofix_agents.observability import MarkdownLiveObserver, SQLiteObservabilityStore
@@ -25,12 +25,11 @@ class ObservabilityStack:
     emitter: Emitter
     sqlite_store: SQLiteObservabilityStore | None
     live_observer: MarkdownLiveObserver | None
+    base_results_dir: Path = field(default_factory=lambda: Path("results"))
 
     def results_dir(self, *, repo_root: Path, run_id: str) -> Path:
         """Resolve the output directory for this run."""
-        if self.live_observer is not None:
-            return self.live_observer.path.parent
-        return repo_root / "results" / run_id
+        return self.base_results_dir / run_id
 
     def live_log_display_path(self, *, repo_root: Path) -> str | None:
         """Return relative path of live log for display, or None if disabled."""

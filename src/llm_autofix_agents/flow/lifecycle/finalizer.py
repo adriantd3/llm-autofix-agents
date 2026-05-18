@@ -28,6 +28,7 @@ class RunFinalizer:
         paths = self._paths(cfg)
 
         self._write_summary(output=output, state=state, cfg=cfg, paths=paths, duration_seconds=duration_seconds)
+        self._emit_run_errors(output=output, cfg=cfg)
         self._emit_run_finished(output=output, state=state, cfg=cfg, paths=paths, duration_seconds=duration_seconds)
         self._attach_observability_artifacts(output=output, cfg=cfg, paths=paths)
         self._append_observability_logs(output=output, state=state, cfg=cfg, duration_seconds=duration_seconds)
@@ -70,6 +71,17 @@ class RunFinalizer:
             observability_db=paths.observability_db_path,
             live_log=paths.live_log_path,
         )
+
+    def _emit_run_errors(self, *, output: RunOutput, cfg: RunConfig) -> None:
+        errors = output.artifacts.get("errors") or []
+        for err in errors:
+            details = err.get("details") or {}
+            cfg.observability.emitter.record_run_error(
+                error_type=details.get("exception_type", "Unknown"),
+                error_message=err.get("message", ""),
+                error_category=err.get("category", "unknown"),
+                traceback=details.get("traceback"),
+            )
 
     def _emit_run_finished(
         self,

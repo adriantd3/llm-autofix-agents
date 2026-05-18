@@ -36,6 +36,7 @@ class RunState:
     accumulated_logs: list[str] = field(default_factory=list)
     final_message: str | None = None
     latest_tests: TestResults | None = None
+    latest_test_execution: TestExecution | None = None
     latest_diff: str = ""
     latest_artifacts: dict[str, Any] = field(default_factory=dict)
     latest_snapshot: str | None = None

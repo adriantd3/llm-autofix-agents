@@ -98,7 +98,6 @@ APR_ORCHESTRATOR_MAIN_TOOLS = [
     list_files,
     search_files,
     read_file,
-    write_file,
     replace_in_file,
     replace_lines,
 ]

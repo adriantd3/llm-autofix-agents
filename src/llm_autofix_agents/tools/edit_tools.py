@@ -31,7 +31,9 @@ def _is_test_file_path(path: str) -> bool:
     parts = lowered.split("/")
     for part in parts:
         stem = part.rsplit(".", 1)[0] if "." in part else part
-        if stem.startswith("test_") or stem.endswith("_test"):
+        if stem in ("test", "tests"):
+            return True
+        if stem.startswith("test_") or stem.startswith("tests_") or stem.endswith("_test"):
             return True
     return False
 
