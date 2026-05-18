@@ -91,7 +91,7 @@ class TestUpsertRunValidation(unittest.TestCase):
         self.assertIn("root cause", row[2])
 
     def test_upsert_overwrites_verdict(self) -> None:
-        self._store.upsert_run_validation(self._make_record(verdict="INCORRECT"))
+        self._store.upsert_run_validation(self._make_record(verdict="OVERFITTING"))
         self._store.upsert_run_validation(self._make_record(verdict="CORRECT"))
 
         with sqlite3.connect(str(self._store.db_path)) as conn:
@@ -122,7 +122,7 @@ class TestUpsertRunValidation(unittest.TestCase):
             run_id=self._run_id,
             validated_at="2026-05-16T00:00:00+00:00",
             validator_model="gpt-4.1-mini",
-            verdict="INFRA_FAIL",
+            verdict="VALIDATION_ERROR",
         )
         self._store.upsert_run_validation(record)
 

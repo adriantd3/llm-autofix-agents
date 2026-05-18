@@ -145,7 +145,7 @@ class FlowRefactorTests(unittest.TestCase):
 
         output = builder.build(
             identity=identity,
-            status=RunStatus.PARTIAL,
+            status=RunStatus.FAILED,
             stop_reason=StopReason.NO_PROGRESS,
             state=state,
         )

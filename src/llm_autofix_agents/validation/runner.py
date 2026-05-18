@@ -83,8 +83,10 @@ class ValidationRunner:
             output = asyncio.run(self._call_llm(ctx))
         except Exception:
             logger.exception("LLM validation failed for run %s", run_id)
-            return ValidationResult(run_id=run_id, verdict="", confidence=None, justification=None,
-                                    skipped=True, skip_reason="llm_error")
+            error_record = self._build_error_record(run_id)
+            self._store.upsert_run_validation(error_record)
+            return ValidationResult(run_id=run_id, verdict="VALIDATION_ERROR", confidence=None,
+                                    justification=None, skipped=False)
 
         record = self._build_record(run_id, ctx, output)
         self._store.upsert_run_validation(record)
@@ -162,7 +164,9 @@ class ValidationRunner:
 
     def _query_run_ids(self) -> list[str]:
         with sqlite3.connect(str(self._db_path)) as conn:
-            rows = conn.execute("SELECT run_id FROM runs ORDER BY started_at").fetchall()
+            rows = conn.execute(
+                "SELECT run_id FROM runs WHERE final_status = 'success' ORDER BY started_at"
+            ).fetchall()
         return [r[0] for r in rows]
 
     async def _call_llm(self, ctx: RunValidationInput) -> ValidatorOutput:
@@ -191,11 +195,22 @@ class ValidationRunner:
             validator_model=self._llm_settings.model,
             verdict=output.verdict,
             test_passed=output.test_passed,
-            infra_fail_detected=output.infra_fail_detected,
+            infra_fail_detected=None,
             canonical_patch_available=ctx.canonical_patch is not None,
             patch_semantically_matches=output.patch_semantically_matches,
             confidence=output.confidence,
             justification=output.justification,
+        )
+
+    def _build_error_record(self, run_id: str) -> RunValidationRecord:
+        validation_id = _make_validation_id(run_id, self._llm_settings.model)
+        return RunValidationRecord(
+            validation_id=validation_id,
+            run_id=run_id,
+            validated_at=datetime.now(UTC).isoformat(),
+            validator_model=self._llm_settings.model,
+            verdict="VALIDATION_ERROR",
+            justification="LLM validation pipeline failed — see logs for details.",
         )
 
 

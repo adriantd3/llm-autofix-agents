@@ -163,7 +163,7 @@ class AgentFlowTests(unittest.TestCase):
                 provider=provider,
             )
 
-        self.assertEqual(output.status, RunStatus.PARTIAL)
+        self.assertEqual(output.status, RunStatus.FAILED)
         self.assertEqual(output.stop_reason, StopReason.NO_PROGRESS)
         self.assertEqual(output.identity.iteration, 2)
 
@@ -211,7 +211,7 @@ class AgentFlowTests(unittest.TestCase):
                 provider=provider,
             )
 
-        self.assertEqual(output.status, RunStatus.PARTIAL)
+        self.assertEqual(output.status, RunStatus.FAILED)
         self.assertEqual(output.stop_reason, StopReason.MAX_ITERATIONS)
         self.assertEqual(output.identity.iteration, 3)
 
@@ -581,7 +581,7 @@ class AgentFlowStatusTests(unittest.TestCase):
                 provider=provider,
             )
 
-        self.assertEqual(output.status, RunStatus.PARTIAL)
+        self.assertEqual(output.status, RunStatus.FAILED)
         self.assertEqual(output.stop_reason, StopReason.NO_PROGRESS)
         self.assertIn("iteration_result=agent_reported_stuck", output.logs)
 

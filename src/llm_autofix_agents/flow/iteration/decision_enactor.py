@@ -70,7 +70,7 @@ class IterationDecisionEnactor:
             )
             return self.output_builder.build(
                 identity=identity,
-                status=RunStatus.PARTIAL,
+                status=RunStatus.FAILED,
                 stop_reason=StopReason.NO_PROGRESS,
                 state=state,
             )
@@ -105,7 +105,7 @@ class IterationDecisionEnactor:
                 state.accumulated_logs.append(decision.log_suffix)
             return self.output_builder.build(
                 identity=identity,
-                status=RunStatus.PARTIAL,
+                status=RunStatus.FAILED,
                 stop_reason=StopReason.NO_PROGRESS,
                 state=state,
             )

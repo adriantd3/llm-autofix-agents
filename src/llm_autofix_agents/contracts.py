@@ -15,7 +15,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class RunStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
-    PARTIAL = "partial"
 
 
 class StopReason(StrEnum):

@@ -525,6 +525,7 @@ class BatchRunner:
         status_emoji = {
             "success": "+",
             "failed": "-",
+            "partial": "-",  # legacy: merged into failed
             "timed_out": "!",
             "infra_failure": "x",
         }.get(result.status, "?")
@@ -547,7 +548,7 @@ class BatchRunner:
         completed_at: datetime | None,
     ) -> BatchSummary:
         successful = sum(1 for r in results if r.status == "success")
-        failed = sum(1 for r in results if r.status == "failed")
+        failed = sum(1 for r in results if r.status in ("failed", "partial"))  # partial is legacy
         timed_out = sum(1 for r in results if r.status == "timed_out")
         infra_failures = sum(1 for r in results if r.status == "infra_failure")
         return BatchSummary(

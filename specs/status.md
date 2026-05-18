@@ -2,6 +2,17 @@
 
 ## En curso
 
+- **Memoria TFM — Capítulo 5 reestructurado y validado (2026-05-18)**:
+  - Reescritura profunda de `memoria/sections/05-propuesta/05-propuesta.tex` con foco en narrativa no genérica: arquitectura, runtime aislado, tools una a una, bucle iterativo, paso de contexto, políticas de validación y observabilidad.
+  - Se añadieron/ajustaron diagramas y pseudocódigo para explicar decisiones de diseño sin depender de paquetes no disponibles (`algorithm.sty`).
+  - Compilación validada con `latexmk`; sin warnings ni errors en la sección 5.
+
+- **SPEC-018 completado: Validation Verdict Refactor (2026-05-18)**:
+  - A: `partial` mergeado en `failed` en `contracts.py`, `decision_enactor.py`, `strategy.py`, `batch/runner.py` (compat legacy).
+  - B: Validador rediseñado — `INCORRECT`→`OVERFITTING`, `INFRA_FAIL` eliminado, `VALIDATION_ERROR` para errores de pipeline; validator solo se invoca para runs `success`; `infra_fail_detected` deprecado (NULL, columna SQLite preservada para compat).
+  - C: `SKILL.md`, `spec-013`, `docs/experiment-plan.md` actualizados con nuevos veredictos.
+  - D: Tests actualizados — 28 passed, 0 regressions.
+
 - **SPEC-017 completado: Harness Hardening & Observability (2026-05-17)**:
   - A: BugsInPy venv hardening — `_COMPILE_REQUIRED_FILES` usa `env/bin/activate` (no symlink roto en host); test command con `PATH=env/bin:$PATH` + pytest availability guard para venvs sin `env/bin/pytest`.
   - B: infra_failure diagnosis — pipeline `RunErrored` completo: orquestador captura traceback → `exception_failure(details=...)` → finalizer drena `artifacts["errors"]` → emitter → JSONL (`event="run_errored"`) + SQLite (`error_type/message/category/traceback` en `runs`, schema v8, migración v7→v8).

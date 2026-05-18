@@ -101,7 +101,7 @@ class TestBuildValidatorPrompt(unittest.TestCase):
 
     def test_system_prompt_contains_protocol_keywords(self) -> None:
         sys_prompt = get_system_prompt()
-        for keyword in ("CORRECT", "PLAUSIBLE", "INCORRECT", "INFRA_FAIL", "PROTOCOL"):
+        for keyword in ("CORRECT", "PLAUSIBLE", "OVERFITTING", "PROTOCOL"):
             self.assertIn(keyword, sys_prompt)
 
 
@@ -111,7 +111,6 @@ class TestValidatorOutputModel(unittest.TestCase):
             verdict="CORRECT",
             confidence=0.95,
             test_passed=True,
-            infra_fail_detected=False,
             patch_semantically_matches=True,
             justification="Fix addresses root cause.",
         )
@@ -126,17 +125,15 @@ class TestValidatorOutputModel(unittest.TestCase):
                 verdict="CORRECT",
                 confidence=1.5,  # out of range
                 test_passed=True,
-                infra_fail_detected=False,
                 justification="x",
             )
 
     def test_patch_semantically_matches_nullable(self) -> None:
         output = ValidatorOutput(
-            verdict="INFRA_FAIL",
+            verdict="VALIDATION_ERROR",
             confidence=0.0,
             test_passed=False,
-            infra_fail_detected=True,
-            justification="Cannot evaluate — env broken.",
+            justification="Pipeline error.",
         )
         self.assertIsNone(output.patch_semantically_matches)
 

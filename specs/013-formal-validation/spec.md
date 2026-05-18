@@ -28,13 +28,13 @@ arquitecturas y modelos.
 Run finalizado
      │
      ▼
-[1] Test signal        → PASS / FAIL / INFRA_FAIL  (determinista, ya existe en `runs.resolved`)
+[1] Test signal        → PASS / FAIL  (determinista, ya existe en `runs.resolved`)
      │
      ▼
-[2] Patch comparison   → ¿aborda el mismo root cause que el patch canónico?  (LLM semántico)
+[2] Patch comparison   → ¿aborda el mismo root cause que el patch canónico?  (LLM semántico, solo para `success`)
      │
      ▼
-[3] Validator verdict  → CORRECT | PLAUSIBLE | INCORRECT | INFRA_FAIL  (LLM sintético)
+[3] Validator verdict  → CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR  (LLM sintético, solo para `success`)
 ```
 
 La comparación de patches es **semántica**, no line-by-line. El objetivo no es igualdad textual
@@ -44,10 +44,10 @@ sino equivalencia de intención: ¿el agente identificó y corrigió el mismo pr
 
 | Veredicto    | Condición                                                                              |
 |--------------|----------------------------------------------------------------------------------------|
-| `CORRECT`    | Tests pasan Y el fix aborda el mismo root cause que el patch canónico                 |
-| `PLAUSIBLE`  | Tests pasan PERO el fix overfittea los tests o no cubre la propagación completa       |
-| `INCORRECT`  | El fix no resuelve el bug (tests fallan, lógica semánticamente errónea)               |
-| `INFRA_FAIL` | Los tests fallan por infra (dependencias, compilación), no evaluable por código       |
+| `CORRECT`          | Tests pasan Y el fix aborda el mismo root cause que el patch canónico                 |
+| `PLAUSIBLE`        | Tests pasan PERO el fix diverge del canónico o no cubre la propagación completa       |
+| `OVERFITTING`      | Tests pasan PERO el agente ajustó el código a las aserciones sin corregir el bug real |
+| `VALIDATION_ERROR` | Error en el pipeline de validación (no lo produce el LLM)                            |
 
 > **Nota de diseño**: "Partially correct" se descarta como categoría. La distinción que aporta
 > valor para el TFM es CORRECT vs PLAUSIBLE — revela el problema clásico APR de *plausible but
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS run_validations (
 
   -- Veredictos del LLM
   patch_semantically_matches  INTEGER,   -- 0/1/NULL (¿mismo root cause que canónico?)
-  verdict                     TEXT NOT NULL,  -- CORRECT|PLAUSIBLE|INCORRECT|INFRA_FAIL
+  verdict                     TEXT NOT NULL,  -- CORRECT|PLAUSIBLE|OVERFITTING|VALIDATION_ERROR
   confidence                  REAL,      -- 0.0–1.0
   justification               TEXT,      -- razonamiento del validador
 
@@ -104,7 +104,7 @@ runs (1) ──< (N) iterations
 ## Métricas derivadas para el TFM
 
 ### Métricas discretas (tablas bug-por-bug)
-- `verdict`: `CORRECT | PLAUSIBLE | INCORRECT | INFRA_FAIL`
+- `verdict`: `CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR`
 - `test_passed`: boolean directo del sistema
 - `patch_semantically_matches`: juicio LLM sobre equivalencia con ground truth
 
@@ -157,16 +157,16 @@ capacidades sean estables independientemente de quién invoque la validación.
 2. Leer y entender el patch canónico: ¿qué corrigió el desarrollador?
 3. Leer y entender el patch del agente: ¿qué hizo el agente?
 4. Comparar semánticamente: ¿abordan el mismo root cause?
-5. Evaluar señal de tests: ¿PASS / FAIL / INFRA_FAIL?
+5. Evaluar señal de tests: ¿PASS / FAIL? (el validador solo recibe runs `success`)
+6. Detectar overfitting: ¿el agente ajustó el código a las aserciones del test?
 6. Sintetizar veredicto con justificación explícita
 
 ### Output estructurado (fijo)
 ```json
 {
-  "verdict": "CORRECT|PLAUSIBLE|INCORRECT|INFRA_FAIL",
+  "verdict": "CORRECT|PLAUSIBLE|OVERFITTING|VALIDATION_ERROR",
   "confidence": 0.0,
   "test_passed": true,
-  "infra_fail_detected": false,
   "patch_semantically_matches": true,
   "justification": "..."
 }

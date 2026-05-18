@@ -327,7 +327,6 @@ SELECT
   v.verdict,
   v.confidence,
   v.test_passed,
-  v.infra_fail_detected,
   v.canonical_patch_available,
   v.patch_semantically_matches,
   v.justification,
@@ -346,8 +345,10 @@ SELECT
   COUNT(*)      AS total_runs,
   SUM(CASE WHEN v.verdict = 'CORRECT' THEN 1 ELSE 0 END)
                 AS correct,
-  SUM(CASE WHEN v.verdict IN ('CORRECT', 'PLAUSIBLE') THEN 1 ELSE 0 END)
+  SUM(CASE WHEN v.verdict = 'PLAUSIBLE' THEN 1 ELSE 0 END)
                 AS plausible,
+  SUM(CASE WHEN v.verdict = 'OVERFITTING' THEN 1 ELSE 0 END)
+                AS overfitting,
   ROUND(1.0 * SUM(CASE WHEN v.verdict = 'CORRECT' THEN 1 ELSE 0 END) / COUNT(*), 3)
                 AS repair_rate,
   ROUND(1.0 * SUM(CASE WHEN v.verdict IN ('CORRECT', 'PLAUSIBLE') THEN 1 ELSE 0 END) / COUNT(*), 3)
@@ -376,7 +377,9 @@ SELECT
   MAX(CASE WHEN v.verdict = 'CORRECT' THEN 1 ELSE 0 END)
                 AS ever_correct,
   MAX(CASE WHEN v.verdict IN ('CORRECT', 'PLAUSIBLE') THEN 1 ELSE 0 END)
-                AS ever_plausible
+                AS ever_plausible,
+  MAX(CASE WHEN v.verdict = 'OVERFITTING' THEN 1 ELSE 0 END)
+                AS ever_overfitting
 FROM runs r
 JOIN architectures a USING (architecture_id)
 LEFT JOIN run_agents ra ON ra.run_id = r.run_id AND ra.agent_order = 1
