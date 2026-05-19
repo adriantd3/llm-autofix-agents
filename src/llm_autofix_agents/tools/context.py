@@ -20,6 +20,13 @@ class APRToolContext:
     # Incremented by lifecycle hooks on every tool call; used by dynamic
     # instructions to detect agents that explore without ever editing.
     iteration_tool_call_count: int = 0
+    # Exit code of the baseline test run — set once before the first iteration
+    # and preserved across iterations. Used to tailor tool guards and facade
+    # context (e.g. exit_code=4 is a collection failure, not a code bug).
+    baseline_exit_code: int | None = None
+    # Number of run_test_target calls made before any code edit in the current
+    # iteration. Reset each iteration alongside iteration_edit_count.
+    pre_edit_test_count: int = 0
 
 
 def get_tool_context(wrapper: RunContextWrapper[APRToolContext]) -> APRToolContext:

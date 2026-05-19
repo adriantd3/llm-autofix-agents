@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from llm_autofix_agents.flow.models import TestExecution, WorkspaceChangeSet
 from llm_autofix_agents.flow.policies.iteration import build_continuation_snapshot, build_iteration_input
@@ -210,6 +212,74 @@ class IterationInputTests(unittest.TestCase):
 
         self.assertIn("Continue improving the repair strategy", user_input)
         self.assertNotIn("You MUST apply a code change this iteration", user_input)
+
+
+class ExitCode4FacadeTests(unittest.TestCase):
+    def test_exit_code_4_includes_collection_failure_hint(self) -> None:
+        user_input = build_iteration_input(
+            prompt="prompt",
+            iteration=1,
+            max_iterations=3,
+            previous_message=None,
+            latest_snapshot=None,
+            baseline_test_execution=TestExecution(
+                exit_code=4,
+                timed_out=False,
+                output="ERROR collecting tests/test_media.py\nModuleNotFoundError: No module named 'testfixtures'",
+                signature="sig-exit4",
+            ),
+            test_command="bash bugsinpy_run_test.sh",
+        )
+
+        self.assertIn("EXIT CODE 4", user_input)
+        self.assertIn("TEST COLLECTION FAILURE", user_input)
+        self.assertIn("ModuleNotFoundError", user_input)  # from test output
+        self.assertIn("env/bin/pip install", user_input)
+
+    def test_exit_code_4_includes_requirements_file_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "bugsinpy_requirements.txt").write_text(
+                "testfixtures==6.14.1\nscrapy==2.1.0\n",
+                encoding="utf-8",
+            )
+            user_input = build_iteration_input(
+                prompt="prompt",
+                iteration=1,
+                max_iterations=3,
+                previous_message=None,
+                latest_snapshot=None,
+                baseline_test_execution=TestExecution(
+                    exit_code=4,
+                    timed_out=False,
+                    output="ERROR: ModuleNotFoundError: No module named 'testfixtures'",
+                    signature="sig-req",
+                ),
+                test_command="bash bugsinpy_run_test.sh",
+                repo_root=root,
+            )
+
+            self.assertIn("<bugsinpy_requirements>", user_input)
+            self.assertIn("testfixtures==6.14.1", user_input)
+
+    def test_exit_code_1_does_not_include_exit4_hint(self) -> None:
+        user_input = build_iteration_input(
+            prompt="prompt",
+            iteration=1,
+            max_iterations=3,
+            previous_message=None,
+            latest_snapshot=None,
+            baseline_test_execution=TestExecution(
+                exit_code=1,
+                timed_out=False,
+                output="FAILED test_gcd.py::test_case",
+                signature="sig-1",
+            ),
+            test_command="pytest",
+        )
+
+        self.assertNotIn("EXIT CODE 4", user_input)
+        self.assertNotIn("<bugsinpy_requirements>", user_input)
 
 
 if __name__ == "__main__":

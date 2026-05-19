@@ -165,6 +165,11 @@ class IterationRunner:
         state.validation_feedback = None
         cfg.agent_context.iteration_edit_count = 0
         cfg.agent_context.iteration_tool_call_count = 0
+        cfg.agent_context.pre_edit_test_count = 0
+        # baseline_exit_code is set once and preserved across iterations;
+        # only update if not already set to avoid overwriting on repeated calls.
+        if cfg.agent_context.baseline_exit_code is None and state.baseline_test_execution is not None:
+            cfg.agent_context.baseline_exit_code = state.baseline_test_execution.exit_code
 
         return _IterationPrep(
             identity=identity,

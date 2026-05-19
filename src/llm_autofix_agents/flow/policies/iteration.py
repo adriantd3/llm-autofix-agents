@@ -18,24 +18,9 @@ _FAILURE_DRIVEN_INTRO = (
     "You are an autonomous software repair agent with a LIMITED number of turns. "
     "Analyze the failing test results below, find the root cause in the repository, "
     "apply the smallest correct change, rerun the focused test command, inspect the "
-    "final diff, and then report the final status.\n\n"
-    "CRITICAL RULES:\n"
-    "- NEVER modify test files (anything under test/ or tests/, or files named test_*.py / *_test.py). "
-    "If you modify a test file, your iteration is REJECTED and the run ENDS.\n"
-    "- Do NOT re-run the failing test before making code changes. The failure output is already below.\n"
-    "- Do NOT call the same tool twice with the same arguments. Every redundant call wastes a turn.\n"
-    "- Plan your next 2-3 tool calls before making any call.\n"
-    "- If a test traceback shows a test function name, you MUST read the ENTIRE test function "
-    "(from 'def test_...' to the next 'def ') to see ALL assertions, not just the failing line.\n"
-    "- Before proposing a fix, consider ALL assertions in the test function that involve the code you will change.\n"
-    "- Do NOT use execute_command to test Python logic or validate your fix with a subprocess. "
-    "Apply your fix directly with replace_in_file, then validate with the test tool.\n"
-    "- Writing a fix in your reasoning does NOT apply it. "
-    "You MUST call replace_in_file for every change. Describing the fix without calling the tool leaves the codebase unchanged.\n"
-    "- Use replace_in_file for files that already exist. "
-    "write_file overwrites the ENTIRE file — only use it to create files that do not exist yet.\n\n"
-    "- In your final response, populate 'notes' with short bullets: inspected, attempted, changes, results, next.\n\n"
-    "You must use tools for evidence; do not report edits or passing tests without tool outputs."
+    "final diff, and then report the final status. "
+    "NEVER modify test files — all failures are source-code bugs. "
+    "Do NOT re-run the failing test before making code changes."
 )
 _MAX_BASELINE_OUTPUT_CHARS = 4000
 _MAX_SNAPSHOT_OUTPUT_CHARS = 2000
@@ -89,10 +74,10 @@ def build_iteration_input(
 
     snapshot_block = f"\n\n{latest_snapshot}" if latest_snapshot else ""
 
-    # Include baseline test context as a reminder of the ORIGINAL failure.
-    # This prevents the model from oscillating (fixing one assertion while breaking another).
+    # Remind the agent of the original failure only on the first continuation (iteration 2).
+    # By iteration 3+ the agent has already seen it twice — repeating it is pure noise.
     baseline_reminder = ""
-    if baseline_test_execution and baseline_test_execution.exit_code != 0:
+    if iteration == 2 and baseline_test_execution and baseline_test_execution.exit_code != 0:
         baseline_output = compact_test_output(
             baseline_test_execution.output, max_chars=1200
         )
@@ -112,17 +97,17 @@ def build_iteration_input(
         )
 
     anti_wander = (
-        f"This is attempt {iteration}/{max_iterations}. Your previous attempt failed. "
+        f"This is attempt {iteration}/{max_iterations}. Your previous attempt did not complete the repair. "
         "If your plan for this attempt is the same as before, stop now and report status='stuck'. "
         "Otherwise, your first action must be different from what you tried last time.\n\n"
     )
 
     no_edit_previous = latest_snapshot is not None and _NO_EDIT_SNAPSHOT_SIGNAL in latest_snapshot
 
-    # Workspace tree — repeated in every iteration since each agent run starts fresh
-    # without conversation history from previous runs.
+    # Workspace tree — only inject in recovery (no-edit) iterations for re-localization.
+    # On normal continuation passes the agent already knows the layout; repeating it wastes tokens.
     workspace_tree_block = ""
-    if repo_root is not None:
+    if no_edit_previous and repo_root is not None:
         workspace_tree_block = _build_workspace_tree(repo_root)
 
     # When the previous iteration made no edits, attempt to re-localize: re-extract
@@ -145,13 +130,13 @@ def build_iteration_input(
         f"{feedback_prefix}"
         f"{anti_wander}"
         f"[ITERATION {iteration}/{max_iterations}]\n"
+        f"{task_block}\n\n"
         f"Previous attempt summary (agent-reported):\n{previous_message}"
         f"{snapshot_block}"
-        f"{baseline_reminder}"
         f"{test_command_reminder}"
-        f"{workspace_tree_block}"
         f"{recovery_source_block}\n\n"
-        f"{task_block}"
+        f"{baseline_reminder}"
+        f"{workspace_tree_block}"
     )
 
 
@@ -216,6 +201,35 @@ def build_continuation_snapshot(
     return "\n".join(lines)
 
 
+_EXIT4_GUIDANCE = (
+    "\n\n⚠ EXIT CODE 4 — TEST COLLECTION FAILURE: pytest could not import or collect tests.\n"
+    "This is almost always a missing or incompatible dependency. Look for "
+    "ModuleNotFoundError or ImportError in the output above.\n"
+    "- To fix a missing package: use `env/bin/pip install <package>` via execute_command.\n"
+    "- Do NOT modify test files to work around missing imports.\n"
+    "- Check <bugsinpy_requirements> below for the expected package list."
+)
+_MAX_REQUIREMENTS_CHARS = 1500
+
+
+def _build_exit4_block(exit_code: int, repo_root: Path | None) -> str:
+    """Return exit-4 guidance + requirements file content block, or empty string."""
+    if exit_code != 4:
+        return ""
+    requirements_block = ""
+    if repo_root is not None:
+        req_path = repo_root / "bugsinpy_requirements.txt"
+        if req_path.is_file():
+            try:
+                content = req_path.read_text(encoding="utf-8")
+                if len(content) > _MAX_REQUIREMENTS_CHARS:
+                    content = content[:_MAX_REQUIREMENTS_CHARS] + "\n... [truncated]"
+                requirements_block = f"\n\n<bugsinpy_requirements>\n{content.strip()}\n</bugsinpy_requirements>"
+            except OSError:
+                pass
+    return _EXIT4_GUIDANCE + requirements_block
+
+
 def _build_first_iteration_input(
     *,
     baseline_test_execution: TestExecution | None,
@@ -263,6 +277,7 @@ def _build_first_iteration_input(
         f"- signature: {baseline_test_execution.signature}\n\n"
         "Compact test output:\n"
         f"{output}"
+        f"{_build_exit4_block(baseline_test_execution.exit_code, repo_root)}"
         f"{workspace_tree_block}"
         f"{source_function_block}"
         f"{test_function_block}"
@@ -399,7 +414,7 @@ def _indent_block(text: str, *, prefix: str) -> str:
     return "\n".join(f"{prefix}{line}" for line in text.splitlines())
 
 
-def _format_notes_block(notes: str | None, *, max_lines: int = 8) -> str:
+def _format_notes_block(notes: str | None, *, max_lines: int = 4) -> str:
     if not notes:
         return ""
 

@@ -66,6 +66,9 @@ class BugsInPyAdapter:
             logger.info("Compiling '%s' (may take several minutes on first run)...", bug.id)
             self._compile(dataset, bug, context, container_project_workspace)
             self._validate_compile(host_project_workspace, bug.id, dataset.tooling.get("compile_required", True))
+            self._reinstall_bugsinpy_requirements(bug, context, container_project_workspace)
+            if bug.extra_packages:
+                self._install_extra_packages(bug, context, container_project_workspace)
         except Exception:
             shutil.rmtree(host_case_root, ignore_errors=True)
             raise
@@ -148,6 +151,53 @@ class BugsInPyAdapter:
             if compile_required:
                 raise RuntimeError(msg)
             logger.warning(msg)
+
+    def _reinstall_bugsinpy_requirements(
+        self,
+        bug: BugEntry,
+        context: DatasetPreparationContext,
+        container_project_workspace: str,
+    ) -> None:
+        """Re-run pip install -r bugsinpy_requirements.txt after compile as a safety net.
+
+        bugsinpy's compile_project step installs packages, but in some cases (e.g. scrapy-33)
+        packages listed in bugsinpy_requirements.txt are skipped or fail silently. This step
+        is idempotent: already-satisfied packages emit 'Requirement already satisfied' and exit 0.
+        Failures are logged as warnings — the run continues so the agent can attempt env repair.
+        """
+        req_file = "bugsinpy_requirements.txt"
+        command = f"env/bin/pip install -r {req_file} -q"
+        logger.info("Re-installing bugsinpy requirements for '%s'...", bug.id)
+        result = self._run_in_bugsinpy_container(
+            context, command, cwd=container_project_workspace, timeout_seconds=180
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            logger.warning("Requirements reinstall warning for '%s': %s", bug.id, stderr)
+
+    def _install_extra_packages(
+        self,
+        bug: BugEntry,
+        context: DatasetPreparationContext,
+        container_project_workspace: str,
+    ) -> None:
+        """Install extra pip packages into the compiled venv after bugsinpy-compile.
+
+        This supplements bugsinpy_requirements.txt for packages that are absent
+        or failed to install during the standard compile step (e.g. testfixtures
+        for scrapy-33 where the requirements file entry is sometimes skipped).
+        Failures are logged as warnings — the run continues even if an install
+        fails, so the agent can attempt env repair itself if needed.
+        """
+        packages = " ".join(shlex.quote(p) for p in bug.extra_packages)
+        command = f"env/bin/pip install {packages} -q"
+        logger.info("Installing extra packages for '%s': %s", bug.id, " ".join(bug.extra_packages))
+        result = self._run_in_bugsinpy_container(
+            context, command, cwd=container_project_workspace, timeout_seconds=120
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            logger.warning("Extra package install warning for '%s': %s", bug.id, stderr)
 
     def _validate_compile(
         self,

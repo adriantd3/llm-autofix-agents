@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, cast
 
-from agents import Agent, AgentOutputSchema, OpenAIChatCompletionsModel, Tool
+from agents import Agent, AgentOutputSchema, ModelSettings, OpenAIChatCompletionsModel, Tool
 from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 from openai import AsyncOpenAI
 
@@ -67,6 +67,8 @@ def build_agent(
         agent_kwargs["handoff_description"] = handoff_description
     if model_settings is not None:
         agent_kwargs["model_settings"] = model_settings
+    elif settings.extra_body is not None:
+        agent_kwargs["model_settings"] = ModelSettings(extra_body=settings.extra_body)
     return Agent(**agent_kwargs)
 
 

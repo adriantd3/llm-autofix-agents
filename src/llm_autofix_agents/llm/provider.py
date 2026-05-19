@@ -21,6 +21,7 @@ from agents import (
     ToolCallOutputItem,
     set_tracing_disabled,
 )
+from agents.extensions.tool_output_trimmer import ToolOutputTrimmer
 from pydantic import BaseModel, Field
 
 from llm_autofix_agents.llm.provider_events import (
@@ -56,6 +57,14 @@ class AgentFixIterationResult(BaseModel):
     changed_files: list[str] = Field(
         default_factory=list,
         description="Repository-relative paths of every file modified in this iteration.",
+    )
+    rejected_hypotheses: str = Field(
+        default="",
+        description=(
+            "Brief list of approaches tried and ruled out this iteration "
+            "(e.g. 'Tried fixing X in file Y \u2014 test still fails because Z'). "
+            "Max 3 bullets. Leave empty if this is the first iteration."
+        ),
     )
 
 
@@ -159,7 +168,30 @@ class OpenAIAgentsSDKProvider:
                     context=context,
                     max_turns=max_turns,
                     hooks=hooks,
-                    run_config=RunConfig(tracing_disabled=self.settings.tracing_disabled),
+                    run_config=RunConfig(
+                        tracing_disabled=self.settings.tracing_disabled,
+                        call_model_input_filter=ToolOutputTrimmer(
+                            recent_turns=5,
+                            # 4000 chars ≈ 80 lines: covers a full function read or test traceback.
+                            # Edit tools (replace_in_file etc.) are excluded: their failure payloads
+                            # include a critical file preview the agent must act on immediately.
+                            max_output_chars=4000,
+                            preview_chars=400,
+                            trimmable_tools=frozenset({
+                                "execute_command",
+                                "list_files",
+                                "search_files",
+                                "get_workspace_info",
+                                "git_status_summary",
+                                "git_diff_summary",
+                                # read_file: old reads are stale once the agent has moved past them.
+                                # 4000 chars covers a full 80-line window for any older read.
+                                "read_file",
+                                # run_test_target: superseded by newer runs; old test output is noise.
+                                "run_test_target",
+                            }),
+                        ),
+                    ),
                     error_handlers={"max_turns": _make_max_turns_handler(max_turns)},
                 )
                 if attempt > 1:

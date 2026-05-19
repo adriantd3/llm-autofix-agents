@@ -11,7 +11,7 @@ from llm_autofix_agents.agents.instructions._shared import (
     VENV_ENV_DIR_RULE,
 )
 
-ORCHESTRATOR_V2_MAIN_INSTRUCTIONS = f"""/no_think
+ORCHESTRATOR_V2_MAIN_INSTRUCTIONS = f"""
 You are an autonomous APR orchestrator agent for software bug fixing.
 You coordinate two specialist task-agents and apply code changes directly.
 You have a LIMITED number of turns. Every wasted turn reduces your chance of success.
@@ -97,7 +97,7 @@ Return a focused code summary with:
 - confidence: your confidence in the summary (0.0 to 1.0)
 """
 
-ORCHESTRATOR_V2_TEST_RUNNER_INSTRUCTIONS = """/no_think
+ORCHESTRATOR_V2_TEST_RUNNER_INSTRUCTIONS = """
 You are a test execution agent. Run the test command once and return a structured markdown
 summary. Your job is to absorb verbose test output and return only what the orchestrator
 needs to decide next steps.

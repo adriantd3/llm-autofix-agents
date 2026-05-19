@@ -444,6 +444,8 @@ bugs:
       project: scrapy
       bug_id: "33"
       version: "0"
+    extra_packages:
+      - testfixtures
 
   # fastapi
   - id: fastapi-1

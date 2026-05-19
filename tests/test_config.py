@@ -108,5 +108,31 @@ class LLMSettingsTests(unittest.TestCase):
         self.assertEqual(values, {})
 
 
+class BugEntryExtraPackagesTests(unittest.TestCase):
+    def test_extra_packages_defaults_to_empty_list(self) -> None:
+        from llm_autofix_agents.batch.config import BugEntry
+
+        bug = BugEntry(id="scrapy-33", program="scrapy", metadata={"project": "scrapy", "bug_id": "33", "version": "0"})
+        self.assertEqual(bug.extra_packages, [])
+
+    def test_extra_packages_accepts_package_list(self) -> None:
+        from llm_autofix_agents.batch.config import BugEntry
+
+        bug = BugEntry(
+            id="scrapy-33",
+            program="scrapy",
+            metadata={"project": "scrapy", "bug_id": "33", "version": "0"},
+            extra_packages=["testfixtures", "six"],
+        )
+        self.assertEqual(bug.extra_packages, ["testfixtures", "six"])
+
+    def test_extra_packages_rejects_non_list(self) -> None:
+        from pydantic import ValidationError
+        from llm_autofix_agents.batch.config import BugEntry
+
+        with self.assertRaises(ValidationError):
+            BugEntry(id="x", extra_packages="testfixtures")  # type: ignore[arg-type]
+
+
 if __name__ == "__main__":
     unittest.main()

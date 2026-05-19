@@ -87,7 +87,7 @@ Ejemplo problemático (IA):
 > Un agente autónomo no dispone de ningún mapa del repositorio. Para localizar el código tiene que explorar. Esta exploración tiene un coste directo en tokens.
 
 Ejemplo corregido:
-> Un agente autónomo no dispone de ningún mapa del repositorio, por lo que para localizar el código relevante tiene que explorar activamente: leer ficheros, seguir importaciones, buscar las funciones del traceback. Esta exploración tiene un coste directo en tokens de contexto y, además, existe una tensión real entre dos extremos: explorar demasiado desperdicia contexto; explorar demasiado poco puede llevar a proponer un fix sin entender el contrato completo de la función.
+> Un agente autónomo no dispone de ningún mapa del repositorio, por lo que para localizar el código relevante tiene que explorar activamente: leer ficheros, seguir importaciones, buscar las funciones del traceback. Esta exploración tiene un coste directo en tokens de contexto y, además, existe una tensión real entre dos extremos: explorar demasiado desperdicia contexto, mientras que hacerlo demasiado poco puede llevar a proponer un fix sin entender el contrato completo de la función.
 
 ### Rayas como separadores — PROHIBIDO
 
@@ -148,4 +148,5 @@ Términos propios de la disciplina: sistema, proceso, herramienta, desarrollo, f
 - **No dejar anglicismos técnicos sin definir en primera aparición**: ver la regla «Anglicismos — primera aparición obligatoria» más arriba.
 - **No inventar** datos, resultados ni citas que no estén en el repositorio
 - **No generalizar** más allá de lo que la documentación del proyecto sustenta
+- **No usar el punto y coma (`;`)**: es un signo infrecuente en prosa académica española y delata un registro anglófono o generado automáticamente. Cuando se sienta la tentación de usarlo, reestructurar la frase: separar en dos oraciones con punto, unir con una coma y un conector (`y`, `pero`, `aunque`, `mientras que`, `por lo que`, `de modo que`), o reformular completamente. En vez de `A; B` escribir `A, mientras que B` o `A. Por ello, B`, según la relación lógica entre las ideas.
 - La guía es orientadora, no un oráculo de estilo: priorizar la coherencia y naturalidad del texto sobre la imitación mecánica

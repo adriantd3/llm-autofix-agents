@@ -68,6 +68,8 @@ def render_final_message(proposal: AgentFixIterationRecord, *, observed_files: l
         f"confidence: {p.confidence:.3f}",
         f"changed_files: {files}",
     ]
+    if p.rejected_hypotheses:
+        lines.append(f"rejected_hypotheses: {p.rejected_hypotheses}")
     return "\n".join(lines)
 
 

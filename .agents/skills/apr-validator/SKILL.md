@@ -1,6 +1,6 @@
 ---
 name: apr-validator
-description: 'Validate APR (Automated Program Repair) fixes formally. Use when running `autofix validate`, when evaluating if a generated patch is CORRECT/PLAUSIBLE/INCORRECT/INFRA_FAIL, when comparing agent patches against canonical ground truth, when assessing overfitting to tests, or when the user mentions "validar", "validate", "verdict", "formal validation", "fix quality".'
+description: 'Validate APR (Automated Program Repair) fixes formally. Use when running `autofix validate`, when evaluating if a generated patch is CORRECT/PLAUSIBLE/OVERFITTING/VALIDATION_ERROR, when comparing agent patches against canonical ground truth, when assessing overfitting to tests, or when the user mentions "validar", "validate", "verdict", "formal validation", "fix quality".'
 ---
 
 # APR Validator — Formal Fix Validation
@@ -78,13 +78,14 @@ Set `patch_semantically_matches`:
 - `false`: different approach, addresses different issue, or overfits
 - `null`: canonical patch not available
 
-### Step 5 — Assess test signal
+### Step 5 — Detect overfitting
 
-Evaluate the test exit code and output:
-- Exit code 0 → tests passed
-- Exit code ≠ 0 → check if failure is due to:
-  - Bug still present (INCORRECT)
-  - Infrastructure issue: missing deps, compilation error, timeout unrelated to bug code (INFRA_FAIL)
+Only runs with `test_exit_code=0` reach this step (validator is not called for failed runs).
+Check whether the agent gamed the tests rather than fixing the root cause:
+- Hardcoded return values matching test assertions → OVERFITTING
+- Modified the test file itself → OVERFITTING
+- `try/except` silencing the error without fixing the logic → lean OVERFITTING
+- Exit code ≠ 0 in the log (edge case: re-run discrepancy) → flag in justification
 
 ### Step 6 — Synthesize verdict
 
@@ -93,27 +94,30 @@ Apply the decision tree below and produce the final verdict with justification.
 ## Decision Tree
 
 ```
-                    ┌─────────────────┐
-                    │ test_exit_code=0?│
-                    └────────┬────────┘
-                      yes /     \ no
-                         /       \
-              ┌─────────▼──┐   ┌──▼──────────────┐
-              │ canonical   │   │ infra failure?   │
-              │ available?  │   │ (deps/compile/   │
-              │             │   │  timeout)        │
-              └──┬──────┬──┘   └──┬──────────┬───┘
-              yes│      │no       │yes       │no
-                 │      │         │          │
-         ┌───────▼──┐   │    ┌───▼────┐  ┌──▼────────┐
-         │semantically│  │    │INFRA_  │  │INCORRECT  │
-         │matches?   │  │    │FAIL    │  │           │
-         └──┬─────┬──┘  │    └────────┘  └───────────┘
-         yes│     │no    │
-            │     │      │
-      ┌─────▼──┐ ┌▼─────────┐ ┌───────────┐
-      │CORRECT │ │PLAUSIBLE  │ │CORRECT *  │
-      └────────┘ └───────────┘ └───────────┘
+                    ┌─────────────────────┐
+                    │ tests_exit_code = 0  │  (only success runs reach here)
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ overfitting signal?  │
+                    └──────┬──────────┬───┘
+                        yes│          │no
+                           │          │
+               ┌───────────▼──┐  ┌───▼──────────────┐
+               │ OVERFITTING  │  │ canonical patch    │
+               └──────────────┘  │ available?        │
+                                 └───┬───────────┬───┘
+                                  yes│           │no
+                                     │           │
+                            ┌────────▼──┐  ┌────▼──────────┐
+                            │semantically│  │ CORRECT *      │
+                            │matches?   │  │ or PLAUSIBLE   │
+                            └──┬─────┬──┘  └────────────────┘
+                            yes│     │no
+                               │     │
+                         ┌─────▼──┐ ┌▼──────────┐
+                         │CORRECT │ │ PLAUSIBLE  │
+                         └────────┘ └────────────┘
 
   * Without canonical: CORRECT only if the fix logic is clearly
     sound and addresses the root cause visible in the traceback.
@@ -125,49 +129,42 @@ Apply the decision tree below and produce the final verdict with justification.
 | Verdict | Meaning | Criteria |
 |---------|---------|----------|
 | **CORRECT** | Fix repairs the bug correctly | Tests pass AND same root cause as canonical (or clearly sound without canonical) |
-| **PLAUSIBLE** | Fix makes tests pass but may overfit | Tests pass BUT different approach, partial fix, or overfits assertions |
-| **INCORRECT** | Fix does not repair the bug | Tests fail for bug-related reasons, or logic is semantically wrong |
-| **INFRA_FAIL** | Cannot evaluate due to infrastructure | Test failure from missing deps, compilation errors, timeouts unrelated to bug |
+| **PLAUSIBLE** | Fix works but is incomplete or diverges | Tests pass BUT different approach, partial fix, or misses propagation |
+| **OVERFITTING** | Fix games the tests | Tests pass BUT agent modified tests, hardcoded values, or special-cased inputs |
+| **VALIDATION_ERROR** | Pipeline error | Reserved — not produced by the LLM |
 
 ## Edge Cases
 
 ### No canonical patch available
 
 - Set `patch_semantically_matches = null`
-- Base verdict purely on test signal + semantic analysis of the patch
+- Base verdict purely on semantic analysis of the patch against the traceback and tests
 - Use CORRECT only if the logic is clearly sound; prefer PLAUSIBLE if uncertain
 - Lower confidence (0.4–0.6 typical)
-
-### Test timeout
-
-- If timeout is due to infinite loop introduced by the patch → INCORRECT
-- If timeout is due to environment/infra (slow CI, missing resource) → INFRA_FAIL
 
 ### Multi-file patches
 
 - All changed files must be consistent with the fix intent
-- Extra changes (formatting, imports not needed) don't disqualify but lower confidence
+- Extra changes (formatting, imports not needed) don’t disqualify but lower confidence
 - If only some files are relevant and others are noise → PLAUSIBLE
 
 ### Patch is empty (no changes)
 
-- If tests pass with no changes → investigate if test was already passing (INFRA_FAIL or PLAUSIBLE with note)
-- If tests fail → INCORRECT
+- If tests pass with no changes → investigate if the test was already passing before the agent ran; note in justification—likely PLAUSIBLE with low confidence
 
 ### Agent added workarounds
 
 - `try/except` that silences the error → PLAUSIBLE (not addressing root cause)
-- Hardcoded return values matching test assertions → PLAUSIBLE (overfitting)
+- Hardcoded return values matching test assertions → OVERFITTING
 - Proper logic fix → evaluate normally
 
 ## Structured Output
 
 ```json
 {
-  "verdict": "CORRECT | PLAUSIBLE | INCORRECT | INFRA_FAIL",
+  "verdict": "CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR",
   "confidence": 0.85,
   "test_passed": true,
-  "infra_fail_detected": false,
   "patch_semantically_matches": true,
   "justification": "Concise explanation of reasoning (2-4 sentences)"
 }
@@ -198,5 +195,4 @@ uv run autofix validate --batch-dir results/batch-xxx/ \
 | Canonical available + clear mismatch | 0.80–0.90 |
 | No canonical + test passes + logic is sound | 0.50–0.70 |
 | No canonical + test passes + unclear logic | 0.40–0.55 |
-| INFRA_FAIL (clear env issue in logs) | 0.85–0.95 |
-| Test fails + fix is obviously wrong | 0.90–0.95 |
+| OVERFITTING (clear evidence of test-gaming) | 0.85–0.95 |

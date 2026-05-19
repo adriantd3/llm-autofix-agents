@@ -17,6 +17,7 @@ class BugEntry(BaseModel):
     test: str | None = None
     test_command: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    extra_packages: list[str] = Field(default_factory=list)
 
     @field_validator("id")
     @classmethod
@@ -111,6 +112,7 @@ class LLMSettings(BaseModel):
     model: str = Field(min_length=1)
     max_turns: int = 20
     agent_models: dict[str, str] | None = None
+    extra_body: dict[str, Any] | None = None
 
     @field_validator("model", "provider")
     @classmethod

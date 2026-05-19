@@ -219,6 +219,49 @@ class FuzzyReplaceTests(unittest.TestCase):
             # exact match exists (no CRLF in old), so this should succeed normally
             self.assertTrue(res["ok"])
 
+    def test_replace_in_file_not_found_includes_file_size_hint(self) -> None:
+        """When old text is not found, the error response should include file_size_lines
+        and a hint so the agent knows to re-read instead of blindly retrying.
+        Observed in thefuck-1 iter 2 (tools 10/12/20) and tqdm-1 iter 1 (tools 11/13):
+        agent retried with stale text, wasting turns.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            content = "\n".join(f"line {i}" for i in range(1, 21))  # 20 lines
+            (root / "module.py").write_text(content, encoding="utf-8")
+            res = asyncio.run(
+                call(
+                    replace_in_file,
+                    tmp,
+                    '{"path":"module.py","old":"this text does not exist anywhere","new":"replacement"}',
+                )
+            )
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "old_text_not_found")
+        self.assertIn("file_size_lines", res)
+        self.assertEqual(res["file_size_lines"], 20)
+        self.assertIn("hint", res)
+        self.assertIn("current_file_preview", res)
+        self.assertIn("line 1", res["current_file_preview"])
+        self.assertIn("line 20", res["current_file_preview"])
+
+    def test_replace_in_file_not_found_preview_truncated_for_large_file(self) -> None:
+        """Files larger than 80 lines include a truncation notice in the preview."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            content = "\n".join(f"line {i}" for i in range(1, 102))  # 101 lines
+            (root / "big.py").write_text(content, encoding="utf-8")
+            res = asyncio.run(
+                call(
+                    replace_in_file,
+                    tmp,
+                    '{"path":"big.py","old":"this text does not exist anywhere","new":"replacement"}',
+                )
+            )
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["file_size_lines"], 101)
+        self.assertIn("more lines", res["current_file_preview"])
+
 
 if __name__ == "__main__":
     unittest.main()

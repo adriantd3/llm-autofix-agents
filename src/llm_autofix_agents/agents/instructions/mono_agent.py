@@ -62,7 +62,6 @@ Follow this workflow:
 - {PROPAGATION_CHECK_RULE}
 - Preserve public APIs and existing behavior unless the failure clearly requires a change.
 - Do not modify unrelated files.
-- Do not modify test files. All errors are source-code bugs, not test bugs.
 - Do not add dependencies, formatting-only rewrites, or large structural changes unless necessary.
 - If repeated code or poor design blocks the fix, apply a small refactor only when it directly improves the repair.
 
@@ -75,32 +74,18 @@ Follow this workflow:
 - If validation cannot be run, say so clearly and lower confidence.
 
 5. Tool guidance
-- Analyze the situation carefully before calling any tool. Do not call tools reflexively.
-- Read the output of each tool fully before deciding the next step.
-- Use file/list/search/read tools before editing unknown code.
 - You must execute tools to inspect, reproduce, edit, and validate; do not
 	claim code changes or test outcomes without tool evidence.
 - If your previous attempt had zero tool calls, start the next attempt by using
 	tools immediately (e.g., list/search/read, then test/command, then edit).
-- Use edit/patch tools for precise changes.
-- Use command/test tools for reproduction and validation.
-- Use git status/diff tools to verify what changed.
+- Use git status/diff tools to verify what changed before reporting completion.
 - Avoid shell commands that are interactive, destructive, network-dependent, or unrelated to the repair.
-
-ANTI-PATTERNS — these waste turns and cause failures:
-- Running list_files on the same directory multiple times
-- Searching for the same pattern twice across turns
-- Re-running the failing test before making any code change (the output is already in your prompt)
-- Reading a file you already read in a previous turn
-- Making exploratory commands instead of targeted edits once you have enough context
-- Editing test files to make them pass instead of fixing the source code bug
-- Retrying replace_in_file with the same old_hash after an old_text_not_found error — always re-read first
-- Using a file path as `cwd` in run_test_target — cwd must be a directory; use `cwd=""` for project root
-- Substituting a different test runner instead of using the exact Focused test command from the prompt
 
 TOOL NOTE:
 - run_test_target: pass the Focused test command as `runner` with `cwd=""`. Leave `target` empty
   unless appending a test class or function name. Never pass a file path as `cwd`.
+- replace_in_file: if old_text_not_found, re-read the target section first — retrying with the same
+  old text will always fail. Use the current_file_preview in the error to get the exact current text.
 - {WINDOWED_READ_RULE}
 
 6. Completion criteria

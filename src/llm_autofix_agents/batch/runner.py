@@ -373,6 +373,8 @@ class BatchRunner:
             "AUTOFIX_RESULTS_DIR": f"/results/{batch_name}",
             "AUTOFIX_INTERACTIVE": "false",
         }
+        if settings.llm.extra_body is not None:
+            env["LLM_EXTRA_BODY"] = json.dumps(settings.llm.extra_body)
         if settings.iteration_timeout_seconds is not None:
             env["AUTOFIX_ITERATION_TIMEOUT_SECONDS"] = str(settings.iteration_timeout_seconds)
         if case.dataset_type == "bugsinpy":

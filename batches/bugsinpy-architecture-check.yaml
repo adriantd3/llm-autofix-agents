@@ -1,7 +1,8 @@
 name: bugsinpy-architecture-check
 description: |
   Sanity-check one bug per BugsInPy repository to verify checkout/compile/test
-  viability. Excludes pandas, cookiecutter, fastapi, httpie and youtube-dl.
+  viability. Excludes pandas, cookiecutter, fastapi, httpie, youtube-dl,
+  keras, matplotlib, sanic and spacy (confirmed infra-incompatible after trace analysis).
   Goal: identify repos that fail due to architectural complexities in the harness.
 
 dataset: ../datasets/bugsinpy.yaml
@@ -11,21 +12,19 @@ global:
   llm:
     provider: ollama
     model: qwen3.5:9b
-    max_turns: 20
-  max_iterations: 1
-  timeout_seconds: 300
+    max_turns: 30
+    extra_body:
+      think: false
+  max_iterations: 3
+  timeout_seconds: 1200
   capture_errors: true
 
 bugs:
   - ansible-1
   - black-6
-  - keras-1
   - luigi-1
-  - matplotlib-1
   - pysnooper-1
-  - sanic-1
   - scrapy-33
-  - spacy-1
   - thefuck-1
   - tornado-1
   - tqdm-1

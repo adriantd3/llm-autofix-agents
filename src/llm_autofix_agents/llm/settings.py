@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
@@ -44,6 +46,7 @@ class LLMSettings(BaseModel):
     api_retry_base_seconds: float = Field(default=1.0, ge=0.1, le=30.0)
     api_retry_max_seconds: float = Field(default=8.0, ge=0.1, le=120.0)
     tracing_disabled: bool = True
+    extra_body: dict[str, Any] | None = None
 
     @field_validator("api_retry_max_seconds")
     @classmethod
@@ -124,6 +127,7 @@ class LLMSettings(BaseModel):
                 api_retry_base_seconds=api_retry_base_seconds,
                 api_retry_max_seconds=api_retry_max_seconds,
                 tracing_disabled=tracing_disabled,
+                extra_body=json.loads(values["LLM_EXTRA_BODY"]) if "LLM_EXTRA_BODY" in values else None,
             )
         except ValidationError as exc:
             raise ValueError(str(exc)) from exc

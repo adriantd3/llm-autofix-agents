@@ -184,5 +184,69 @@ class RunTestTargetGuardTests(unittest.TestCase):
         self.assertNotEqual(res.get("error", ""), "python_inline_not_allowed")
 
 
+class RunTestTargetExit4RelaxationTests(unittest.TestCase):
+    """Exit-code-4 relaxation: allow one pre-edit test call when baseline was a
+    pytest collection failure. Observed in scrapy-33 trace (tools 5/8/20)."""
+
+    def test_exit4_baseline_allows_first_pre_edit_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = APRToolContext(
+                root_dir=tmp,
+                iteration_edit_count=0,
+                pre_edit_test_count=0,
+                baseline_exit_code=4,
+            )
+            res = asyncio.run(
+                call(
+                    run_test_target,
+                    tmp,
+                    '{"runner":"echo collection-check"}',
+                    ctx=ctx,
+                )
+            )
+        # Should NOT be blocked by no_changes_yet
+        self.assertNotEqual(res.get("error", ""), "no_changes_yet: apply a fix with replace_in_file or replace_lines before running tests")
+        # pre_edit_test_count incremented
+        self.assertEqual(ctx.pre_edit_test_count, 1)
+
+    def test_exit4_baseline_blocks_second_pre_edit_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = APRToolContext(
+                root_dir=tmp,
+                iteration_edit_count=0,
+                pre_edit_test_count=1,
+                baseline_exit_code=4,
+            )
+            res = asyncio.run(
+                call(
+                    run_test_target,
+                    tmp,
+                    '{"runner":"echo should-be-blocked"}',
+                    ctx=ctx,
+                )
+            )
+        self.assertFalse(res["ok"])
+        self.assertIn("no_changes_yet", res["error"])
+
+    def test_exit1_baseline_always_blocks_pre_edit_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = APRToolContext(
+                root_dir=tmp,
+                iteration_edit_count=0,
+                pre_edit_test_count=0,
+                baseline_exit_code=1,
+            )
+            res = asyncio.run(
+                call(
+                    run_test_target,
+                    tmp,
+                    '{"runner":"echo should-be-blocked"}',
+                    ctx=ctx,
+                )
+            )
+        self.assertFalse(res["ok"])
+        self.assertIn("no_changes_yet", res["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

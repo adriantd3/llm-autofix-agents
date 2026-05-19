@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import shutil
-from dataclasses import asdict
 from typing import Any, Mapping
 
 from agents import RunContextWrapper, function_tool
@@ -38,7 +37,6 @@ def get_workspace_info(ctx: RunContextWrapper[APRToolContext]) -> str:
         {
             "ok": True,
             "root_dir": str(root),
-            "config": asdict(cfg),
             "python": shutil.which("python") or shutil.which("python3"),
             "git_repo": git_dir,
             "suggested_test_runner": test_detector[1] if test_detector else None,
@@ -57,26 +55,15 @@ def list_files(
     cfg = get_tool_context(ctx)
     root = workspace_root(cfg)
     cap = max(1, min(max_entries, cfg.max_list_entries))
-    entries: list[dict[str, Any]] = []
+    entries: list[str] = []
     total_seen = 0
     for path in iter_files(root, glob):
         rel = safe_rel(root, path)
         if not include_hidden and any(part.startswith(".") for part in rel.split("/")):
             continue
         total_seen += 1
-        if len(entries) >= cap:
-            continue
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-        entries.append(
-            {
-                "path": rel,
-                "bytes": stat.st_size,
-                "text": is_probably_text(path),
-            }
-        )
+        if len(entries) < cap:
+            entries.append(rel)
     return json_result(
         {
             "ok": True,

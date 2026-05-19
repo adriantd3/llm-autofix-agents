@@ -172,7 +172,25 @@ def replace_in_file(
         # replace_all is excluded: fuzzy multi-match semantics are ambiguous.
         updated = _fuzzy_find_and_replace(source, old, new)
         if updated is None:
-            return json_result({"ok": False, "error": "old_text_not_found", "path": path})
+            file_lines = source.splitlines()
+            file_size_lines = len(file_lines)
+            # Include the first 80 lines so the agent can immediately identify the
+            # current state and retry without an extra read_file round-trip.
+            # (Observed in thefuck-1 iter 2 and tqdm-1 iter 1: agent retried with
+            # stale text 3+ times before re-reading.)
+            _PREVIEW_LINES = 80
+            preview_lines = file_lines[:_PREVIEW_LINES]
+            preview = "\n".join(preview_lines)
+            if file_size_lines > _PREVIEW_LINES:
+                preview += f"\n... [{file_size_lines - _PREVIEW_LINES} more lines — use read_file to see the rest]"
+            return json_result({
+                "ok": False,
+                "error": "old_text_not_found",
+                "path": path,
+                "file_size_lines": file_size_lines,
+                "hint": "The old text was not found. The current file content is in current_file_preview. Copy the exact text from there and retry.",
+                "current_file_preview": preview,
+            })
         fuzzy_matched = True
         occurrences = 1
     else:

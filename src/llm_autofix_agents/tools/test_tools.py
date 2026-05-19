@@ -59,10 +59,17 @@ def run_test_target(
             ),
         })
     if cfg.iteration_edit_count == 0:
-        return json_result({
-            "ok": False,
-            "error": "no_changes_yet: apply a fix with replace_in_file or replace_lines before running tests",
-        })
+        # Exit code 4 = pytest collection failure (missing import, bad package).
+        # Allow exactly ONE pre-edit test call so the agent can verify whether
+        # an env fix (e.g. pip install) resolved the collection error before
+        # attempting a code change. Observed in scrapy-33 trace (tools 5/8/20).
+        if cfg.baseline_exit_code == 4 and cfg.pre_edit_test_count == 0:
+            cfg.pre_edit_test_count += 1
+        else:
+            return json_result({
+                "ok": False,
+                "error": "no_changes_yet: apply a fix with replace_in_file or replace_lines before running tests",
+            })
     root = workspace_root(cfg)
     if runner is None:
         detected = detect_test_command(root)

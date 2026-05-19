@@ -633,8 +633,8 @@ class TestBugsInPyAdapter(unittest.TestCase):
                 "/benchmark-workspaces/batch-test/youtube-dl-2/youtube-dl",
             )
 
-            # Verify docker compose was called for checkout and compile
-            self.assertEqual(mock_run.call_count, 2)
+            # Verify docker compose was called for checkout, compile, and requirements reinstall
+            self.assertEqual(mock_run.call_count, 3)
             checkout_call = mock_run.call_args_list[0]
             self.assertIn("bugsinpy-runner", checkout_call[0][0])
             self.assertIn("bugsinpy-checkout", checkout_call[0][0][-1])

@@ -2,6 +2,15 @@
 
 ## En curso
 
+- **SPEC-019 completado: Trace-Analysis Fixes (2026-05-19)**:
+  - Análisis de batch `bugsinpy-architecture-check` (12 bugs, mono_agent, qwen3-coder:30b); 10 mejoras implementadas.
+  - `extra_packages` en `BugEntry` + `_install_extra_packages()` en harness BugsInPy.
+  - Exit-4 context engineering: `_build_exit4_block()` inyecta guía de collection-failure + requirements en el primer turno.
+  - Exit-4 run-test relaxation: una llamada pre-edit permitida cuando `baseline_exit_code == 4`.
+  - `old_text_not_found` enriquecido con `file_size_lines` + `hint`.
+  - Exclusión de keras, matplotlib, sanic del pool; `max_turns: 30` en architecture-check.
+  - 10 tests nuevos en 4 archivos, todos passing. Pool de experimento: ~48 bugs en 12 proyectos.
+
 - **Memoria TFM — Capítulo 5 reestructurado y validado (2026-05-18)**:
   - Reescritura profunda de `memoria/sections/05-propuesta/05-propuesta.tex` con foco en narrativa no genérica: arquitectura, runtime aislado, tools una a una, bucle iterativo, paso de contexto, políticas de validación y observabilidad.
   - Se añadieron/ajustaron diagramas y pseudocódigo para explicar decisiones de diseño sin depender de paquetes no disponibles (`algorithm.sty`).
