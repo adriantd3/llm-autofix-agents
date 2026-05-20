@@ -35,11 +35,7 @@ class AgentFixIterationResult(BaseModel):
     """Structured APR iteration report. Be honest and evidence-driven — the runtime independently verifies changed_files, diffs, and test results."""
 
     status: Literal["in_progress", "done", "stuck"] = Field(
-        description=(
-            '"done" = fix applied and tests pass. '
-            '"stuck" = cannot progress with available tools or evidence. '
-            '"in_progress" = partial progress, validation incomplete or still failing.'
-        )
+        description='"done"=tests pass, "stuck"=cannot progress, "in_progress"=still working.'
     )
     reasoning_summary: str = Field(
         min_length=1,
@@ -60,11 +56,7 @@ class AgentFixIterationResult(BaseModel):
     )
     rejected_hypotheses: str = Field(
         default="",
-        description=(
-            "Brief list of approaches tried and ruled out this iteration "
-            "(e.g. 'Tried fixing X in file Y \u2014 test still fails because Z'). "
-            "Max 3 bullets. Leave empty if this is the first iteration."
-        ),
+        description="Approaches tried and ruled out this iteration (max 3 bullets).",
     )
 
 
@@ -76,6 +68,10 @@ class AgentFixIterationRecord(BaseModel):
     output_tokens: int = Field(default=0, ge=0)
     total_tokens: int = Field(default=0, ge=0)
     last_agent_name: str | None = None
+    # False when token usage could not be extracted from the model response
+    # (e.g. ModelBehaviorError from a local model with no result attached).
+    # Consumers should exclude False entries from token averages.
+    tokens_tracked: bool = True
 
 
 class LLMProvider(Protocol):
@@ -171,12 +167,12 @@ class OpenAIAgentsSDKProvider:
                     run_config=RunConfig(
                         tracing_disabled=self.settings.tracing_disabled,
                         call_model_input_filter=ToolOutputTrimmer(
-                            recent_turns=5,
-                            # 4000 chars ≈ 80 lines: covers a full function read or test traceback.
-                            # Edit tools (replace_in_file etc.) are excluded: their failure payloads
-                            # include a critical file preview the agent must act on immediately.
-                            max_output_chars=4000,
-                            preview_chars=400,
+                            # Keep only 3 recent turns at full size; trim the rest aggressively.
+                            # Schema overhead is ~1300 tokens/turn; every extra turn retained
+                            # at full fidelity multiplies that by the remaining turn count.
+                            recent_turns=3,
+                            max_output_chars=2000,
+                            preview_chars=200,
                             trimmable_tools=frozenset({
                                 "execute_command",
                                 "list_files",
@@ -203,7 +199,7 @@ class OpenAIAgentsSDKProvider:
                 # capability issue, not a transient failure — retrying is
                 # wasteful. Return a fallback record so the outer loop can
                 # evaluate actual changes.
-                usage = _extract_token_usage(getattr(exc, "result", None))
+                usage = _extract_token_usage(getattr(exc, "run_data", None))
                 return AgentFixIterationRecord(
                     proposal=AgentFixIterationResult(
                         status="done",
@@ -216,6 +212,7 @@ class OpenAIAgentsSDKProvider:
                     input_tokens=usage["input_tokens"],
                     output_tokens=usage["output_tokens"],
                     total_tokens=usage["total_tokens"],
+                    tokens_tracked=usage["total_tokens"] > 0,
                 )
             except Exception as exc:  # noqa: BLE001
                 retryable = _is_retryable_provider_error(exc)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from agents import RunContextWrapper
 
@@ -27,6 +27,17 @@ class APRToolContext:
     # Number of run_test_target calls made before any code edit in the current
     # iteration. Reset each iteration alongside iteration_edit_count.
     pre_edit_test_count: int = 0
+    # Hard limit on search_files calls while no edit has been made.
+    # Mirrors the run_test_target guard: once the budget is exhausted the tool
+    # returns an error so the model is forced to either apply a fix or report
+    # stuck — rather than looping on search variations indefinitely.
+    # 0 = no limit. Reset each iteration.
+    search_files_budget: int = 8
+    search_files_calls: int = 0
+    # Tracks (lower-cased pattern, glob) pairs searched this iteration to
+    # short-circuit exact duplicate calls. Maps query key -> call number.
+    # Reset each iteration.
+    seen_search_queries: dict[str, int] = field(default_factory=dict)
 
 
 def get_tool_context(wrapper: RunContextWrapper[APRToolContext]) -> APRToolContext:

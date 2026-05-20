@@ -28,7 +28,7 @@ from llm_autofix_agents.tools.text import (
 
 @function_tool
 def get_workspace_info(ctx: RunContextWrapper[APRToolContext]) -> str:
-    """Return workspace limits and environment summary for the APR agent."""
+    """Return workspace root path, Python location, and git status."""
     cfg = get_tool_context(ctx)
     root = workspace_root(cfg)
     git_dir = (root / ".git").exists()
@@ -83,11 +83,9 @@ def read_file(
     start_line: int | None = None,
     end_line: int | None = None,
 ) -> str:
-    """Read a text file from the workspace with line numbers.
+    """Read a text file from the workspace with line numbers. Paths relative to workspace root.
 
-    Paths must be relative to the workspace root.
-    Use start_line/end_line to read specific sections of large files.
-    Returns line-numbered content — copy lines verbatim as old text for replace_in_file.
+    Use start_line/end_line for large files. Returned lines are numbered — copy them verbatim into replace_in_file.
     """
     cfg = get_tool_context(ctx)
     file_path = resolve_path(cfg, path)
@@ -122,22 +120,59 @@ def search_files(
     context_lines: int = 0,
     max_results: int = 20,
 ) -> str:
-    """Search text files in the workspace for a literal string or regex pattern.
+    """Search text files for a literal string or regex pattern.
 
-    IMPORTANT: set regex=True when using regex syntax such as ^, $, \\d, \\s, \\b,
-    or alternation (|). Without regex=True the pattern is treated as a literal
-    string and special characters like ^ will NOT match as anchors.
-
-    Examples:
-      search_files("import pipes", glob="**/*.py")              # literal search
-      search_files("^def ", glob="**/*.py", regex=True)         # regex: functions at start of line
-      search_files("fix_xml|shell_quote", glob="**/*.py", regex=True)  # alternation
+    glob controls which files are scanned — use **/*.py to search all .py files recursively;
+    *.py matches only root-level files. Set regex=True for ^, $, |, \\d, etc.
     """
     cfg = get_tool_context(ctx)
+
+    # Normalize pattern based on case_sensitive: two calls that produce identical
+    # results (same case-insensitive pattern, same glob, same regex mode) are
+    # treated as the same query. case_sensitive=True keeps the original casing.
+    norm_pattern = pattern if case_sensitive else pattern.lower()
+    query_key = f"{norm_pattern}|{glob}|r={regex}|cs={case_sensitive}"
+
+    # Exact duplicate detection: same effective query already searched this iteration.
+    prev_call = cfg.seen_search_queries.get(query_key)
+    if prev_call is not None:
+        return json_result({
+            "ok": False,
+            "error": (
+                f"duplicate_search: pattern={pattern!r} glob={glob!r} was already searched "
+                f"in tool call #{prev_call} this iteration. "
+                "The result is in your context — use it instead of calling again."
+            ),
+        })
+
+    # Hard pre-edit search budget: block further searches once exhausted.
+    # Lifted as soon as any code edit is made (iteration_edit_count > 0).
+    if cfg.search_files_budget > 0 and cfg.iteration_edit_count == 0:
+        if cfg.search_files_calls >= cfg.search_files_budget:
+            return json_result({
+                "ok": False,
+                "error": (
+                    f"search_budget_exhausted: {cfg.search_files_calls} search_files calls made "
+                    "with 0 code edits this iteration. "
+                    "Apply your best hypothesis with replace_in_file, or report status=stuck."
+                ),
+            })
+
+    # Compile the matcher BEFORE registering the call so that an invalid regex
+    # returns a clean error without consuming a search slot. re.escape() never
+    # raises, so this only guards the regex=True path.
+    flags = 0 if case_sensitive else re.IGNORECASE
+    try:
+        matcher = re.compile(pattern if regex else re.escape(pattern), flags)
+    except re.error as exc:
+        return json_result({"ok": False, "error": f"invalid_regex: {exc}"})
+
+    cfg.seen_search_queries[query_key] = cfg.iteration_tool_call_count
+    cfg.search_files_calls += 1
+
     root = workspace_root(cfg)
     cap = max(1, min(max_results, cfg.max_search_hits))
-    flags = 0 if case_sensitive else re.IGNORECASE
-    matcher = re.compile(pattern if regex else re.escape(pattern), flags)
+    # flags and matcher already computed above
 
     results: list[dict[str, Any]] = []
     scanned_files = 0

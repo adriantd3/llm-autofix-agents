@@ -22,7 +22,7 @@ from llm_autofix_agents.batch.config import (
     load_dataset_config,
 )
 from llm_autofix_agents.batch.prompt import capture_error_output, generate_prompt
-from llm_autofix_agents.batch.runner import _parse_json_output, _truncate
+from llm_autofix_agents.batch.runner import _parse_json_output, _truncate, BatchRunner
 from llm_autofix_agents.batch.summary import BatchSummary, BugRunResult, new_batch_id
 from llm_autofix_agents.contracts import RunArchitecture
 from llm_autofix_agents.datasets.base import DatasetPreparationContext, PreparedExecutionCase
@@ -1203,6 +1203,231 @@ class TestRepoSourceLocalPath(unittest.TestCase):
         result = prepare_target_repository(repository="https://github.com/example/repo.git", branch="main")
         self.assertTrue(result.temporary)
         result.cleanup()
+
+
+def _make_run_db(run_dir: Path, run_id: str) -> None:
+    """Create a minimal run.db with a single run row (as after run_started)."""
+    from llm_autofix_agents.observability.models import RunDescriptor
+    from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore
+
+    store = SQLiteObservabilityStore(db_path=run_dir / "run.db")
+    store.initialize()
+    arch_id = store.upsert_architecture("mono_agent")
+    store.insert_run_started(
+        descriptor=RunDescriptor(
+            run_id=run_id,
+            architecture="mono_agent",
+            target_repo="/repo",
+            target_branch=None,
+            run_fingerprint="fp-test",
+        ),
+        architecture_id=arch_id,
+        started_at="2026-05-20T10:00:00+00:00",
+    )
+
+
+def _write_events_jsonl(run_dir: Path, run_id: str, iterations: list[dict]) -> None:
+    """Write an events.jsonl file with run_started + iteration_finished events."""
+    lines = [
+        {
+            "run_id": run_id,
+            "event": "run_started",
+            "ts": "2026-05-20T10:00:00+00:00",
+            "started_at": "2026-05-20T10:00:00+00:00",
+        }
+    ]
+    for i, it in enumerate(iterations, 1):
+        lines.append({
+            "run_id": run_id,
+            "iteration_index": i,
+            "event": "iteration_finished",
+            "ts": f"2026-05-20T10:0{i}:00+00:00",
+            "input_tokens": it.get("input_tokens", 0),
+            "output_tokens": it.get("output_tokens", 0),
+            "total_tokens": it.get("total_tokens", 0),
+            "changed_files_count": it.get("changed_files_count", 0),
+        })
+    (run_dir / "events.jsonl").write_text(
+        "\n".join(json.dumps(l) for l in lines), encoding="utf-8"
+    )
+
+
+def _make_batch_runner(tmp: Path) -> BatchRunner:
+    return BatchRunner(
+        compose_file=tmp / "docker-compose.yml",
+        project_dir=tmp,
+        results_dir=tmp / "results",
+    )
+
+
+class FinalizeTimedOutRunTests(unittest.TestCase):
+    """Tests for BatchRunner._finalize_timed_out_run: post-timeout summary + DB update."""
+
+    def _setup_run(
+        self,
+        tmp: Path,
+        run_id: str,
+        dest_name: str,
+        iterations: list[dict],
+    ) -> tuple[Path, Path, BatchRunner]:
+        batch_dir = tmp / "batch-test"
+        run_dir = batch_dir / dest_name
+        run_dir.mkdir(parents=True)
+
+        _write_events_jsonl(run_dir, run_id, iterations)
+        _make_run_db(run_dir, run_id)
+
+        # Simulate what _merge_into_batch_db does: copy run into batch.db
+        from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore
+        batch_store = SQLiteObservabilityStore(db_path=batch_dir / "batch.db")
+        batch_store.initialize()
+        batch_store.merge_from(run_dir / "run.db")
+
+        runner = _make_batch_runner(tmp)
+        return batch_dir, run_dir, runner
+
+    def test_summary_json_created_with_correct_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            run_id = "run-20260520T100000Z-abc123"
+            dest_name = "tornado-6-mono_agent-qwen3"
+            batch_dir, run_dir, runner = self._setup_run(
+                tmp, run_id, dest_name,
+                iterations=[
+                    {"input_tokens": 345352, "output_tokens": 29009, "total_tokens": 374361, "changed_files_count": 1},
+                    {"input_tokens": 342971, "output_tokens": 21895, "total_tokens": 364866, "changed_files_count": 1},
+                ],
+            )
+
+            runner._finalize_timed_out_run(batch_dir, dest_name, duration_seconds=1800.0)
+
+            summary_path = run_dir / "summary.json"
+            self.assertTrue(summary_path.exists(), "summary.json must be created")
+            summary = json.loads(summary_path.read_text())
+            self.assertEqual(summary["run_id"], run_id)
+            self.assertEqual(summary["status"], "timed_out")
+            self.assertEqual(summary["stop_reason"], "timed_out")
+            self.assertEqual(summary["tokens"]["input"], 688323)
+            self.assertEqual(summary["tokens"]["output"], 50904)
+            self.assertEqual(summary["tokens"]["total"], 739227)
+            self.assertEqual(summary["iterations"], 2)
+            self.assertAlmostEqual(summary["duration_seconds"], 1800.0)
+
+    def test_run_db_updated_with_timed_out_status(self) -> None:
+        import sqlite3 as _sqlite3
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            run_id = "run-20260520T100000Z-def456"
+            dest_name = "tornado-6-mono_agent-test"
+            batch_dir, run_dir, runner = self._setup_run(
+                tmp, run_id, dest_name,
+                iterations=[
+                    {"input_tokens": 1000, "output_tokens": 200, "total_tokens": 1200, "changed_files_count": 2},
+                ],
+            )
+
+            runner._finalize_timed_out_run(batch_dir, dest_name, duration_seconds=600.0)
+
+            conn = _sqlite3.connect(str(run_dir / "run.db"))
+            conn.row_factory = _sqlite3.Row
+            row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            conn.close()
+
+            self.assertIsNotNone(row["finished_at"])
+            self.assertEqual(row["final_status"], "timed_out")
+            self.assertEqual(row["stop_reason"], "timed_out")
+            self.assertEqual(row["total_input_tokens"], 1000)
+            self.assertEqual(row["total_output_tokens"], 200)
+            self.assertEqual(row["total_tokens"], 1200)
+            self.assertEqual(row["total_iterations"], 1)
+            self.assertAlmostEqual(row["duration_seconds"], 600.0, places=1)
+            self.assertIsNotNone(row["summary_path"])
+
+    def test_batch_db_updated_with_token_totals(self) -> None:
+        import sqlite3 as _sqlite3
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            run_id = "run-20260520T100000Z-ghi789"
+            dest_name = "tornado-6-mono_agent-batch"
+            batch_dir, run_dir, runner = self._setup_run(
+                tmp, run_id, dest_name,
+                iterations=[
+                    {"input_tokens": 500, "output_tokens": 100, "total_tokens": 600, "changed_files_count": 0},
+                    {"input_tokens": 600, "output_tokens": 150, "total_tokens": 750, "changed_files_count": 1},
+                ],
+            )
+
+            runner._finalize_timed_out_run(batch_dir, dest_name, duration_seconds=900.0)
+
+            conn = _sqlite3.connect(str(batch_dir / "batch.db"))
+            conn.row_factory = _sqlite3.Row
+            row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            conn.close()
+
+            self.assertEqual(row["final_status"], "timed_out")
+            self.assertEqual(row["total_tokens"], 1350)
+            self.assertEqual(row["total_input_tokens"], 1100)
+            self.assertEqual(row["total_output_tokens"], 250)
+            self.assertEqual(row["files_changed_count"], 1)
+
+    def test_no_events_file_is_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            batch_dir = tmp / "batch-test"
+            run_dir = batch_dir / "run-no-events"
+            run_dir.mkdir(parents=True)
+            runner = _make_batch_runner(tmp)
+
+            # Must not raise even with no events.jsonl
+            runner._finalize_timed_out_run(batch_dir, "run-no-events", duration_seconds=60.0)
+
+            self.assertFalse((run_dir / "summary.json").exists())
+
+    def test_zero_tokens_when_no_iteration_finished_events(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            run_id = "run-20260520T100000Z-jkl012"
+            dest_name = "tornado-6-no-iters"
+            batch_dir, run_dir, runner = self._setup_run(
+                tmp, run_id, dest_name,
+                iterations=[],  # container died before any iteration completed
+            )
+
+            runner._finalize_timed_out_run(batch_dir, dest_name, duration_seconds=120.0)
+
+            summary_path = run_dir / "summary.json"
+            self.assertTrue(summary_path.exists())
+            summary = json.loads(summary_path.read_text())
+            self.assertEqual(summary["status"], "timed_out")
+            self.assertEqual(summary["tokens"]["total"], 0)
+            self.assertEqual(summary["iterations"], 0)
+
+    def test_summary_path_stored_in_db(self) -> None:
+        import sqlite3 as _sqlite3
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            run_id = "run-20260520T100000Z-mno345"
+            dest_name = "tornado-6-summary-path"
+            batch_dir, run_dir, runner = self._setup_run(
+                tmp, run_id, dest_name,
+                iterations=[{"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}],
+            )
+
+            runner._finalize_timed_out_run(batch_dir, dest_name, duration_seconds=300.0)
+
+            conn = _sqlite3.connect(str(batch_dir / "batch.db"))
+            conn.row_factory = _sqlite3.Row
+            row = conn.execute("SELECT summary_path FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            conn.close()
+
+            expected_suffix = f"/{batch_dir.name}/{dest_name}/summary.json"
+            self.assertTrue(
+                row["summary_path"].endswith(expected_suffix),
+                f"Expected summary_path to end with {expected_suffix!r}, got {row['summary_path']!r}",
+            )
 
 
 if __name__ == "__main__":

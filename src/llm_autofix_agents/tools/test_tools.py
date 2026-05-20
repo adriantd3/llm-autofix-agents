@@ -44,10 +44,9 @@ def run_test_target(
 ) -> str:
     """Run a test command and return exit code and output.
 
-    runner: the full test command verbatim (e.g. ". env/bin/activate && bash bugsinpy_run_test.sh").
-    target: optional test class or function name appended after runner. Leave empty to run all tests.
-            NEVER put the full command here — that causes double-execution and corrupts the run.
-    cwd: working directory path. Use "" or "." for the workspace root. NEVER pass a file path here.
+    runner: full test command (e.g. ". env/bin/activate && bash bugsinpy_run_test.sh").
+    target: optional test class/function appended to runner. NEVER put the full command here.
+    cwd: working directory; use "" or "." for workspace root. NEVER pass a file path.
     """
     cfg = get_tool_context(ctx)
     if runner is not None and _PYTHON_INLINE_RE.search(runner):

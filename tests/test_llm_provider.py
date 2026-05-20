@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from agents import AgentOutputSchema, Usage
+from agents import AgentOutputSchema, ModelBehaviorError, Usage
 from pydantic import SecretStr
 
 from llm_autofix_agents.llm.agent_factory import build_agent
@@ -737,6 +737,115 @@ class _RateLimitError(RuntimeError):
         if retry_after is not None:
             headers["Retry-After"] = str(retry_after)
         self.response = SimpleNamespace(headers=headers)
+
+
+_SENTINEL = object()
+
+
+def _model_behavior_error(
+    *,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    total_tokens: int = 0,
+    raw_response_usages: list[Usage] | None = None,
+    run_data: object | None = _SENTINEL,
+) -> ModelBehaviorError:
+    """Build a ModelBehaviorError the way the SDK would construct it."""
+    exc = ModelBehaviorError("malformed JSON output")
+    if run_data is _SENTINEL:
+        exc.run_data = SimpleNamespace(
+            context_wrapper=SimpleNamespace(
+                usage=Usage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                )
+            ),
+            raw_responses=[
+                SimpleNamespace(usage=u) for u in (raw_response_usages or [])
+            ],
+        )
+    else:
+        exc.run_data = run_data  # type: ignore[assignment]
+    return exc
+
+
+
+
+class ModelBehaviorErrorTests(unittest.TestCase):
+    """Tests that ModelBehaviorError correctly reports token usage via exc.run_data."""
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_tokens_extracted_from_context_wrapper_usage(self, runner_run: AsyncMock) -> None:
+        runner_run.side_effect = _model_behavior_error(
+            input_tokens=1000, output_tokens=200, total_tokens=1200
+        )
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="x", max_turns=2))
+
+        self.assertIsInstance(result, AgentFixIterationRecord)
+        self.assertEqual(result.input_tokens, 1000)
+        self.assertEqual(result.output_tokens, 200)
+        self.assertEqual(result.total_tokens, 1200)
+        self.assertTrue(result.tokens_tracked)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_tokens_extracted_from_raw_responses_when_context_wrapper_empty(
+        self, runner_run: AsyncMock
+    ) -> None:
+        exc = ModelBehaviorError("malformed JSON output")
+        exc.run_data = SimpleNamespace(
+            context_wrapper=SimpleNamespace(usage=Usage()),  # empty accumulated usage
+            raw_responses=[
+                SimpleNamespace(usage=Usage(input_tokens=300, output_tokens=50, total_tokens=350)),
+                SimpleNamespace(usage=Usage(input_tokens=400, output_tokens=60, total_tokens=460)),
+            ],
+        )
+        runner_run.side_effect = exc
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="x", max_turns=2))
+
+        self.assertEqual(result.input_tokens, 700)
+        self.assertEqual(result.output_tokens, 110)
+        self.assertEqual(result.total_tokens, 810)
+        self.assertTrue(result.tokens_tracked)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_tokens_zero_when_run_data_is_none(self, runner_run: AsyncMock) -> None:
+        exc = ModelBehaviorError("no run data")
+        exc.run_data = None
+        runner_run.side_effect = exc
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="x", max_turns=2))
+
+        self.assertEqual(result.input_tokens, 0)
+        self.assertEqual(result.output_tokens, 0)
+        self.assertEqual(result.total_tokens, 0)
+        self.assertFalse(result.tokens_tracked)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_returns_fallback_record_with_done_status(self, runner_run: AsyncMock) -> None:
+        runner_run.side_effect = _model_behavior_error(input_tokens=50, output_tokens=10, total_tokens=60)
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        result = asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="x", max_turns=2))
+
+        self.assertEqual(result.proposal.status, "done")
+        self.assertIn("structured output", result.proposal.reasoning_summary)
+        self.assertIsNotNone(result.proposal.notes)
+
+    @patch("llm_autofix_agents.llm.provider.Runner.run", new_callable=AsyncMock)
+    def test_does_not_retry_on_model_behavior_error(self, runner_run: AsyncMock) -> None:
+        """ModelBehaviorError is a capability issue — must not trigger the retry loop."""
+        runner_run.side_effect = _model_behavior_error(input_tokens=100, output_tokens=20, total_tokens=120)
+        provider = OpenAIAgentsSDKProvider(settings=_gemini_settings())
+
+        asyncio.run(provider.run_agent(agent=_stub_agent(), user_input="x", max_turns=2))
+
+        self.assertEqual(runner_run.await_count, 1, "must not retry on ModelBehaviorError")
 
 
 if __name__ == "__main__":

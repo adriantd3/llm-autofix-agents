@@ -59,13 +59,7 @@ def write_file(
     create_dirs: bool = True,
     overwrite: bool = True,
 ) -> str:
-    """Write the complete content of a file inside the workspace.
-
-    Use ONLY for creating new files or fully rewriting small files (under 50 lines).
-    NEVER overwrite a large existing source file with partial content — the rest of the
-    module will be destroyed. Use replace_in_file or replace_lines for targeted edits.
-    Paths must be relative to the workspace root.
-    """
+    """Write a new file or fully rewrite a small file (under 50 lines). Paths relative to workspace root."""
     rejection = _reject_if_test_file(path)
     if rejection is not None:
         return rejection
@@ -148,11 +142,8 @@ def replace_in_file(
 ) -> str:
     """Replace an exact text block in a file.
 
-    old must be copied verbatim from read_file output — it is the text to be replaced.
-    Fuzzy matching handles minor whitespace/CRLF differences automatically.
-    If old_text_not_found is returned: re-read the target section with read_file to get
-    the current exact text, then retry. Never retry with the same old text — it will fail again.
-    Paths must be relative to the workspace root.
+    old: copied verbatim from read_file output. Fuzzy matching handles minor whitespace/CRLF differences.
+    If old_text_not_found: re-read with read_file and retry with the current exact text.
     """
     rejection = _reject_if_test_file(path)
     if rejection is not None:
@@ -178,7 +169,7 @@ def replace_in_file(
             # current state and retry without an extra read_file round-trip.
             # (Observed in thefuck-1 iter 2 and tqdm-1 iter 1: agent retried with
             # stale text 3+ times before re-reading.)
-            _PREVIEW_LINES = 80
+            _PREVIEW_LINES = 30
             preview_lines = file_lines[:_PREVIEW_LINES]
             preview = "\n".join(preview_lines)
             if file_size_lines > _PREVIEW_LINES:
@@ -229,11 +220,7 @@ def replace_lines(
     end_line: int,
     new_lines: str,
 ) -> str:
-    """Replace an inclusive line range in a file with new content.
-
-    Use to insert new code (functions, imports) at a known line position.
-    Get line numbers from read_file output. Paths must be relative to the workspace root.
-    """
+    """Replace a line range in a file. Get line numbers from read_file. Paths relative to workspace root."""
     rejection = _reject_if_test_file(path)
     if rejection is not None:
         return rejection

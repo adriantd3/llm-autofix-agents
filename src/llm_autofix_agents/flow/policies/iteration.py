@@ -281,6 +281,7 @@ def _build_first_iteration_input(
         f"{workspace_tree_block}"
         f"{source_function_block}"
         f"{test_function_block}"
+        "\n\nSearch tip: use glob=\"**/*.py\" (not \"*.py\") to search all Python files recursively."
     )
 
 

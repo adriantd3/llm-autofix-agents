@@ -144,6 +144,16 @@ class BatchRunner:
             dest_name = self._rename_run_dir(batch_dir, result.run_id, case, settings)
             if dest_name:
                 self._merge_into_batch_db(batch_dir, dest_name)
+        elif result.status == "timed_out":
+            # The container was killed before it could write its JSON output, so
+            # run_id is None. Try to find the orphan run-TIMESTAMP-hash directory
+            # that was created at the start of the run and rename it correctly.
+            orphan_run_id = self._find_orphan_run_dir(batch_dir, started)
+            if orphan_run_id:
+                dest_name = self._rename_run_dir(batch_dir, orphan_run_id, case, settings)
+                if dest_name:
+                    self._merge_into_batch_db(batch_dir, dest_name)
+                    self._finalize_timed_out_run(batch_dir, dest_name, duration)
 
         return result
 
@@ -444,6 +454,26 @@ class BatchRunner:
             exit_code=process.returncode,
         )
 
+    def _find_orphan_run_dir(self, batch_dir: Path, started: datetime) -> str | None:
+        """Return the name of the orphan run-TIMESTAMP-hash dir left by a timed-out container.
+
+        Scans batch_dir for directories whose name starts with "run-" and whose
+        mtime is at or after `started`. Returns the name only when exactly one
+        candidate is found — ambiguous results are left untouched.
+        """
+        try:
+            candidates = [
+                d for d in batch_dir.iterdir()
+                if d.is_dir()
+                and d.name.startswith("run-")
+                and d.stat().st_mtime >= started.timestamp()
+            ]
+        except OSError:
+            return None
+        if len(candidates) == 1:
+            return candidates[0].name
+        return None
+
     def _rename_run_dir(
         self, batch_dir: Path, run_id: str, case: PreparedExecutionCase, settings: Any
     ) -> str | None:
@@ -482,6 +512,117 @@ class BatchRunner:
             logger.debug("Merged run DB %s into batch.db", run_db.name)
         except Exception:
             logger.warning("Failed to merge run DB into batch.db", exc_info=True)
+
+    def _finalize_timed_out_run(
+        self, batch_dir: Path, dest_name: str, duration_seconds: float
+    ) -> None:
+        """Write a synthetic summary.json and update DB records for a timed-out run.
+
+        Reconstructs token totals from completed iteration_finished events in
+        events.jsonl so the run has meaningful data even though the container
+        was killed before RunFinalizer could execute.
+        """
+        run_dir = batch_dir / dest_name
+        events_file = run_dir / "events.jsonl"
+        if not events_file.exists():
+            return
+
+        run_id: str | None = None
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_tokens = 0
+        iterations = 0
+        changed_files_count = 0
+        try:
+            with events_file.open(encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if run_id is None:
+                        run_id = event.get("run_id")
+                    if event.get("event") == "iteration_finished":
+                        iterations += 1
+                        total_input_tokens += event.get("input_tokens", 0)
+                        total_output_tokens += event.get("output_tokens", 0)
+                        total_tokens += event.get("total_tokens", 0)
+                        changed_files_count = max(
+                            changed_files_count, event.get("changed_files_count", 0)
+                        )
+        except OSError:
+            logger.warning("Could not read events.jsonl for timed-out run %s", dest_name)
+            return
+
+        if run_id is None:
+            logger.warning("No run_id found in events.jsonl for timed-out run %s", dest_name)
+            return
+
+        batch_name = batch_dir.name
+        summary_path = run_dir / "summary.json"
+        db_summary_path = f"/results/{batch_name}/{dest_name}/summary.json"
+        live_log_path = run_dir / "live.md"
+        db_live_log_path = (
+            f"/results/{batch_name}/{dest_name}/live.md" if live_log_path.exists() else None
+        )
+
+        try:
+            from llm_autofix_agents.observability.summary import write_summary
+
+            write_summary(
+                summary_path=summary_path,
+                run_id=run_id,
+                status="timed_out",
+                stop_reason="timed_out",
+                duration_seconds=duration_seconds,
+                iterations=iterations,
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens,
+                total_tokens=total_tokens,
+                changed_files_count=changed_files_count,
+                observability_db=f"/results/{batch_name}/{dest_name}/run.db",
+                live_log=db_live_log_path,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to write summary.json for timed-out run %s", dest_name, exc_info=True
+            )
+
+        finished_at = datetime.now(UTC).isoformat()
+        try:
+            from llm_autofix_agents.observability.models import RunFinishedRecord
+            from llm_autofix_agents.observability.sqlite_store import SQLiteObservabilityStore
+
+            record = RunFinishedRecord(
+                run_id=run_id,
+                finished_at=finished_at,
+                final_status="timed_out",
+                stop_reason="timed_out",
+                duration_seconds=duration_seconds,
+                total_iterations=iterations,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                total_tokens=total_tokens,
+                files_changed_count=changed_files_count,
+                resolved=False,
+                live_log_path=db_live_log_path,
+                summary_path=db_summary_path,
+            )
+            run_db = run_dir / "run.db"
+            if run_db.exists():
+                SQLiteObservabilityStore(db_path=run_db).update_run_finished(record)
+            batch_db_path = batch_dir / "batch.db"
+            batch_store = SQLiteObservabilityStore(db_path=batch_db_path)
+            batch_store.initialize()
+            batch_store.update_run_finished(record)
+            logger.info("Finalized timed-out run %s: %d tokens from %d iterations", dest_name, total_tokens, iterations)
+        except Exception:
+            logger.warning(
+                "Failed to update DB for timed-out run %s", dest_name, exc_info=True
+            )
 
     def _update_observability_paths(self, batch_dir: Path, run_id: str, dest_name: str) -> None:
         # Update path columns in the per-run DB after the run directory is renamed.

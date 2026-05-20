@@ -248,5 +248,285 @@ class RunTestTargetExit4RelaxationTests(unittest.TestCase):
         self.assertIn("no_changes_yet", res["error"])
 
 
+class SearchFilesGuardTests(unittest.TestCase):
+    """Hard search budget and duplicate-detection guards in search_files."""
+
+    def test_blocks_exact_duplicate_query(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def foo(): return 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            # First call succeeds
+            res1 = asyncio.run(call(search_files, tmp, '{"pattern":"return 1","glob":"src/**/*.py"}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res1.get("error", ""))
+
+            # Identical second call is rejected
+            res2 = asyncio.run(call(search_files, tmp, '{"pattern":"return 1","glob":"src/**/*.py"}', ctx=ctx))
+            self.assertFalse(res2["ok"])
+            self.assertIn("duplicate_search", res2["error"])
+
+    def test_budget_exhausted_blocks_pre_edit_search(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            budget = 3
+            ctx = APRToolContext(root_dir=tmp, search_files_budget=budget, iteration_edit_count=0)
+
+            # Exhaust the budget with distinct queries
+            for i in range(budget):
+                asyncio.run(call(search_files, tmp, f'{{"pattern":"pattern_{i}","glob":"src/**"}}', ctx=ctx))
+
+            self.assertEqual(ctx.search_files_calls, budget)
+
+            # Next distinct call must be blocked
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"pattern_overflow","glob":"src/**"}', ctx=ctx))
+            self.assertFalse(res["ok"])
+            self.assertIn("search_budget_exhausted", res["error"])
+
+    def test_budget_lifted_after_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def foo(): return 1\n", encoding="utf-8")
+            budget = 2
+            # Simulate budget already exhausted, but an edit has been made
+            ctx = APRToolContext(
+                root_dir=tmp,
+                search_files_budget=budget,
+                search_files_calls=budget,
+                iteration_edit_count=1,  # edit already applied
+            )
+
+            # Budget should not apply after an edit
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"return 1","glob":"src/**/*.py"}', ctx=ctx))
+            self.assertNotIn("search_budget_exhausted", res.get("error", ""))
+
+    # --- duplicate key correctness ---
+
+    def test_regex_flag_distinguishes_duplicate_key(self) -> None:
+        """regex=True and regex=False with the same pattern are DIFFERENT queries
+        and must not trigger duplicate detection against each other."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def foo(): return 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            # First call: literal search
+            asyncio.run(call(search_files, tmp, '{"pattern":"return","glob":"src/**/*.py","regex":false}', ctx=ctx))
+            # Second call: regex mode with same pattern — must NOT be blocked as duplicate
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"return","glob":"src/**/*.py","regex":true}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res.get("error", ""))
+            self.assertEqual(ctx.search_files_calls, 2)
+
+    def test_case_insensitive_pattern_is_a_duplicate(self) -> None:
+        """With the default case_sensitive=False, 'FOO' and 'foo' match identically
+        and must be treated as the same query (duplicate blocked)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def foo(): return 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"FOO","glob":"src/**/*.py"}', ctx=ctx))
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"foo","glob":"src/**/*.py"}', ctx=ctx))
+            self.assertFalse(res["ok"])
+            self.assertIn("duplicate_search", res["error"])
+
+    def test_case_sensitive_true_different_casing_is_not_a_duplicate(self) -> None:
+        """With case_sensitive=True, 'FOO' and 'foo' match different text and must
+        be treated as distinct queries — no duplicate blocking."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def FOO(): return 1\ndef foo(): return 2\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"FOO","glob":"src/**/*.py","case_sensitive":true}', ctx=ctx))
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"foo","glob":"src/**/*.py","case_sensitive":true}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res.get("error", ""))
+            self.assertEqual(ctx.search_files_calls, 2)
+
+    def test_case_sensitive_flag_itself_differentiates_key(self) -> None:
+        """cs=True and cs=False with the same lower-cased pattern are different
+        queries (one is restricted to exact case, the other is not)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def foo(): return 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"foo","glob":"src/**/*.py","case_sensitive":false}', ctx=ctx))
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"foo","glob":"src/**/*.py","case_sensitive":true}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res.get("error", ""))
+            self.assertEqual(ctx.search_files_calls, 2)
+
+    def test_different_glob_is_not_a_duplicate(self) -> None:
+        """Same pattern with different glob scopes must each be allowed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "foo.py").write_text("def foo(): pass\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"def foo","glob":"src/**/*.py"}', ctx=ctx))
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"def foo","glob":"**/*.py"}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res.get("error", ""))
+            self.assertEqual(ctx.search_files_calls, 2)
+
+    # --- state consistency ---
+
+    def test_duplicate_error_does_not_consume_budget(self) -> None:
+        """A blocked duplicate must not count against the search budget."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            ctx = APRToolContext(root_dir=tmp, search_files_budget=2)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"x","glob":"src/**"}', ctx=ctx))
+            self.assertEqual(ctx.search_files_calls, 1)
+
+            # Trigger duplicate
+            asyncio.run(call(search_files, tmp, '{"pattern":"x","glob":"src/**"}', ctx=ctx))
+            # Counter must still be 1 — duplicate didn't consume a slot
+            self.assertEqual(ctx.search_files_calls, 1)
+
+            # Budget slot #2 is still available
+            asyncio.run(call(search_files, tmp, '{"pattern":"y","glob":"src/**"}', ctx=ctx))
+            self.assertEqual(ctx.search_files_calls, 2)
+
+    def test_budget_error_does_not_modify_state(self) -> None:
+        """A budget-exceeded rejection must leave both counters unchanged."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ctx = APRToolContext(root_dir=tmp, search_files_budget=1, search_files_calls=1)
+
+            before_queries = dict(ctx.seen_search_queries)
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"z","glob":"**"}', ctx=ctx))
+
+            self.assertFalse(res["ok"])
+            self.assertIn("search_budget_exhausted", res["error"])
+            self.assertEqual(ctx.search_files_calls, 1)  # unchanged
+            self.assertEqual(ctx.seen_search_queries, before_queries)  # unchanged
+
+    def test_duplicate_error_does_not_modify_seen_queries(self) -> None:
+        """A duplicate rejection must not overwrite the original call number stored."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"x","glob":"src/**"}', ctx=ctx))
+            original_call_number = ctx.seen_search_queries.copy()
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"x","glob":"src/**"}', ctx=ctx))
+            # Seen queries must be unchanged after the duplicate was blocked
+            self.assertEqual(ctx.seen_search_queries, original_call_number)
+
+    def test_duplicate_error_takes_precedence_over_budget_exhausted(self) -> None:
+        """When a query is both a duplicate AND the budget is exhausted, the
+        duplicate error must be returned (checked first)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            ctx = APRToolContext(root_dir=tmp, search_files_budget=1)
+
+            # First call: consumes the only slot
+            asyncio.run(call(search_files, tmp, '{"pattern":"q","glob":"src/**"}', ctx=ctx))
+            self.assertEqual(ctx.search_files_calls, 1)
+
+            # Second call with the SAME pattern: budget is also exhausted.
+            # Must get "duplicate", not "budget_exhausted".
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"q","glob":"src/**"}', ctx=ctx))
+            self.assertFalse(res["ok"])
+            self.assertIn("duplicate_search", res["error"])
+
+    # --- invalid regex ---
+
+    def test_invalid_regex_returns_error_without_consuming_slot(self) -> None:
+        """An invalid regex (regex=True with bad pattern) must return a clean error
+        and must NOT register the call in seen_search_queries or increment search_files_calls."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = APRToolContext(root_dir=tmp)
+
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"[invalid","glob":"**","regex":true}', ctx=ctx))
+
+            self.assertFalse(res["ok"])
+            self.assertIn("invalid_regex", res["error"])
+            # Slot must NOT have been consumed
+            self.assertEqual(ctx.search_files_calls, 0)
+            self.assertEqual(ctx.seen_search_queries, {})
+
+    def test_valid_call_succeeds_after_invalid_regex_attempt(self) -> None:
+        """After a failed invalid-regex call, a valid call with the same pattern
+        must succeed (the failed call must not appear in seen_search_queries)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "a.py").write_text("foo = 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            # First: invalid regex — should fail cleanly
+            asyncio.run(call(search_files, tmp, '{"pattern":"[invalid","glob":"src/**","regex":true}', ctx=ctx))
+
+            # Retry with valid regex using the same pattern string — must NOT be blocked as duplicate
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"[invalid","glob":"src/**","regex":false}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res.get("error", ""))
+
+    # --- budget boundary ---
+
+    def test_budget_zero_allows_unlimited_calls(self) -> None:
+        """budget=0 disables the limit; all calls must succeed regardless of count."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            ctx = APRToolContext(root_dir=tmp, search_files_budget=0)
+
+            for i in range(15):
+                res = asyncio.run(call(search_files, tmp, f'{{"pattern":"pattern_{i}","glob":"src/**"}}', ctx=ctx))
+                self.assertNotIn("search_budget_exhausted", res.get("error", ""))
+
+            self.assertEqual(ctx.search_files_calls, 15)
+
+    def test_budget_last_allowed_call_succeeds(self) -> None:
+        """The call at index budget-1 (last slot) must succeed, not be blocked."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            budget = 4
+            ctx = APRToolContext(root_dir=tmp, search_files_budget=budget, search_files_calls=budget - 1)
+
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"last_allowed","glob":"src/**"}', ctx=ctx))
+            self.assertNotIn("search_budget_exhausted", res.get("error", ""))
+            self.assertEqual(ctx.search_files_calls, budget)
+
+    def test_iteration_reset_clears_duplicate_state(self) -> None:
+        """Simulating an iteration reset (as done by runner.py) must allow the
+        same query to be searched again in the new iteration."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+            ctx = APRToolContext(root_dir=tmp)
+
+            asyncio.run(call(search_files, tmp, '{"pattern":"x","glob":"src/**"}', ctx=ctx))
+            self.assertEqual(ctx.search_files_calls, 1)
+
+            # Simulate runner.py iteration reset
+            ctx.iteration_edit_count = 0
+            ctx.iteration_tool_call_count = 0
+            ctx.pre_edit_test_count = 0
+            ctx.search_files_calls = 0
+            ctx.seen_search_queries = {}
+
+            # Same query must now succeed
+            res = asyncio.run(call(search_files, tmp, '{"pattern":"x","glob":"src/**"}', ctx=ctx))
+            self.assertNotIn("duplicate_search", res.get("error", ""))
+            self.assertEqual(ctx.search_files_calls, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
