@@ -4,10 +4,11 @@ Generate experiment batch YAMLs from the BugsInPy sampling strategy
 defined in docs/experiment-plan.md.
 
 Sampling rules:
-  - Excluded:  pandas, cookiecutter (infra broken) +
-               fastapi, httpie, youtube-dl, keras, matplotlib, sanic, spacy
-               (confirmed infra-incompatible after trace analysis, 2026-05-19).
-  - Included (cap=5 each): 8 remaining projects.
+  - Excluded: projects with confirmed system-level infra failures
+    (missing compilers, CUDA drivers, broken test runners, etc.) that
+    prevent any bug from being set up or tested regardless of the agent.
+    Currently: pandas, cookiecutter, keras, matplotlib, sanic, spacy.
+  - Included (cap=5 each): all remaining projects with working infra.
   - Within each project: stratified by difficulty (bajo/medio/alto),
     confirmed bugs from previous experiments prioritised.
     Selection within each tier is randomised to avoid systematic bias.
@@ -35,30 +36,29 @@ QUIXBUGS_DATASET_REF = "../../datasets/quixbugs.yaml"
 
 # ── Sampling config ───────────────────────────────────────────────────────────
 
-# Infra-incompatible after architecture-check and trace analysis (2026-05-19).
+# Projects excluded due to confirmed system-level infra failures:
+#   pandas      — requires Cython compilation (gcc missing in Docker image, 15-20 min/env)
+#   cookiecutter — uses tox with Python 2.7/3.3/3.4/pypy envs unavailable in container
+#   keras        — requires CUDA drivers (libcuda.so.1 not present)
+#   matplotlib   — requires compiled C extension (ft2font) with FreeType headers
+#   sanic        — pytest_benchmark version conflict causes conftest to fail on load
+#   spacy        — requires g++ for C++ extensions (cymem, murmurhash)
 EXCLUDED = {
-    "pandas", "cookiecutter",
-    "fastapi", "httpie", "youtube-dl", "keras", "matplotlib", "sanic", "spacy",
+    "pandas", "cookiecutter", "keras", "matplotlib", "sanic", "spacy",
 }
 
-# 8 projects with confirmed infra from architecture-check smoke runs.
+# All remaining projects with confirmed working infra (smoke-tests or prior experiment runs).
 INCLUDED = {
     "thefuck", "PySnooper", "tornado", "black", "tqdm", "scrapy", "luigi", "ansible",
+    "youtube-dl", "httpie", "fastapi",
 }
 
-# Uniform cap per project: 5 bugs × 8 projects = 40 bugs total.
+# Uniform cap per project: 5 bugs × 11 projects = up to 55 bugs total.
 # 5 slots: one per difficulty tier (bajo/medio/alto) + one extra bajo + one confirmed/priority.
 CAP = 5
 CAPS: dict[str, int] = {p: CAP for p in INCLUDED}
 
-# Confirmed working (test passed) in previous experiments; prioritised within difficulty tier.
-# Updated after architecture-check batch (2026-05-17/19): pysnooper-1 and tqdm-1 succeeded.
-CONFIRMED: dict[str, set[int]] = {
-    "thefuck":   {1, 2, 5, 6, 7},
-    "tornado":   {9},
-    "PySnooper": {1},
-    "tqdm":      {1},
-}
+
 
 # ── Difficulty thresholds (relative to BugsInPy) ─────────────────────────────
 
@@ -111,24 +111,19 @@ def _analyze_patch(patch_path: Path) -> tuple[int, int]:
 def _pick_stratified(
     bugs: list[dict],
     cap: int,
-    confirmed: set[int],
 ) -> list[int]:
     """
-    Pick up to `cap` bug IDs with four-phase logic:
-      1. One bug per difficulty level (confirmed preferred; unconfirmed shuffled)
-      1b. A second bajo bug (extra easy slot)
-      2. Fill remaining slots with confirmed bugs not yet chosen
-      3. Fill remaining with lowest-difficulty bugs (shuffled within tier)
+    Pick up to `cap` bug IDs with stratified random sampling:
+      1. One randomly chosen bug per difficulty tier (bajo, medio, alto)
+      2. A second bajo bug (extra easy slot)
+      3. Fill remaining slots randomly, preferring bajo → medio → alto
+    Within each tier the order is shuffled to avoid systematic bias.
     """
     by_level: dict[str, list[dict]] = {"bajo": [], "medio": [], "alto": []}
     for b in bugs:
         by_level[b["difficulty"]].append(b)
-    # Within each tier: confirmed first (deterministic), unconfirmed randomised.
     for lvl in by_level:
-        conf = [b for b in by_level[lvl] if b["confirmed"]]
-        unconf = [b for b in by_level[lvl] if not b["confirmed"]]
-        random.shuffle(unconf)
-        by_level[lvl] = conf + unconf
+        random.shuffle(by_level[lvl])
 
     chosen: set[int] = set()
 
@@ -141,7 +136,7 @@ def _pick_stratified(
                 chosen.add(b["id"])
                 break
 
-    # Phase 1b: a second bajo bug (the extra easy slot)
+    # Phase 2: a second bajo bug (extra easy slot)
     for b in by_level["bajo"]:
         if len(chosen) >= cap:
             break
@@ -149,13 +144,7 @@ def _pick_stratified(
             chosen.add(b["id"])
             break
 
-    # Phase 2: remaining confirmed bugs
-    for b in sorted((b for b in bugs if b["confirmed"] and b["id"] not in chosen), key=lambda b: b["id"]):
-        if len(chosen) >= cap:
-            break
-        chosen.add(b["id"])
-
-    # Phase 3: fill remaining slots, preferring bajo → medio → alto (already shuffled)
+    # Phase 3: fill remaining slots, preferring bajo → medio → alto
     for lvl in ("bajo", "medio", "alto"):
         for b in by_level[lvl]:
             if len(chosen) >= cap:
@@ -187,7 +176,6 @@ def select_bugs(bugsinpy_root: Path) -> dict[str, list[int]]:
             continue
 
         cap = CAPS[project]
-        confirmed = CONFIRMED.get(project, set())
         bug_data: list[dict] = []
 
         for bug_dir in sorted(bugs_dir.iterdir(), key=lambda p: int(p.name) if p.name.isdigit() else 9999):
@@ -204,11 +192,10 @@ def select_bugs(bugsinpy_root: Path) -> dict[str, list[int]]:
                     "src_files": src_files,
                     "lines": lines,
                     "difficulty": _difficulty(src_files, lines),
-                    "confirmed": bug_id in confirmed,
                 }
             )
 
-        selection[project] = _pick_stratified(bug_data, cap, confirmed)
+        selection[project] = _pick_stratified(bug_data, cap)
 
     return selection
 
@@ -222,9 +209,9 @@ ARCHITECTURES = [
 ]
 
 # Uniform run parameters — identical across all architectures for fair comparison.
-MAX_TURNS = 20
+MAX_TURNS = 30
 MAX_ITERATIONS = 3
-TIMEOUT_SECONDS = 900
+TIMEOUT_SECONDS = 1200
 ITERATION_TIMEOUT_SECONDS = 500
 
 # (provider, model, label_for_filename, sequential, extra_body)
@@ -232,8 +219,8 @@ ITERATION_TIMEOUT_SECONDS = 500
 # sequential=False → API call, can overlap with Ollama or other API batches
 # extra_body       → passed as llm.extra_body; used for model-specific params (e.g. Qwen think mode)
 MODELS = [
-    ("ollama", "qwen3.6:35b",   "qwen3.6-35b",   True,  {"think": False}),
-    ("ollama", "gemma4:27b",    "gemma4-27b",    True,  None),
+    ("ollama", "qwen3.5:9b",   "qwen3.5-9b",   True,  {"think": False}),
+    ("ollama", "gemma4:26b",    "gemma4-26b",    True,  None),
     ("openai", "gpt-5.4-mini",  "gpt-5.4-mini",  False, None),
 ]
 
