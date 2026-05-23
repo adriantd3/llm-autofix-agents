@@ -150,6 +150,10 @@ class BatchRunner:
             # that was created at the start of the run and rename it correctly.
             orphan_run_id = self._find_orphan_run_dir(batch_dir, started)
             if orphan_run_id:
+                # Preserve correlation between the batch summary entry and the
+                # on-disk run directory / SQLite rows even though the container
+                # never produced the final JSON envelope.
+                result.run_id = orphan_run_id
                 dest_name = self._rename_run_dir(batch_dir, orphan_run_id, case, settings)
                 if dest_name:
                     self._merge_into_batch_db(batch_dir, dest_name)

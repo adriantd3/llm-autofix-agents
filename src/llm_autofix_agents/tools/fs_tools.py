@@ -87,6 +87,8 @@ def read_file(
 
     Use start_line/end_line for large files. Returned lines are numbered — copy them verbatim into replace_in_file.
     """
+    if not path:
+        return json_result({"ok": False, "error": "missing_path", "hint": "path is required — provide the workspace-relative file path"})
     cfg = get_tool_context(ctx)
     file_path = resolve_path(cfg, path)
     ok, error, content = read_text_checked(cfg, file_path)
@@ -125,6 +127,8 @@ def search_files(
     glob controls which files are scanned — use **/*.py to search all .py files recursively;
     *.py matches only root-level files. Set regex=True for ^, $, |, \\d, etc.
     """
+    if not pattern:
+        return json_result({"ok": False, "error": "missing_pattern", "hint": "pattern is required — provide the search string or regex"})
     cfg = get_tool_context(ctx)
 
     # Normalize pattern based on case_sensitive: two calls that produce identical

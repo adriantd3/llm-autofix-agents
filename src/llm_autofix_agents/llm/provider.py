@@ -199,14 +199,32 @@ class OpenAIAgentsSDKProvider:
                 # capability issue, not a transient failure — retrying is
                 # wasteful. Return a fallback record so the outer loop can
                 # evaluate actual changes.
-                usage = _extract_token_usage(getattr(exc, "run_data", None))
+                #
+                # Critically for planner-executor: salvage whatever the planner
+                # investigated (files read, search hits, planned edits) so the
+                # executor phase gets useful starting context rather than a
+                # generic error string. Mirrors the max_turns handler but strips
+                # the "MaxTurnsExceeded" header (not applicable here) and only
+                # runs when the agent actually made tool calls.
+                run_data = getattr(exc, "run_data", None)
+                usage = _extract_token_usage(run_data)
+                _new_items = (getattr(run_data, "new_items", None) or []) if run_data is not None else []
+                if _new_items:
+                    raw_ctx = _extract_research_context(run_data, max_turns)
+                    # Strip the first line ("MaxTurnsExceeded after N turns…") —
+                    # that header is specific to the max_turns handler.
+                    _ctx_lines = raw_ctx.splitlines()
+                    research_context = "\n".join(_ctx_lines[1:]).strip()
+                else:
+                    research_context = ""
+                reasoning = research_context or (
+                    "Model could not produce structured output; assuming completion based on tool usage"
+                )
                 return AgentFixIterationRecord(
                     proposal=AgentFixIterationResult(
                         status="done",
-                        reasoning_summary=(
-                            "Model could not produce structured output; assuming completion based on tool usage"
-                        ),
-                        confidence=0.5,
+                        reasoning_summary=reasoning,
+                        confidence=0.4 if research_context else 0.1,
                         notes=f"ModelBehaviorError: {str(exc)[:200]}",
                     ),
                     input_tokens=usage["input_tokens"],

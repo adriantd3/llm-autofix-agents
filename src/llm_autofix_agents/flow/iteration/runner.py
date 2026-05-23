@@ -139,6 +139,7 @@ class IterationRunner:
         state: RunState,
         iteration: int,
     ) -> _IterationPrep:
+        state.current_iteration = iteration
         identity = build_run_identity(
             run_input=run_input,
             agent_config=cfg.agent_config,

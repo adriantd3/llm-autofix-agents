@@ -111,7 +111,7 @@ class RunOrchestrator:
                 identity=build_run_identity(
                     run_input=run_input,
                     agent_config=cfg.agent_config,
-                    iteration=1,
+                    iteration=max(state.current_iteration, 1),
                     run_id=cfg.run_id,
                 ),
                 state=state,

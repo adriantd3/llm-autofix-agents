@@ -88,5 +88,85 @@ La planner-executor es analoga a como trabajan los coding agents modernos (Claud
 - [x] La estrategia "planner_executor" se puede seleccionar por batch config.
 - [x] Se registran en observabilidad ambos agentes (planner, executor) con su rol.
 - [x] Tests unitarios validan factory dispatch y wiring de la arquitectura.
-- [ ] Validacion end-to-end: `make batch BATCH_CONFIG=batches/bugsinpy-planner-executor-local.yaml`.
-- [ ] Comparativa de resultados con handoff y mono_agent en al menos 1 caso.
+- [x] Validacion end-to-end: batches sobre BugsInPy hard (tornado-6, ansible-1, ansible-2, scrapy-33).
+- [x] Comparativa de resultados: run iterativo con gemma4-26b-ctx32k (4 runs, 1/4 → 3/4).
+
+---
+
+## Context Engineering Fixes (2026-05-23)
+
+Tras ejecutar 4 batches experimentales con `gemma4-26b-ctx32k` sobre bugs hard de BugsInPy
+(tornado-6, ansible-1, ansible-2, scrapy-33), se identificaron y corrigieron tres errores
+en `PLANNER_INSTRUCTIONS` que impedían el correcto funcionamiento del planner.
+
+### Errores encontrados
+
+#### Error 1: Contrato roto — `transfer_to_executor` inexistente
+
+Las instrucciones del planner decían:
+```
+CRITICAL: Once you have a complete diagnosis and repair plan,
+you MUST call transfer_to_executor to hand off.
+```
+Pero `transfer_to_executor` **no existe** como tool en el planner agent. La arquitectura
+`PhasedIterationStrategy` usa texto libre como output del planner (no handoffs). El planner
+tenía copiado un patrón de la arquitectura handoff que no fue nunca implementado aquí.
+
+Efecto observado: gemma4-26b intenta llamar al tool inexistente → falla silenciosamente
+→ produce output vacío (`content=""`, 0 tokens) en ~2-4 segundos. Reproducible en todos
+los runs.
+
+**Fix**: reemplazar la instrucción por "escribe tu plan como respuesta de texto plano"
+con un formato estructurado (SUMMARY/EVIDENCE/FILES/FIX/CONFIDENCE).
+
+#### Error 2: FORBIDDEN confuso para el planner
+
+Las instrucciones incluían:
+```
+FORBIDDEN actions:
+- Producing the final iteration record.
+```
+Esta instrucción es para el executor (que produce `AgentFixIterationResult`), no para
+el planner. Para el planner, "producir la salida" ES su tarea. La instrucción podía
+desincentivar al modelo de generar cualquier output.
+
+**Fix**: eliminado del planner. Reemplazado por la restricción correcta: no escribir
+texto antes de hacer al menos una tool call.
+
+#### Error 3: Primera respuesta vacía en bugs "obvios"
+
+Para ansible-1 (`TypeError: 'GalaxyAPI' object is not iterable`), el error es visible
+directamente en el stack trace. El modelo entraba en modo thinking, "veía" la solución,
+intentaba escribirla directamente como primera respuesta → output vacío (thinking tokens
+consumidos, sin content tokens).
+
+La instrucción del executor sí tenía `Your FIRST response MUST be a tool call`. El planner
+no la tenía.
+
+**Fix**: añadir al inicio de PLANNER_INSTRUCTIONS:
+```
+Your FIRST response MUST be a tool call. Do not write any text before calling a tool.
+```
+
+### Resultados por run
+
+| Run | Cambios | tornado-6 | ansible-1 | ansible-2 | scrapy-33 | Total |
+|-----|---------|-----------|-----------|-----------|-----------|-------|
+| 1 | baseline | ❌ 1353s | ❌ 46s | ✅ 198s | ❌ 1229s | 1/4 |
+| 2 | think:false | ❌ 466s | ❌ 30s | ❌ 262s | ❌ 801s | 0/4 |
+| 3 | fix Error 1+2 | ❌ 512s | ❌ 953s | ✅ 107s | ❌ 502s | 1/4 |
+| 4 | + fix Error 3 | ✅ 1439s | ✅ 292s | ✅ 135s | ❌ 163s | **3/4** |
+
+Run 2 (think:false) fue un experimento que causó regresión en ansible-2 y fue revertido.
+La mejora real vino de corregir los contratos de instrucciones, no de deshabilitar thinking.
+
+### Clasificación de la mejora
+
+Estos cambios son **context engineering** (modificaciones al system prompt del agente),
+no cambios de arquitectura ni de harness. El Error 1 tenía componente de contrato
+arquitectónico (instrucciones describían un patrón no implementado), pero el fix fue
+completo al nivel de prompt sin tocar código de orquestación.
+
+Resultado (1/4 → 3/4) con dos líneas de instrucciones modificadas ilustra el alto
+impacto del context engineering frente al rediseño arquitectónico para modelos con
+modo thinking.

@@ -33,6 +33,11 @@ class RunState:
 
     # Iteration progress
     max_changed_files_count: int = 0
+    # Index of the iteration currently in flight (1-based). Set by IterationRunner
+    # before each iteration runs; read by the outer exception handler so the
+    # run_finished event reports the iteration the failure actually occurred in
+    # rather than a hardcoded 1.
+    current_iteration: int = 0
     accumulated_logs: list[str] = field(default_factory=list)
     final_message: str | None = None
     latest_tests: TestResults | None = None

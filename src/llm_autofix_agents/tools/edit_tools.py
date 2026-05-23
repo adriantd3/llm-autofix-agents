@@ -60,6 +60,8 @@ def write_file(
     overwrite: bool = True,
 ) -> str:
     """Write a new file or fully rewrite a small file (under 50 lines). Paths relative to workspace root."""
+    if not path:
+        return json_result({"ok": False, "error": "missing_path", "hint": "path is required — provide the workspace-relative file path"})
     rejection = _reject_if_test_file(path)
     if rejection is not None:
         return rejection
@@ -131,6 +133,34 @@ def _fuzzy_find_and_replace(source: str, old: str, new: str) -> str | None:
     return None
 
 
+def _build_old_text_not_found_payload(path: str, source: str) -> dict[str, Any]:
+    """Build the diagnostic payload returned when replace_in_file cannot anchor.
+
+    Centralises the preview shape so old_text_not_found and
+    unexpected_occurrence_count produce consistent feedback. Including a
+    file preview short-circuits read-then-retry round trips the agent
+    otherwise wastes turns on. (Observed in thefuck-1 iter 2, tqdm-1
+    iter 1, ansible-2 PE, scrapy-33 orchestrator.)
+    """
+    file_lines = source.splitlines()
+    file_size_lines = len(file_lines)
+    _PREVIEW_LINES = 30
+    preview = "\n".join(file_lines[:_PREVIEW_LINES])
+    if file_size_lines > _PREVIEW_LINES:
+        preview += f"\n... [{file_size_lines - _PREVIEW_LINES} more lines — use read_file to see the rest]"
+    return {
+        "ok": False,
+        "error": "old_text_not_found",
+        "path": path,
+        "file_size_lines": file_size_lines,
+        "hint": (
+            "The old text was not found. The current file content is in "
+            "current_file_preview. Copy the exact text from there and retry."
+        ),
+        "current_file_preview": preview,
+    }
+
+
 @function_tool
 def replace_in_file(
     ctx: RunContextWrapper[APRToolContext],
@@ -145,6 +175,8 @@ def replace_in_file(
     old: copied verbatim from read_file output. Fuzzy matching handles minor whitespace/CRLF differences.
     If old_text_not_found: re-read with read_file and retry with the current exact text.
     """
+    if not path:
+        return json_result({"ok": False, "error": "missing_path", "hint": "path is required — provide the workspace-relative file path"})
     rejection = _reject_if_test_file(path)
     if rejection is not None:
         return rejection
@@ -163,40 +195,30 @@ def replace_in_file(
         # replace_all is excluded: fuzzy multi-match semantics are ambiguous.
         updated = _fuzzy_find_and_replace(source, old, new)
         if updated is None:
-            file_lines = source.splitlines()
-            file_size_lines = len(file_lines)
-            # Include the first 80 lines so the agent can immediately identify the
-            # current state and retry without an extra read_file round-trip.
-            # (Observed in thefuck-1 iter 2 and tqdm-1 iter 1: agent retried with
-            # stale text 3+ times before re-reading.)
-            _PREVIEW_LINES = 30
-            preview_lines = file_lines[:_PREVIEW_LINES]
-            preview = "\n".join(preview_lines)
-            if file_size_lines > _PREVIEW_LINES:
-                preview += f"\n... [{file_size_lines - _PREVIEW_LINES} more lines — use read_file to see the rest]"
-            return json_result({
-                "ok": False,
-                "error": "old_text_not_found",
-                "path": path,
-                "file_size_lines": file_size_lines,
-                "hint": "The old text was not found. The current file content is in current_file_preview. Copy the exact text from there and retry.",
-                "current_file_preview": preview,
-            })
+            return json_result(_build_old_text_not_found_payload(path, source))
         fuzzy_matched = True
         occurrences = 1
     else:
         if expected_occurrences is not None and occurrences != expected_occurrences:
-            return json_result(
-                {
-                    "ok": False,
-                    "error": "unexpected_occurrence_count",
-                    "path": path,
-                    "expected_occurrences": expected_occurrences,
-                    "actual_occurrences": occurrences,
-                }
+            # When the count doesn't match expectations the file content has
+            # almost certainly drifted (e.g. a previous iteration already
+            # applied part of the edit). Include the same preview as the
+            # not-found branch so the agent can re-anchor without an extra
+            # read_file round-trip — preventing the hash-mismatch retry loops
+            # observed in ansible-2 (planner-executor) and scrapy-33
+            # (orchestrator).
+            payload = _build_old_text_not_found_payload(path, source)
+            payload["error"] = "unexpected_occurrence_count"
+            payload["expected_occurrences"] = expected_occurrences
+            payload["actual_occurrences"] = occurrences
+            payload["hint"] = (
+                "The file content has drifted from your expected snapshot. "
+                "Re-read the relevant range with read_file and recompute the exact `old` text "
+                "before retrying. Do not resend the same `old` value."
             )
+            return json_result(payload)
         if occurrences == 0:
-            return json_result({"ok": False, "error": "old_text_not_found", "path": path})
+            return json_result(_build_old_text_not_found_payload(path, source))
         updated = source.replace(old, new) if replace_all else source.replace(old, new, 1)
 
     file_path.write_text(updated, encoding="utf-8")
@@ -221,6 +243,8 @@ def replace_lines(
     new_lines: str,
 ) -> str:
     """Replace a line range in a file. Get line numbers from read_file. Paths relative to workspace root."""
+    if not path:
+        return json_result({"ok": False, "error": "missing_path", "hint": "path is required — provide the workspace-relative file path"})
     rejection = _reject_if_test_file(path)
     if rejection is not None:
         return rejection

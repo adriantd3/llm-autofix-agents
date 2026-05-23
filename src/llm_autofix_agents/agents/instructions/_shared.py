@@ -64,6 +64,14 @@ VENV_ENV_DIR_RULE = (
     "the test runner. Do not list, search, or read files inside `env/`."
 )
 
+# ── Tool call discipline ─────────────────────────────────────────────────────
+
+TOOL_CALL_DISCIPLINE_RULE = (
+    "Always provide all required arguments before calling a tool: path must be a real, non-null file "
+    "path; pattern must be a non-empty string. If you don't know the path yet, search first. "
+    "Call one tool per turn. If a tool returns ok:false, read the error and correct your arguments."
+)
+
 # ── Handoff protocol ──────────────────────────────────────────────────────────
 
 HANDOFF_PAYLOAD_FORMAT = (
