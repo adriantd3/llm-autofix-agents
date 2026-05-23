@@ -3,7 +3,7 @@ from __future__ import annotations
 import traceback as _traceback
 
 from llm_autofix_agents.architectures.config import BuiltArchitecture
-from llm_autofix_agents.contracts import RunInput, RunOutput, build_run_identity
+from llm_autofix_agents.contracts import RunInput, RunOutput, RunStatus, StopReason, build_run_identity
 from llm_autofix_agents.flow.agent_execution import AgentExecutionRunner
 from llm_autofix_agents.flow.errors import error_category_from_exception
 from llm_autofix_agents.flow.execution import resolve_test_timeout_seconds, run_test_command
@@ -81,6 +81,30 @@ class RunOrchestrator:
             state.baseline_test_execution = self._run_baseline_tests(
                 run_input=run_input, cfg=cfg, state=state
             )
+            if (
+                state.baseline_test_execution is not None
+                and state.baseline_test_execution.exit_code == 0
+                and not state.baseline_test_execution.timed_out
+            ):
+                state.accumulated_logs.append(
+                    "baseline_already_passes: test suite passed before any agent intervention; "
+                    "no fix needed — skipping agent execution"
+                )
+                return self._finalizer.finalize(
+                    output=self._output_builder.build(
+                        identity=build_run_identity(
+                            run_input=run_input,
+                            agent_config=cfg.agent_config,
+                            iteration=1,
+                            run_id=cfg.run_id,
+                        ),
+                        status=RunStatus.SUCCESS,
+                        stop_reason=StopReason.BASELINE_ALREADY_PASSES,
+                        state=state,
+                    ),
+                    state=state,
+                    cfg=cfg,
+                )
             return self._run_iterations(run_input=run_input, cfg=cfg, state=state)
         except Exception as exc:
             output = self._output_builder.exception_failure(

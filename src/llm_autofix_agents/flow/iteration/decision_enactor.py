@@ -35,10 +35,26 @@ class IterationDecisionEnactor:
         validation: IterationValidationResult,
     ) -> RunOutput | None:
         if decision.action == "retry":
-            self.workspace.restore_all_changes(
-                repo_root=cfg.repo_root,
-                logs=state.accumulated_logs,
-            )
+            # When retrying due to test_file_modified, only revert the test files — keep the
+            # source fix intact so the next iteration can re-validate it without starting over.
+            if validation.failure_type == "test_file_modified":
+                test_files = validation.details.get("changed_test_files", [])
+                if test_files:
+                    self.workspace.restore_test_files(
+                        repo_root=cfg.repo_root,
+                        test_files=test_files,
+                        logs=state.accumulated_logs,
+                    )
+                else:
+                    self.workspace.restore_all_changes(
+                        repo_root=cfg.repo_root,
+                        logs=state.accumulated_logs,
+                    )
+            else:
+                self.workspace.restore_all_changes(
+                    repo_root=cfg.repo_root,
+                    logs=state.accumulated_logs,
+                )
             state.validation_feedback = build_validation_feedback(validation)
             state.validation_retries += 1
             self._append_iteration_logs(cfg=cfg, state=state, observation=observation)

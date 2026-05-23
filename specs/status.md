@@ -2,6 +2,24 @@
 
 ## En curso
 
+- **SPEC-021 cerrada: Evaluación de Modelos Locales para Experimentación Formal (2026-05-23)**:
+  - Probados 7 configuraciones/modelos en `bugsinpy-hard-mono` (tornado-6, ansible-1, ansible-2, scrapy-33).
+  - Únicamente gemma4-26b-ctx32k (think=on) produjo fixes correctos: 2/4 (ansible-2, scrapy-33).
+  - Descartados: devstral (1 tool call + stop), mistral-small32 (argumento faltante), hermes3 (1 tool call/iter), llama3.1 (no tool calls), deepseek-r1/phi4/gemma3 (sin tool calling en Ollama), gemma4-ctx45k (output garbled).
+  - gemma4:26b descartado para experimentación formal: renderer/parser no comparable, razonamiento opaco, alta varianza, sensibilidad al ctx.
+  - Selección recomendada: propietario (GPT-4o-mini/Claude Haiku) + qwen3.5:9b + qwen3-coder:30b.
+  - Fixes de framework aplicados durante exploración: `restore_test_files()` + revert selectivo en `decision_enactor.py`.
+
+
+
+- **SPEC-020 abierta: Context Length & VRAM Budget**:
+  - Ollama default `num_ctx=2048` trunca silenciosamente el historial del agente.
+  - gemma4:26b y qwen3.5:9b no tienen `num_ctx` en `extra_body`; YAMLs pendientes de actualizar.
+  - Implica revisar estimaciones VRAM en `scheduler.py` (KV cache ~3-4 GiB adicionales).
+  - Bloqueada en T1/T2 hasta reboot (fix NVML). T3 se puede hacer antes.
+
+## Completado reciente
+
 - **SPEC-019 completado: Trace-Analysis Fixes (2026-05-19)**:
   - Análisis de batch `bugsinpy-architecture-check` (12 bugs, mono_agent, qwen3-coder:30b); 10 mejoras implementadas.
   - `extra_packages` en `BugEntry` + `_install_extra_packages()` en harness BugsInPy.

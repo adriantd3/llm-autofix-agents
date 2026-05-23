@@ -211,17 +211,27 @@ ARCHITECTURES = [
 # Uniform run parameters — identical across all architectures for fair comparison.
 MAX_TURNS = 30
 MAX_ITERATIONS = 3
-TIMEOUT_SECONDS = 1200
-ITERATION_TIMEOUT_SECONDS = 500
+TIMEOUT_SECONDS = 1500
+ITERATION_TIMEOUT_SECONDS = 600
 
-# (provider, model, label_for_filename, sequential, extra_body)
+# (provider, model, label_for_filename, sequential, extra_body, max_turns)
 # sequential=True  → local GPU, must run one batch at a time
 # sequential=False → API call, can overlap with Ollama or other API batches
 # extra_body       → passed as llm.extra_body; used for model-specific params (e.g. Qwen think mode)
+# max_turns        → per-model override; API models use a lower cap to control token cost
+#
+# NOTE: num_ctx is baked into the Ollama Modelfile of each derived model — the /v1/
+# endpoint ignores num_ctx passed in extra_body (Ollama uses the value at load time).
+# Modelfiles: qwen3.5-9b-ctx65k (65 536) and gemma4-26b-ctx32k (32 768).
+# VRAM measured on RTX 4090 (24 564 MiB):
+#   qwen3.5-9b-ctx65k  → ~10 700 MiB  (weights 6 754 + KV@65K ~3 946 MiB Q4)
+#   gemma4-26b-ctx32k  → 19 453 MiB   (weights ~18 771 + KV@32K ~682 MiB — GQA)
 MODELS = [
-    ("ollama", "qwen3.5:9b",   "qwen3.5-9b",   True,  {"think": False}),
-    ("ollama", "gemma4:26b",    "gemma4-26b",    True,  None),
-    ("openai", "gpt-5.4-mini",  "gpt-5.4-mini",  False, None),
+    ("ollama", "qwen3.5-9b-ctx65k", "qwen3.5-9b",  True,  {"think": False}, MAX_TURNS),
+    ("ollama", "gemma4-26b-ctx32k", "gemma4-26b",   True,  None,             MAX_TURNS),
+    # gpt-5.4-mini: max_turns reduced to 15 to bound token cost (avg ~700K input tokens
+    # per run with 30 turns; context grows linearly with turns).
+    ("openai", "gpt-5.4-mini",      "gpt-5.4-mini", False, None,             15),
 ]
 
 # ── QuixBugs stratified subset (20 bugs) ──────────────────────────────────────────
@@ -269,11 +279,12 @@ def _batch_yaml(
     model: str,
     bug_ids: list[str],
     extra_body: dict | None = None,
+    max_turns: int = MAX_TURNS,
 ) -> str:
     llm_cfg: dict = {
         "provider": provider,
         "model": model,
-        "max_turns": MAX_TURNS,
+        "max_turns": max_turns,
     }
     if extra_body is not None:
         llm_cfg["extra_body"] = extra_body
@@ -310,20 +321,21 @@ def generate(
     for project, ids in sorted(selection.items()):
         print(f"  {project:20s} (cap={CAPS[project]}): {ids}")
 
-    ollama_models = [(p, m, l, s, _) for p, m, l, s, _ in MODELS if s]
-    api_models    = [(p, m, l, s, _) for p, m, l, s, _ in MODELS if not s]
+    ollama_models = [(p, m, l, s, eb, t) for p, m, l, s, eb, t in MODELS if s]
+    api_models    = [(p, m, l, s, eb, t) for p, m, l, s, eb, t in MODELS if not s]
     combos = len(ARCHITECTURES) * len(MODELS)
     print(f"\n{'='*60}")
     print(f"Generating {combos} batch files ({len(ARCHITECTURES)} arch × {len(MODELS)} models)")
-    print(f"  Ollama (sequential): {[m for _, m, _, _, _ in ollama_models]}")
-    print(f"  API    (parallel OK): {[m for _, m, _, _, _ in api_models]}")
-    print(f"  Uniform params: max_turns={MAX_TURNS}, max_iterations={MAX_ITERATIONS}, "
+    print(f"  Ollama (sequential): {[m for _, m, _, _, _, _ in ollama_models]}")
+    print(f"  API    (parallel OK): {[m for _, m, _, _, _, _ in api_models]}")
+    model_turns = {l: t for _, _, l, _, _, t in MODELS}
+    print(f"  max_turns per model: {model_turns}  |  max_iterations={MAX_ITERATIONS}, "
           f"timeout={TIMEOUT_SECONDS}s, iter_timeout={ITERATION_TIMEOUT_SECONDS}s")
     print(f"Output dir: {out_dir}")
     print(f"{'='*60}\n")
 
     for arch in ARCHITECTURES:
-        for provider, model, model_label, _sequential, extra_body in MODELS:
+        for provider, model, model_label, _sequential, extra_body, max_turns in MODELS:
             arch_label = arch.replace("_", "-")
             filename = f"bugsinpy-{arch_label}-{model_label}.yaml"
             name = f"experiment-bugsinpy-{arch_label}-{model_label}"
@@ -341,6 +353,7 @@ def generate(
                 model=model,
                 bug_ids=all_bug_ids,
                 extra_body=extra_body,
+                max_turns=max_turns,
             )
 
             path = out_dir / filename
@@ -358,7 +371,7 @@ def generate(
         print(f"  {QUIXBUGS_SELECTION}")
         print()
         for arch in ARCHITECTURES:
-            for provider, model, model_label, _sequential, extra_body in MODELS:
+            for provider, model, model_label, _sequential, extra_body, max_turns in MODELS:
                 arch_label = arch.replace("_", "-")
                 filename = f"quixbugs-{arch_label}-{model_label}.yaml"
                 name = f"experiment-quixbugs-{arch_label}-{model_label}"
@@ -374,6 +387,7 @@ def generate(
                     model=model,
                     bug_ids=QUIXBUGS_SELECTION,
                     extra_body=extra_body,
+                    max_turns=max_turns,
                 )
                 path = out_dir / filename
                 if dry_run:

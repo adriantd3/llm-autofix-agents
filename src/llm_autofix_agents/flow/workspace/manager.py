@@ -86,6 +86,19 @@ class WorkspaceManager:
             logs.append(f"workspace_restore_error={exc}")
             raise WorkspaceError(f"failed to restore workspace after retryable validation: {exc}") from exc
 
+    def restore_test_files(self, *, repo_root: Path, test_files: list[str], logs: list[str]) -> None:
+        """Restore only the specified test files, leaving source changes intact.
+
+        Used when validation rejects an iteration solely because test files were modified:
+        we want to keep the source fix for the next iteration while reverting the test changes.
+        """
+        try:
+            _git.restore_files(repo_root, test_files)
+            logs.append(f"workspace_test_files_restored_after_test_file_modified: {', '.join(test_files)}")
+        except Exception as exc:  # noqa: BLE001
+            logs.append(f"workspace_restore_error={exc}")
+            raise WorkspaceError(f"failed to restore test files after test_file_modified validation: {exc}") from exc
+
     def restore_temp_branch_for_debug(
         self,
         *,

@@ -70,7 +70,7 @@ class BatchRunner:
         if settings.llm.agent_models:
             all_models.extend(settings.llm.agent_models.values())
         all_models = list(dict.fromkeys(all_models))
-        self._evict_stale_ollama_models(all_models)
+        self._evict_stale_ollama_models(all_models, provider=settings.llm.provider)
 
         adapter = get_adapter(dataset.type)
         context = DatasetPreparationContext(
@@ -242,7 +242,7 @@ class BatchRunner:
             raise RuntimeError(f"Docker build failed: {result.stderr[:500]}")
         logger.info("Docker image for service '%s' built successfully", service)
 
-    def _evict_stale_ollama_models(self, keep_models: list[str]) -> None:
+    def _evict_stale_ollama_models(self, keep_models: list[str], *, provider: str = "ollama") -> None:
         """Stop any Ollama models that are NOT in keep_models to free GPU VRAM.
 
         Prevents CUDA OOM when switching between models of different sizes
@@ -250,12 +250,11 @@ class BatchRunner:
         Uses the native Ollama API on localhost:11434 (not the Docker-forwarded
         OpenAI-compatible proxy on port 11500).
         """
-        dotenv_values = _load_dotenv_values(Path(".env"))
-        combined_env = {**dotenv_values, **os.environ}
-        provider_raw = combined_env.get("LLM_PROVIDER", "ollama").strip().lower()
-        if provider_raw != "ollama":
+        if provider != "ollama":
             return
 
+        dotenv_values = _load_dotenv_values(Path(".env"))
+        combined_env = {**dotenv_values, **os.environ}
         ollama_host = combined_env.get("OLLAMA_HOST", "http://localhost:11434")
         if not ollama_host.startswith(("http://", "https://")):
             ollama_host = f"http://{ollama_host}"
@@ -376,6 +375,7 @@ class BatchRunner:
             "RUN_TEST_COMMAND": case.test_command,
             "RUN_DATASET_TYPE": case.dataset_type,
             "RUN_DATASET_NAME": case.dataset_name,
+            "RUN_PROBLEM_ID": case.case_id,
             "RUN_MAX_TURNS": str(settings.llm.max_turns),
             "LLM_PROVIDER": settings.llm.provider,
             "LLM_MODEL": settings.llm.model,

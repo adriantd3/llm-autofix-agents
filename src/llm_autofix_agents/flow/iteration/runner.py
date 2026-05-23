@@ -59,6 +59,9 @@ class IterationRunner:
     agent_factory: AgentFactory
     stop_policy: StopPolicy = field(default_factory=StopPolicy)
     pre_test_validator: PreTestValidator = _noop_validator
+    # When set, overrides cfg.run_agent_id with run_agent_ids[agent_name].
+    # Used by multi-agent architectures so each runner records its own role.
+    agent_name: str | None = None
 
     # ──────────────────────────────────────────────────────────────────────
     # Public API
@@ -195,8 +198,9 @@ class IterationRunner:
         prep: _IterationPrep,
     ) -> AgentExecutionResult:
         agent = self.agent_factory()
+        run_agent_id = cfg.run_agent_ids.get(self.agent_name, cfg.run_agent_id) if self.agent_name else cfg.run_agent_id
         agent_context = AgentExecutionContext(
-            run_agent_id=cfg.run_agent_id,
+            run_agent_id=run_agent_id,
             run_agent_ids=cfg.run_agent_ids,
             agent_context=cfg.agent_context,
             emitter=cfg.observability.emitter,

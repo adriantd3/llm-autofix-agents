@@ -14,9 +14,13 @@ authors = [{ name = "adriantd3", email = "adriantorremocha@hotmail.com" }]
 
 [dependency-groups]
 dev = [
+    "jinja2>=3.1.6",
+    "matplotlib>=3.10.9",
     "mypy>=1.20.0",
+    "pandas>=3.0.3",
     "pytest>=9.0.3",
     "ruff>=0.15.9",
+    "seaborn>=0.13.2",
     "types-pyyaml>=6.0.12.20260408",
 ]
 

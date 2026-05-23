@@ -170,22 +170,63 @@ Apply the decision tree below and produce the final verdict with justification.
 }
 ```
 
-## CLI Usage
+## Agent Step 7 — Persist Verdicts to DB
+
+After producing verdicts (Steps 1–6), run [./scripts/validate_batch.py](./scripts/validate_batch.py)
+to write all results into the batch's `run_validations` table in a single command.
+**Do not skip this step** — verdicts that exist only in the chat are not persisted.
+
+### When to run
+
+- After completing manual validation of one or more runs in a batch
+- After a full batch run completes and you want to validate all resolved runs at once
+- Any time the user asks to "persist", "guardar" or "almacenar" validation results
+
+### Command
 
 ```bash
-# Validate all runs in a batch directory (uses batch.db)
-uv run autofix validate --batch-dir results/batch-xxx/ \
-  --canonical-root ~/Projects/BugsInPy \
-  --model gpt-4.1-mini --provider openai
+# Standard: validate all unvalidated resolved runs, get JSON summary
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db> --json
 
-# Validate a single run
-uv run autofix validate --db results/batch-xxx/batch.db \
-  --run-id run-abc123 --canonical-root ~/Projects/QuixBugs
+# Re-validate a single run (e.g. after correcting reasoning)
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db> --run-id <run_id> --force --json
 
-# Force re-validation + create analysis views
-uv run autofix validate --batch-dir results/batch-xxx/ \
-  --canonical-root ~/Projects/BugsInPy --force --create-views
+# Force re-validation of everything in a batch
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db> --force --json
+
+# Different judge model
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db> --model gpt-4o --json
 ```
+
+Always pass `--json` when invoking from agent context — it emits a single JSON line
+on stdout that you can read to confirm what was written:
+
+```json
+{"status": "ok", "validated": 12, "errors": 0, "results": [
+  {"run_id": "run-...", "bug_id": "gcd", "arch": "mono_agent", "verdict": "CORRECT", "confidence": 0.92},
+  ...
+]}
+```
+
+Exit code `0` = success (even with partial errors). Check `"status"` field: `"ok"` or `"partial"`.
+
+### What the script resolves automatically
+
+| Field | Source |
+|-------|--------|
+| Generated patch | `it*.patch` files in the run directory (derived from `live_log_path`) |
+| Bug identifier | Last path segment of `target_repo` |
+| Dataset type | Detected from `target_repo` path (`quixbug` → QuixBugs, else BugsInPy) |
+| Canonical program (QuixBugs) | `{target_repo}/correct_python_programs/{bug_id}.py` |
+| Canonical program (BugsInPy) | Not yet supported — `patch_semantically_matches` will be `null` |
+| Workspace root | Defaults to repo root (4 levels above the script); override with `--workspace-root` |
+
+The script is **idempotent**: skips already-validated runs unless `--force` is passed.
+Each run produces exactly one row in `run_validations` (`INSERT OR REPLACE`).
 
 ## Confidence Guidelines
 

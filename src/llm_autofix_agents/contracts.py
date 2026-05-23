@@ -24,6 +24,7 @@ class StopReason(StrEnum):
     TOOL_FAILURE = "tool_failure"
     INFRA_FAILURE = "infra_failure"
     VALIDATION_FAILURE = "validation_failure"
+    BASELINE_ALREADY_PASSES = "baseline_already_passes"
 
 
 class ErrorCategory(StrEnum):

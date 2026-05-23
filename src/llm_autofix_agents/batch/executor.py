@@ -45,6 +45,7 @@ def main() -> int:
     test_command = _resolve_optional_text(os.environ.get("RUN_TEST_COMMAND"))
     dataset_type = _resolve_optional_text(os.environ.get("RUN_DATASET_TYPE"))
     dataset_name = _resolve_optional_text(os.environ.get("RUN_DATASET_NAME"))
+    problem_id = _resolve_optional_text(os.environ.get("RUN_PROBLEM_ID"))
     bugsinpy_compile_required = _resolve_optional_bool(os.environ.get("RUN_BUGSINPY_COMPILE_REQUIRED"))
     metadata.update(
         {
@@ -58,6 +59,9 @@ def main() -> int:
         metadata["dataset_type"] = dataset_type
     if dataset_name is not None:
         metadata["dataset_name"] = dataset_name
+        metadata["benchmark_name"] = dataset_name
+    if problem_id is not None:
+        metadata["problem_id"] = problem_id
     if bugsinpy_compile_required is not None:
         metadata["bugsinpy_compile_required"] = bugsinpy_compile_required
 

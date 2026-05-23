@@ -96,6 +96,8 @@ def build_planner_executor_architecture(
     ) -> IterationStrategy:
         from llm_autofix_agents.flow.iteration.runner import IterationRunner as _IR
 
+        from dataclasses import replace as _replace
+
         planner_runner = _IR(
             agent_runner=iteration_runner.agent_runner,
             workspace=workspace,
@@ -103,10 +105,12 @@ def build_planner_executor_architecture(
             agent_factory=build_planner_agent,
             stop_policy=PlannerStopPolicy(),
             pre_test_validator=iteration_runner.pre_test_validator,
+            agent_name="planner",
         )
+        executor_runner = _replace(iteration_runner, agent_name="executor")
         return PhasedIterationStrategy(
             planner_runner=planner_runner,
-            executor_runner=iteration_runner,
+            executor_runner=executor_runner,
             workspace=workspace,
             output_builder=output_builder,
             finalizer=finalizer,
