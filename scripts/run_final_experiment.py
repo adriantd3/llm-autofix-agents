@@ -49,6 +49,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
@@ -83,7 +84,7 @@ OLLAMA_HOST = OLLAMA_DEFAULT_HOST
 
 # Verify the exact model name with:  copilot --help | grep -A5 'model'
 # Available models depend on your Copilot subscription.
-COPILOT_MODEL = "claude-sonnet-4-6"
+COPILOT_MODEL = "claude-sonnet-4.6"
 COPILOT_EFFORT = "medium"
 COPILOT_TIMEOUT_SECS = 900  # 15 min max per validation batch
 
@@ -260,13 +261,20 @@ def split_by_project(config_path: Path, tmp_dir: Path) -> list[Path]:
     if dataset_ref and not Path(dataset_ref).is_absolute():
         dataset_ref = str((config_path.parent / dataset_ref).resolve())
 
+    single_project = len(by_project) == 1
     paths: list[Path] = []
     for project in sorted(by_project.keys()):
-        per_project_name = f"{data['name']}-{project}"
+        # Don't append project suffix when the batch is already per-project (avoids
+        # double suffixes like "…-thefuck-thefuck" in result directory names).
+        per_project_name = data['name'] if single_project else f"{data['name']}-{project}"
+        per_project_desc = (
+            data.get('description', '') if single_project
+            else f"{data.get('description', '')} [{project}]"
+        )
         per_project_data = {
             **data,
             "name": per_project_name,
-            "description": f"{data.get('description', '')} [{project}]",
+            "description": per_project_desc,
             "dataset": dataset_ref,
             "bugs": by_project[project],
         }
@@ -423,7 +431,13 @@ def main() -> int:
                         help="Solo validar — escanea todos los batch-experiment-* existentes.")
     parser.add_argument("--validation-wait", type=int, default=300, metavar="SECS",
                         help="Segundos entre invocaciones copilot (default: 300).")
+    parser.add_argument("--smoke-test", action="store_true",
+                        help="Prueba E2E: 3 batches qwen3.5-9b, notifica por batch, validacion sin espera.")
     args = parser.parse_args()
+
+    # Smoke test overrides
+    if args.smoke_test and args.validation_wait == 300:
+        args.validation_wait = 0
 
     validate_env(args.gpt_only, dry_run=args.dry_run)
 
@@ -432,6 +446,8 @@ def main() -> int:
         else os.environ.get("NTFY_TOPIC", "")
     )
     mode_label = "GPT" if args.gpt_only else "Ollama"
+    if args.smoke_test:
+        mode_label = f"SMOKE {mode_label}"
     lock_path = LOCK_FILE_GPT if args.gpt_only else LOCK_FILE_OLLAMA
 
     if not args.dry_run:
@@ -484,7 +500,12 @@ def _run(args: argparse.Namespace, *, ntfy_topic: str, mode_label: str) -> int:
             mode_label=mode_label,
         )
 
-    produced_batch_dirs = _run_experiments(args, ntfy_topic=ntfy_topic, mode_label=mode_label)
+    produced_batch_dirs = _run_experiments(
+        args,
+        ntfy_topic=ntfy_topic,
+        mode_label=mode_label,
+        notify_interval=1 if args.smoke_test else 5,
+    )
 
     if not args.skip_validation and produced_batch_dirs:
         rc = _run_validation_phase(
@@ -505,7 +526,7 @@ def _run(args: argparse.Namespace, *, ntfy_topic: str, mode_label: str) -> int:
 
 
 def _run_experiments(
-    args: argparse.Namespace, *, ntfy_topic: str, mode_label: str
+    args: argparse.Namespace, *, ntfy_topic: str, mode_label: str, notify_interval: int = 5
 ) -> list[Path]:
     """Run all sub-batches and return the list of produced batch result dirs."""
     configs = discover_configs(BATCHES_DIR, gpt_only=args.gpt_only)
@@ -547,6 +568,12 @@ def _run_experiments(
                 if existing:
                     skip_reason = f"done -> {existing.name}"
             sub_batches.append(SubBatch(path=sub, name=name, model=model, skip_reason=skip_reason))
+
+        # Smoke test: keep only 3 of the fastest (qwen3.5-9b) batches
+        if args.smoke_test:
+            eligible = [b for b in sub_batches if b.skip_reason is None]
+            qwen = [b for b in eligible if "qwen" in b.model]
+            sub_batches = (qwen if qwen else eligible)[:3]
 
         to_run = sum(1 for b in sub_batches if b.skip_reason is None)
         to_skip = len(sub_batches) - to_run
@@ -654,8 +681,8 @@ def _run_experiments(
                     topic=ntfy_topic,
                 )
 
-            # ntfy cada 5 batches completados (éxito o fallo)
-            if completed_since_notify >= 5:
+            # ntfy cada N batches completados (éxito o fallo)
+            if completed_since_notify >= notify_interval:
                 notify(
                     f"TFM {mode_label}: {completed}/{total_to_run} batches completados",
                     f"{len(passed)} OK, {len(failed)} fallidos — {utcnow()}",
@@ -693,42 +720,45 @@ def _run_validation_phase(
     total = len(batch_dirs)
     print()
     print("=" * 64)
-    print(f"  Fase de validación — {total} batch dirs")
+    print(f"  Fase de validación — {total} batch dirs (hasta 5 en paralelo)")
     print("=" * 64)
 
     if args.dry_run:
         for bd in batch_dirs:
             print(f"  [dry-run] validar: {bd.name}")
-        print(f"\n[dry-run] {total} invocaciones copilot previstas, "
-              f"{args.validation_wait}s entre cada una (~{total * args.validation_wait // 60} min total)")
+        print(f"\n[dry-run] {total} invocaciones copilot previstas (máx 5 en paralelo)")
         return 0
 
     notify(
         f"TFM {mode_label}: Validacion iniciada ({total} batches)",
-        f"Tiempo estimado: ~{total * args.validation_wait // 60} min — {utcnow()}",
+        f"Hasta 5 en paralelo — {utcnow()}",
         priority=3,
         tags=("hourglass_flowing_sand",),
         topic=ntfy_topic,
     )
 
     validation_failed: list[str] = []
+    completed = 0
 
-    for i, batch_dir in enumerate(batch_dirs):
-        ok = run_validation(batch_dir, dry_run=args.dry_run, ntfy_topic=ntfy_topic)
-        if ok:
-            notify(
-                f"TFM {mode_label}: Validado batch {i + 1}/{total}",
-                batch_dir.name,
-                priority=3,
-                tags=("heavy_check_mark",),
-                topic=ntfy_topic,
-            )
-        else:
-            validation_failed.append(batch_dir.name)
-
-        if i < total - 1:
-            print(f"  [validación] Esperando {args.validation_wait}s antes del siguiente batch...")
-            time.sleep(args.validation_wait)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures: dict = {
+            executor.submit(run_validation, bd, dry_run=args.dry_run, ntfy_topic=ntfy_topic): bd
+            for bd in batch_dirs
+        }
+        for future in as_completed(futures):
+            batch_dir = futures[future]
+            ok = future.result()
+            completed += 1
+            if ok:
+                notify(
+                    f"TFM {mode_label}: Validado batch {completed}/{total}",
+                    batch_dir.name,
+                    priority=3,
+                    tags=("heavy_check_mark",),
+                    topic=ntfy_topic,
+                )
+            else:
+                validation_failed.append(batch_dir.name)
 
     ok_count = total - len(validation_failed)
     final_priority = 4 if not validation_failed else 5

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "pdf": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pdf/SKILL.md",
+      "computedHash": "cfbc539377088ca7e44a813b30c306327385bbd973cd7a721e1743f60837dd62"
+    },
+    "tikz-flowchart": {
+      "source": "yzlnew/infra-skills",
+      "sourceType": "github",
+      "skillPath": "tikz-flowchart/SKILL.md",
+      "computedHash": "ef1a1ed285214d1468f3753b7cba043839c9f2b23f9e5bddea1dbd83949204c0"
+    }
+  }
+}

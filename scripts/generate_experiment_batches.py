@@ -323,9 +323,9 @@ def generate(
 
     ollama_models = [(p, m, l, s, eb, t) for p, m, l, s, eb, t in MODELS if s]
     api_models    = [(p, m, l, s, eb, t) for p, m, l, s, eb, t in MODELS if not s]
-    combos = len(ARCHITECTURES) * len(MODELS)
+    combos = len(ARCHITECTURES) * len(MODELS) * len(selection)
     print(f"\n{'='*60}")
-    print(f"Generating {combos} batch files ({len(ARCHITECTURES)} arch × {len(MODELS)} models)")
+    print(f"Generating {combos} BugsInPy batch files ({len(ARCHITECTURES)} arch × {len(MODELS)} models × {len(selection)} repos)")
     print(f"  Ollama (sequential): {[m for _, m, _, _, _, _ in ollama_models]}")
     print(f"  API    (parallel OK): {[m for _, m, _, _, _, _ in api_models]}")
     model_turns = {l: t for _, _, l, _, _, t in MODELS}
@@ -337,31 +337,33 @@ def generate(
     for arch in ARCHITECTURES:
         for provider, model, model_label, _sequential, extra_body, max_turns in MODELS:
             arch_label = arch.replace("_", "-")
-            filename = f"bugsinpy-{arch_label}-{model_label}.yaml"
-            name = f"experiment-bugsinpy-{arch_label}-{model_label}"
-            description = (
-                f"TFM experiment — BugsInPy subset ({total} bugs), "
-                f"{arch}, {model}"
-            )
+            for project, ids in sorted(selection.items()):
+                project_bug_ids = [f"{project}-{bug_id}" for bug_id in ids]
+                filename = f"bugsinpy-{arch_label}-{model_label}-{project}.yaml"
+                name = f"experiment-bugsinpy-{arch_label}-{model_label}-{project}"
+                description = (
+                    f"TFM experiment — BugsInPy {project} ({len(ids)} bugs), "
+                    f"{arch}, {model}"
+                )
 
-            content = _batch_yaml(
-                name=name,
-                description=description,
-                dataset_ref=DATASET_REF,
-                architecture=arch,
-                provider=provider,
-                model=model,
-                bug_ids=all_bug_ids,
-                extra_body=extra_body,
-                max_turns=max_turns,
-            )
+                content = _batch_yaml(
+                    name=name,
+                    description=description,
+                    dataset_ref=DATASET_REF,
+                    architecture=arch,
+                    provider=provider,
+                    model=model,
+                    bug_ids=project_bug_ids,
+                    extra_body=extra_body,
+                    max_turns=max_turns,
+                )
 
-            path = out_dir / filename
-            if dry_run:
-                print(f"[dry-run] Would write: {path.relative_to(REPO_ROOT)}")
-            else:
-                path.write_text(content)
-                print(f"Written: {path.relative_to(REPO_ROOT)}")
+                path = out_dir / filename
+                if dry_run:
+                    print(f"[dry-run] Would write: {path.relative_to(REPO_ROOT)}")
+                else:
+                    path.write_text(content)
+                    print(f"Written: {path.relative_to(REPO_ROOT)}")
 
     # QuixBugs batches (stratified subset of 20 bugs)
     quixbugs_dataset = REPO_ROOT / "datasets" / "quixbugs.yaml"

@@ -82,9 +82,9 @@ USER_TEMPLATE = """\
 ```
 
 ---
-## Canonical correct program (ground truth):
+## Canonical ground truth (correct program or canonical patch):
 
-```python
+```
 {canonical}
 ```
 
@@ -142,12 +142,19 @@ def build_quixbugs_context(bug_id: str, target_repo_abs: Path) -> tuple[str, str
     return canonical, buggy
 
 
-def build_bugsinpy_context(bug_id: str, target_repo_abs: Path) -> tuple[str, str]:
+def build_bugsinpy_context(bug_id: str, target_repo_abs: Path, bugsinpy_root: Path | None = None) -> tuple[str, str]:
     """
-    For BugsInPy, there is no canonical 'correct_python_programs' directory.
-    Falls back to the summary.json diff or returns empty strings.
-    A future improvement could call fetch_bugsinpy_patch.sh here.
+    For BugsInPy, read the canonical bug_patch.txt from the local BugsInPy repo.
+    problem_id format: {project}-{number}, e.g. ansible-1, youtube-dl-3.
     """
+    if bugsinpy_root and bugsinpy_root.is_dir():
+        # Parse project and number from bug_id (split on last hyphen)
+        number = bug_id.rsplit("-", 1)[-1]
+        project = bug_id.rsplit("-", 1)[0]
+        patch_path = bugsinpy_root / "projects" / project / "bugs" / number / "bug_patch.txt"
+        canonical_patch = read_file_safe(patch_path)
+        if canonical_patch:
+            return canonical_patch, ""
     return "", ""
 
 
@@ -172,7 +179,8 @@ def call_llm(client: openai.OpenAI, model: str, user_msg: str) -> dict:
 
 # ── Core validation logic ─────────────────────────────────────────────────────
 
-def validate_run(run: dict, workspace_root: Path, client: openai.OpenAI, model: str) -> dict:
+def validate_run(run: dict, workspace_root: Path, client: openai.OpenAI, model: str,
+                 bugsinpy_root: Path | None = None) -> dict:
     """
     Build context for a single run and call the LLM judge.
 
@@ -186,8 +194,12 @@ def validate_run(run: dict, workspace_root: Path, client: openai.OpenAI, model: 
     # Derive run directory from live_log_path (strip leading slash, then parent)
     run_dir = (workspace_root / live_log_path.lstrip("/")).parent
 
-    # Derive bug_id from the last segment of target_repo
-    bug_id = Path(target_repo.rstrip("/")).name if target_repo else run.get("problem_id") or "unknown"
+    # Derive bug_id: use problem_id when available (correct for BugsInPy like
+    # "PySnooper-3"), fall back to the last segment of target_repo (correct for
+    # QuixBugs where the repo name IS the bug name, e.g. "gcd").
+    bug_id = run.get("problem_id") or (
+        Path(target_repo.rstrip("/")).name if target_repo else "unknown"
+    )
 
     # Collect generated patch
     patch = collect_patches(run_dir)
@@ -207,7 +219,7 @@ def validate_run(run: dict, workspace_root: Path, client: openai.OpenAI, model: 
     if dataset == "QuixBugs":
         canonical, buggy = build_quixbugs_context(bug_id, target_repo_abs)
     elif dataset == "BugsInPy":
-        canonical, buggy = build_bugsinpy_context(bug_id, target_repo_abs)
+        canonical, buggy = build_bugsinpy_context(bug_id, target_repo_abs, bugsinpy_root)
     else:
         canonical, buggy = "", ""
 
@@ -279,6 +291,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Repo root used to resolve relative paths stored in the DB. "
              "Defaults to the llm-autofix-agents repo root.",
     )
+    parser.add_argument(
+        "--bugsinpy-root",
+        default=str(Path.home() / "Projects" / "BugsInPy"),
+        metavar="PATH",
+        help="Path to local BugsInPy repo for canonical patch resolution. "
+             "Defaults to ~/Projects/BugsInPy.",
+    )
     parser.add_argument("--model", default="gpt-4.1-mini", metavar="MODEL",
                         help="OpenAI model for the LLM judge (default: gpt-4.1-mini).")
     parser.add_argument("--force", action="store_true",
@@ -318,6 +337,7 @@ def main() -> None:
 
     db_path = Path(args.db)
     workspace_root = Path(args.workspace_root)
+    bugsinpy_root = Path(args.bugsinpy_root) if args.bugsinpy_root else None
 
     if not db_path.exists():
         _fail(f"DB not found: {db_path}", args)
@@ -347,17 +367,17 @@ def main() -> None:
     results_log: list[dict] = []
 
     for i, run in enumerate(runs, 1):
-        bug_id = (
+        bug_id = run.get("problem_id") or (
             Path(run["target_repo"].rstrip("/")).name
             if run.get("target_repo")
-            else run.get("problem_id") or "unknown"
+            else "unknown"
         )
         arch = run.get("arch", "?")
         if not args.json:
             print(f"[{i}/{total}] {bug_id} ({arch}) ... ", end="", flush=True)
 
         try:
-            result = validate_run(run, workspace_root, client, args.model)
+            result = validate_run(run, workspace_root, client, args.model, bugsinpy_root=bugsinpy_root)
             write_validation(conn, run["run_id"], args.model, result)
             verdict = result.get("verdict", "?")
             conf = result.get("confidence") or 0.0

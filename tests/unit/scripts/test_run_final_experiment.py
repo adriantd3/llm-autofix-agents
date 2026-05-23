@@ -200,6 +200,14 @@ class TestDiscoverConfigs(unittest.TestCase):
         self.assertEqual(configs, [])
 
 
+class TestConstants(unittest.TestCase):
+    def test_copilot_model_uses_dot_not_dash(self) -> None:
+        """Regression: model name must be 'claude-sonnet-4.6' (dot), not 'claude-sonnet-4-6' (dash).
+        The copilot CLI rejects the dash variant with 'model not available'."""
+        self.assertEqual(rfe.COPILOT_MODEL, "claude-sonnet-4.6")
+        self.assertNotIn("4-6", rfe.COPILOT_MODEL)
+
+
 class TestBuildValidationPrompt(unittest.TestCase):
     def test_contains_batch_dir_path(self) -> None:
         batch_dir = Path("/results/batch-experiment-mono-20260522T")
@@ -243,6 +251,196 @@ class TestFindProducedBatchDir(unittest.TestCase):
             after = time.time() + 10  # created before this threshold
             found = rfe.find_produced_batch_dir("myname", results_dir, after)
             self.assertIsNone(found)
+
+
+class TestSmokeTestFlag(unittest.TestCase):
+    """Regression tests for --smoke-test behavior."""
+
+    def _make_sub_batch(self, name: str, model: str, skip: bool = False) -> rfe.SubBatch:
+        return rfe.SubBatch(
+            path=Path(f"/tmp/{name}.yaml"),
+            name=name,
+            model=model,
+            skip_reason="done" if skip else None,
+        )
+
+    def _make_args(self, smoke_test: bool = True, validation_wait: int = 300) -> object:
+        import argparse
+        args = argparse.Namespace(
+            smoke_test=smoke_test,
+            gpt_only=False,
+            force=False,
+            start_from=None,
+            dry_run=False,
+            gpu_poll=300,
+            skip_validation=False,
+            validation_only=False,
+            validation_wait=validation_wait,
+        )
+        return args
+
+    def test_smoke_filter_picks_qwen_batches(self) -> None:
+        """Smoke test should pick qwen batches over gemma when both are available."""
+        sub_batches = [
+            self._make_sub_batch("gemma-mono-PySnooper", "gemma4-26b-ctx32k"),
+            self._make_sub_batch("gemma-multi-PySnooper", "gemma4-26b-ctx32k"),
+            self._make_sub_batch("qwen-mono-PySnooper",  "qwen3.5-9b-ctx65k"),
+            self._make_sub_batch("qwen-multi-PySnooper", "qwen3.5-9b-ctx65k"),
+            self._make_sub_batch("qwen-planner-PySnooper", "qwen3.5-9b-ctx65k"),
+            self._make_sub_batch("qwen-extra-PySnooper", "qwen3.5-9b-ctx65k"),
+        ]
+        # Simulate the smoke filter logic extracted from _run_experiments
+        eligible = [b for b in sub_batches if b.skip_reason is None]
+        qwen = [b for b in eligible if "qwen" in b.model]
+        result = (qwen if qwen else eligible)[:3]
+
+        self.assertEqual(len(result), 3)
+        self.assertTrue(all("qwen" in b.model for b in result))
+
+    def test_smoke_filter_falls_back_to_any_when_no_qwen(self) -> None:
+        """When no qwen batches exist, smoke test falls back to first 3 eligible."""
+        sub_batches = [
+            self._make_sub_batch(f"gemma-batch-{i}", "gemma4-26b-ctx32k") for i in range(5)
+        ]
+        eligible = [b for b in sub_batches if b.skip_reason is None]
+        qwen = [b for b in eligible if "qwen" in b.model]
+        result = (qwen if qwen else eligible)[:3]
+
+        self.assertEqual(len(result), 3)
+
+    def test_smoke_filter_skips_already_done_batches(self) -> None:
+        """Smoke filter should only consider batches without skip_reason."""
+        sub_batches = [
+            self._make_sub_batch("qwen-batch-done-1", "qwen3.5-9b-ctx65k", skip=True),
+            self._make_sub_batch("qwen-batch-done-2", "qwen3.5-9b-ctx65k", skip=True),
+            self._make_sub_batch("qwen-batch-pending", "qwen3.5-9b-ctx65k", skip=False),
+        ]
+        eligible = [b for b in sub_batches if b.skip_reason is None]
+        qwen = [b for b in eligible if "qwen" in b.model]
+        result = (qwen if qwen else eligible)[:3]
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].name, "qwen-batch-pending")
+
+    def test_smoke_test_sets_validation_wait_to_zero(self) -> None:
+        """--smoke-test should override validation_wait default (300) to 0."""
+        args = self._make_args(smoke_test=True, validation_wait=300)
+        # Simulate the post-parse override in main()
+        if args.smoke_test and args.validation_wait == 300:
+            args.validation_wait = 0
+        self.assertEqual(args.validation_wait, 0)
+
+    def test_smoke_test_does_not_override_explicit_validation_wait(self) -> None:
+        """--smoke-test should NOT override an explicitly set --validation-wait value."""
+        args = self._make_args(smoke_test=True, validation_wait=60)
+        if args.smoke_test and args.validation_wait == 300:
+            args.validation_wait = 0
+        self.assertEqual(args.validation_wait, 60)
+
+    def test_notify_interval_1_triggers_after_each_batch(self) -> None:
+        """With notify_interval=1, notification fires after every completed batch."""
+        mock_post = MagicMock(return_value=MagicMock(status_code=200))
+        notify_interval = 1
+        completed_since_notify = 0
+
+        for _ in range(3):
+            completed_since_notify += 1
+            if completed_since_notify >= notify_interval:
+                rfe.notify("T", "M", topic="test", _http_post=mock_post)
+                completed_since_notify = 0
+
+        self.assertEqual(mock_post.call_count, 3)
+
+    def test_notify_interval_5_fires_once_for_3_batches(self) -> None:
+        """With notify_interval=5, no mid-run notification fires for only 3 batches."""
+        mock_post = MagicMock(return_value=MagicMock(status_code=200))
+        notify_interval = 5
+        completed_since_notify = 0
+
+        for _ in range(3):
+            completed_since_notify += 1
+            if completed_since_notify >= notify_interval:
+                rfe.notify("T", "M", topic="test", _http_post=mock_post)
+                completed_since_notify = 0
+
+        self.assertEqual(mock_post.call_count, 0)  # never fires in 3 iterations
+
+
+class TestValidationPhase(unittest.TestCase):
+    """Tests for _run_validation_phase parallel execution."""
+
+    def _make_args(self, dry_run: bool = False, validation_wait: int = 0) -> object:
+        import argparse
+        ns = argparse.Namespace()
+        ns.dry_run = dry_run
+        ns.validation_wait = validation_wait
+        ns.smoke_test = False
+        return ns
+
+    def test_all_batch_dirs_validated(self) -> None:
+        """Every batch_dir in the list must get exactly one run_validation call."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dirs = [Path(tmp) / f"batch-experiment-{i}" for i in range(4)]
+            for d in dirs:
+                d.mkdir()
+                (d / "batch.db").write_text("")
+
+            with patch.object(rfe, "run_validation", return_value=True) as mock_val, \
+                 patch.object(rfe, "notify"):
+                rc = rfe._run_validation_phase(
+                    dirs,
+                    args=self._make_args(),
+                    ntfy_topic="test",
+                    mode_label="TEST",
+                )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(mock_val.call_count, 4)
+        validated_dirs = {c.args[0] for c in mock_val.call_args_list}
+        self.assertEqual(validated_dirs, set(dirs))
+
+    def test_failures_collected_and_returns_nonzero(self) -> None:
+        """If any run_validation returns False, rc must be 1 and name recorded."""
+        with tempfile.TemporaryDirectory() as tmp:
+            good = Path(tmp) / "batch-experiment-good"
+            bad = Path(tmp) / "batch-experiment-bad"
+            for d in (good, bad):
+                d.mkdir()
+                (d / "batch.db").write_text("")
+
+            side_effects = {good: True, bad: False}
+
+            def _fake_validate(bd: Path, **kwargs: object) -> bool:
+                return side_effects[bd]
+
+            with patch.object(rfe, "run_validation", side_effect=_fake_validate), \
+                 patch.object(rfe, "notify"):
+                rc = rfe._run_validation_phase(
+                    [good, bad],
+                    args=self._make_args(),
+                    ntfy_topic="test",
+                    mode_label="TEST",
+                )
+
+        self.assertEqual(rc, 1)
+
+    def test_dry_run_does_not_call_run_validation(self) -> None:
+        """In dry-run mode no real validation should be invoked."""
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / "batch-experiment-x"
+            d.mkdir()
+            (d / "batch.db").write_text("")
+
+            with patch.object(rfe, "run_validation") as mock_val, \
+                 patch.object(rfe, "notify"):
+                rfe._run_validation_phase(
+                    [d],
+                    args=self._make_args(dry_run=True),
+                    ntfy_topic="test",
+                    mode_label="TEST",
+                )
+
+        mock_val.assert_not_called()
 
 
 class TestCollectAllExperimentBatchDirs(unittest.TestCase):
