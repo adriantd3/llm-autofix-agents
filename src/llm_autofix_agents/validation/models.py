@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class ValidatorOutput(BaseModel):
     """Structured verdict produced by the LLM validator."""
 
-    verdict: Literal["CORRECT", "PLAUSIBLE", "OVERFITTING", "VALIDATION_ERROR"]
+    verdict: Literal["CORRECT", "PLAUSIBLE", "OVERFITTING", "FAIL"]
     confidence: float = Field(ge=0.0, le=1.0)
     test_passed: bool
     patch_semantically_matches: bool | None = None

@@ -45,8 +45,16 @@ class CommandExecutor:
                 env=env,
             )
         except subprocess.TimeoutExpired as exc:
-            stdout, _ = self._truncate(exc.stdout or "")
-            stderr, _ = self._truncate(exc.stderr or "")
+            # On Linux, exc.stdout/exc.stderr are bytes even with text=True because
+            # the decoding happens after communicate() returns, not inside it.
+            raw_stdout = exc.stdout or ""
+            raw_stderr = exc.stderr or ""
+            if isinstance(raw_stdout, bytes):
+                raw_stdout = raw_stdout.decode("utf-8", errors="replace")
+            if isinstance(raw_stderr, bytes):
+                raw_stderr = raw_stderr.decode("utf-8", errors="replace")
+            stdout, _ = self._truncate(raw_stdout)
+            stderr, _ = self._truncate(raw_stderr)
             return CommandExecution(
                 exit_code=124,
                 stdout=stdout,

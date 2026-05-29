@@ -27,8 +27,8 @@ VERDICT DEFINITIONS:
                 code to satisfy the test assertions without correcting the root cause.
                 Examples: modifying test files, hardcoding expected values, special-casing
                 the test inputs, or inverting logic to match assertions.
-- VALIDATION_ERROR : the validation pipeline failed unexpectedly (should not be returned
-                by the LLM — reserved for pipeline error handling).
+- FAIL        : tests did not pass, no generated patch is available, or no semantic
+                validation can be made for the run.
 
 IMPORTANT:
 - A passing test is necessary but not sufficient for CORRECT or PLAUSIBLE.

@@ -34,7 +34,7 @@ Run finalizado
 [2] Patch comparison   → ¿aborda el mismo root cause que el patch canónico?  (LLM semántico, solo para `success`)
      │
      ▼
-[3] Validator verdict  → CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR  (LLM sintético, solo para `success`)
+[3] Validator verdict  → CORRECT | PLAUSIBLE | OVERFITTING | FAIL  (LLM sintético, solo para `success`)
 ```
 
 La comparación de patches es **semántica**, no line-by-line. El objetivo no es igualdad textual
@@ -47,7 +47,7 @@ sino equivalencia de intención: ¿el agente identificó y corrigió el mismo pr
 | `CORRECT`          | Tests pasan Y el fix aborda el mismo root cause que el patch canónico                 |
 | `PLAUSIBLE`        | Tests pasan PERO el fix diverge del canónico o no cubre la propagación completa       |
 | `OVERFITTING`      | Tests pasan PERO el agente ajustó el código a las aserciones sin corregir el bug real |
-| `VALIDATION_ERROR` | Error en el pipeline de validación (no lo produce el LLM)                            |
+| `FAIL`             | Tests no pasan, no hay patch válido, o no aplica validación semántica                 |
 
 > **Nota de diseño**: "Partially correct" se descarta como categoría. La distinción que aporta
 > valor para el TFM es CORRECT vs PLAUSIBLE — revela el problema clásico APR de *plausible but
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS run_validations (
 
   -- Veredictos del LLM
   patch_semantically_matches  INTEGER,   -- 0/1/NULL (¿mismo root cause que canónico?)
-  verdict                     TEXT NOT NULL,  -- CORRECT|PLAUSIBLE|OVERFITTING|VALIDATION_ERROR
+  verdict                     TEXT NOT NULL,  -- CORRECT|PLAUSIBLE|OVERFITTING|FAIL
   confidence                  REAL,      -- 0.0–1.0
   justification               TEXT,      -- razonamiento del validador
 
@@ -104,7 +104,7 @@ runs (1) ──< (N) iterations
 ## Métricas derivadas para el TFM
 
 ### Métricas discretas (tablas bug-por-bug)
-- `verdict`: `CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR`
+- `verdict`: `CORRECT | PLAUSIBLE | OVERFITTING | FAIL`
 - `test_passed`: boolean directo del sistema
 - `patch_semantically_matches`: juicio LLM sobre equivalencia con ground truth
 
@@ -164,7 +164,7 @@ capacidades sean estables independientemente de quién invoque la validación.
 ### Output estructurado (fijo)
 ```json
 {
-  "verdict": "CORRECT|PLAUSIBLE|OVERFITTING|VALIDATION_ERROR",
+  "verdict": "CORRECT|PLAUSIBLE|OVERFITTING|FAIL",
   "confidence": 0.0,
   "test_passed": true,
   "patch_semantically_matches": true,

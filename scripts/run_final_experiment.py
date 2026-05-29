@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -84,8 +85,7 @@ OLLAMA_HOST = OLLAMA_DEFAULT_HOST
 
 # Verify the exact model name with:  copilot --help | grep -A5 'model'
 # Available models depend on your Copilot subscription.
-COPILOT_MODEL = "claude-sonnet-4.6"
-COPILOT_EFFORT = "medium"
+COPILOT_MODEL = "claude-sonnet-4.5"
 COPILOT_TIMEOUT_SECS = 900  # 15 min max per validation batch
 
 # ---------------------------------------------------------------------------
@@ -246,20 +246,33 @@ def discover_configs(batches_dir: Path, *, gpt_only: bool) -> list[Path]:
 def split_by_project(config_path: Path, tmp_dir: Path) -> list[Path]:
     """Split a batch YAML into one temp YAML per project.
 
-    Bug IDs follow the pattern {project}-{number} (e.g. thefuck-1).
+    BugsInPy bug IDs follow the pattern {project}-{number} (e.g. thefuck-1) so
+    they are split per project to allow parallel VRAM scheduling.
+
+    QuixBugs batches are NOT split — all bugs run as a single unit so that
+    validation is also done in one Copilot call instead of one per bug.
     The dataset path is resolved to absolute so temp YAMLs work from any cwd.
     """
     data = yaml.safe_load(config_path.read_text())
+
+    dataset_ref = data.get("dataset", "")
+    if dataset_ref and not Path(dataset_ref).is_absolute():
+        dataset_ref = str((config_path.parent / dataset_ref).resolve())
+
+    # QuixBugs: return as a single unsplit batch.
+    if "quixbugs" in config_path.name:
+        tmp_path = tmp_dir / config_path.name
+        tmp_path.write_text(
+            yaml.dump({**data, "dataset": dataset_ref}, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        )
+        return [tmp_path]
+
     bugs: list[str] = data.get("bugs", [])
 
     by_project: dict[str, list[str]] = {}
     for bug in bugs:
         project = bug.rsplit("-", 1)[0]
         by_project.setdefault(project, []).append(bug)
-
-    dataset_ref = data.get("dataset", "")
-    if dataset_ref and not Path(dataset_ref).is_absolute():
-        dataset_ref = str((config_path.parent / dataset_ref).resolve())
 
     single_project = len(by_project) == 1
     paths: list[Path] = []
@@ -340,65 +353,72 @@ def release_lock(lock_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def build_validation_prompt(batch_dir: Path) -> str:
+def build_validation_prompt(batch_dirs: list[Path]) -> str:
+    if len(batch_dirs) == 1:
+        dirs_block = str(batch_dirs[0])
+    else:
+        dirs_block = "\n".join(f"  - {d}" for d in sorted(batch_dirs))
+    label = "directory" if len(batch_dirs) == 1 else "directories"
     return (
-        "Use the apr-validator skill to formally validate all APR runs in this batch.\n\n"
-        f"Batch directory: {batch_dir}\n"
+        f"Use the apr-validator skill to formally validate all APR runs in the following batch {label}.\n\n"
+        f"Batch {label}:\n{dirs_block}\n\n"
         f"Repository root: {REPO_ROOT}\n\n"
-        "For each run-* subdirectory found in the batch directory, follow the 6-step\n"
-        "validation protocol defined in the apr-validator skill and record the verdict\n"
-        "in the batch database (batch.db)."
+        "Follow the two-step workflow defined in Step 7 of the apr-validator skill:\n"
+        "1. Call validate_batch.py --list-runs on each batch.db to get the pending runs.\n"
+        "2. For each run, apply the 6-step validation protocol to produce a verdict.\n"
+        "3. Pipe the full verdicts JSON array to validate_batch.py (write mode) to persist.\n"
+        "The script is a pure persistence layer — you are the judge, not the script."
     )
 
 
 def run_validation(
-    batch_dir: Path,
+    batch_dirs: list[Path],
     *,
     dry_run: bool = False,
     ntfy_topic: str = "",
-) -> bool:
-    """Invoke copilot CLI to validate all runs in *batch_dir*.
+) -> tuple[bool, str | None]:
+    """Invoke copilot CLI to validate all runs in *batch_dirs*.
 
-    Returns True on success (exit code 0), False otherwise.
+    Returns (ok, reason). reason values on failure: oauth | timeout | exit:<code> | exception:<msg>
     """
-    prompt = build_validation_prompt(batch_dir)
+    prompt = build_validation_prompt(batch_dirs)
+    label = (
+        batch_dirs[0].name if len(batch_dirs) == 1
+        else f"{batch_dirs[0].name} (+{len(batch_dirs) - 1} más)"
+    )
     cmd = [
         "copilot",
         "-p", prompt,
         "--allow-all",
         "--no-ask-user",
         f"--model={COPILOT_MODEL}",
-        f"--effort={COPILOT_EFFORT}",
     ]
 
-    print(f"[validación] {utcnow()} — {batch_dir.name}")
+    print(f"[validación] {utcnow()} — {label}")
     if dry_run:
-        print(f"  [dry-run] copilot -p '<prompt>' --allow-all --model={COPILOT_MODEL} --effort={COPILOT_EFFORT}")
-        return True
+        print(f"  [dry-run] copilot -p '<prompt>' --allow-all --model={COPILOT_MODEL}")
+        return True, None
 
     try:
-        result = subprocess.run(cmd, cwd=str(REPO_ROOT), timeout=COPILOT_TIMEOUT_SECS)
-        if result.returncode != 0:
-            print(f"  [validación] FALLO — exit {result.returncode}", file=sys.stderr)
-            notify(
-                f"TFM: Error validacion {batch_dir.name}",
-                f"copilot salió con código {result.returncode}",
-                priority=5,
-                tags=("skull", "warning"),
-                topic=ntfy_topic,
-            )
-            return False
-        return True
-    except subprocess.TimeoutExpired:
-        print(f"  [validación] TIMEOUT ({COPILOT_TIMEOUT_SECS}s) — {batch_dir.name}", file=sys.stderr)
-        notify(
-            f"TFM: Timeout validacion {batch_dir.name}",
-            f"Superado el límite de {COPILOT_TIMEOUT_SECS}s",
-            priority=5,
-            tags=("skull", "warning"),
-            topic=ntfy_topic,
+        result = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            timeout=COPILOT_TIMEOUT_SECS,
+            capture_output=True,
+            text=True,
         )
-        return False
+        if result.returncode != 0:
+            combined = (result.stdout or "") + "\n" + (result.stderr or "")
+            reason = "oauth" if "No authentication information found" in combined else f"exit:{result.returncode}"
+            print(f"  [validación] FALLO — exit {result.returncode}", file=sys.stderr)
+            return False, reason
+        return True, None
+    except subprocess.TimeoutExpired:
+        print(f"  [validación] TIMEOUT ({COPILOT_TIMEOUT_SECS}s) — {label}", file=sys.stderr)
+        return False, "timeout"
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [validación] EXCEPCIÓN — {label}: {exc}", file=sys.stderr)
+        return False, f"exception:{exc}"
 
 
 def collect_all_experiment_batch_dirs(results_dir: Path) -> list[Path]:
@@ -407,6 +427,36 @@ def collect_all_experiment_batch_dirs(results_dir: Path) -> list[Path]:
         p for p in results_dir.glob("batch-experiment-*")
         if (p / "batch.db").exists()
     )
+
+
+def _validation_group_key(batch_dir: Path) -> str:
+    """Return a key that groups related batch dirs for joint validation.
+
+    QuixBugs per-bug dirs (e.g. quixbugs-mono-agent-gemma4-26b-bitcount-*)
+    share a key so all bugs for the same architecture+model are validated
+    together in a single Copilot call.  All other dirs are their own group.
+    """
+    name = batch_dir.name
+    if "quixbugs" not in name:
+        return name
+    # Strip timestamp suffix (-YYYYMMDDTHHMMSSZ)
+    base = re.sub(r"-\d{8}T\d{6}Z$", "", name)
+    # Strip the last '-{bug_name}' segment (QuixBugs bug names never contain hyphens)
+    return base.rsplit("-", 1)[0]
+
+
+def _group_batch_dirs_for_validation(batch_dirs: list[Path]) -> list[list[Path]]:
+    """Group batch dirs so QuixBugs per-bug dirs are validated together.
+
+    Each QuixBugs architecture+model combination (e.g. mono-agent-gemma4-26b)
+    becomes one group with all 20 bugs, validated in a single Copilot call.
+    BugsInPy dirs are kept as individual groups (already one project per dir).
+    """
+    groups: dict[str, list[Path]] = {}
+    for bd in sorted(batch_dirs):
+        key = _validation_group_key(bd)
+        groups.setdefault(key, []).append(bd)
+    return list(groups.values())
 
 
 # ---------------------------------------------------------------------------
@@ -684,7 +734,7 @@ def _run_experiments(
             # ntfy cada N batches completados (éxito o fallo)
             if completed_since_notify >= notify_interval:
                 notify(
-                    f"TFM {mode_label}: {completed}/{total_to_run} batches completados",
+                    f"TFM {mode_label}: {to_skip + completed}/{len(sub_batches)} batches completados",
                     f"{len(passed)} OK, {len(failed)} fallidos — {utcnow()}",
                     priority=3,
                     tags=("heavy_check_mark",),
@@ -717,20 +767,25 @@ def _run_validation_phase(
     ntfy_topic: str,
     mode_label: str,
 ) -> int:
-    total = len(batch_dirs)
+    groups = _group_batch_dirs_for_validation(batch_dirs)
+    total_dirs = len(batch_dirs)
+    total_groups = len(groups)
     print()
     print("=" * 64)
-    print(f"  Fase de validación — {total} batch dirs (hasta 5 en paralelo)")
+    print(f"  Fase de validación — {total_dirs} batch dirs → {total_groups} grupos (hasta 5 en paralelo)")
     print("=" * 64)
 
     if args.dry_run:
-        for bd in batch_dirs:
-            print(f"  [dry-run] validar: {bd.name}")
-        print(f"\n[dry-run] {total} invocaciones copilot previstas (máx 5 en paralelo)")
+        for group in groups:
+            if len(group) == 1:
+                print(f"  [dry-run] validar: {group[0].name}")
+            else:
+                print(f"  [dry-run] validar grupo ({len(group)} dirs): {group[0].name} ...")
+        print(f"\n[dry-run] {total_groups} invocaciones copilot previstas (máx 5 en paralelo)")
         return 0
 
     notify(
-        f"TFM {mode_label}: Validacion iniciada ({total} batches)",
+        f"TFM {mode_label}: Validacion iniciada ({total_dirs} dirs → {total_groups} grupos)",
         f"Hasta 5 en paralelo — {utcnow()}",
         priority=3,
         tags=("hourglass_flowing_sand",),
@@ -739,33 +794,74 @@ def _run_validation_phase(
 
     validation_failed: list[str] = []
     completed = 0
+    oauth_stop = False
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures: dict = {
-            executor.submit(run_validation, bd, dry_run=args.dry_run, ntfy_topic=ntfy_topic): bd
-            for bd in batch_dirs
-        }
-        for future in as_completed(futures):
-            batch_dir = futures[future]
-            ok = future.result()
-            completed += 1
-            if ok:
-                notify(
-                    f"TFM {mode_label}: Validado batch {completed}/{total}",
-                    batch_dir.name,
-                    priority=3,
-                    tags=("heavy_check_mark",),
-                    topic=ntfy_topic,
+    for chunk_start in range(0, len(groups), 5):
+        chunk = groups[chunk_start:chunk_start + 5]
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures: dict = {
+                executor.submit(run_validation, group, dry_run=args.dry_run, ntfy_topic=ntfy_topic): group
+                for group in chunk
+            }
+            for future in as_completed(futures):
+                group = futures[future]
+                ok, reason = future.result()
+                completed += 1
+                label = (
+                    group[0].name if len(group) == 1
+                    else f"{group[0].name} (+{len(group) - 1} más)"
                 )
-            else:
-                validation_failed.append(batch_dir.name)
+                status = "OK" if ok else "FALLO"
+                print(f"  [{completed}/{total_groups}] {status} — {label}")
+                if ok:
+                    notify(
+                        f"TFM {mode_label}: Validado grupo {completed}/{total_groups}",
+                        label,
+                        priority=3,
+                        tags=("heavy_check_mark",),
+                        topic=ntfy_topic,
+                    )
+                else:
+                    validation_failed.append(label)
+                    detail = label
+                    if reason:
+                        detail = f"{label} | reason={reason}"
+                    notify(
+                        f"TFM {mode_label}: Error validación {completed}/{total_groups}",
+                        detail,
+                        priority=5,
+                        tags=("warning",),
+                        topic=ntfy_topic,
+                    )
+                    if reason == "oauth":
+                        oauth_stop = True
+                        notify(
+                            f"TFM {mode_label}: Validación detenida por OAuth",
+                            f"Fallo de autenticación Copilot detectado en {label}. Se detiene la ejecución.",
+                            priority=5,
+                            tags=("no_entry", "warning"),
+                            topic=ntfy_topic,
+                        )
+                        break
 
-    ok_count = total - len(validation_failed)
+        if oauth_stop:
+            break
+
+        if args.validation_wait > 0 and (chunk_start + 5) < len(groups):
+            import time
+            print(f"[pausa] Esperando {args.validation_wait}s antes del siguiente bloque...")
+            time.sleep(args.validation_wait)
+
+    ok_count = total_groups - len(validation_failed)
     final_priority = 4 if not validation_failed else 5
     final_tags = ("partying_face",) if not validation_failed else ("triangular_flag_on_post", "warning")
     notify(
-        f"TFM {mode_label} completado: {ok_count}/{total} validados",
-        f"{len(validation_failed)} con errores — {utcnow()}",
+        f"TFM {mode_label} completado: {ok_count}/{total_groups} grupos validados",
+        (
+            f"{len(validation_failed)} con errores — {utcnow()}"
+            if not oauth_stop else
+            f"{len(validation_failed)} fallidos (detenido por OAuth) — {utcnow()}"
+        ),
         priority=final_priority,
         tags=final_tags,
         topic=ntfy_topic,

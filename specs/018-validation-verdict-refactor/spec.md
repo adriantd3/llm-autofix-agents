@@ -34,12 +34,12 @@ El validador LLM sólo se invoca para runs con `final_status = 'success'`.
 | `CORRECT` | Tests pasan Y el fix aborda el mismo root cause que el patch canónico |
 | `PLAUSIBLE` | Tests pasan PERO el fix es incompleto, usa un camino diferente al canónico, o no cubre toda la propagación |
 | `OVERFITTING` | Tests pasan PERO el fix no resuelve el bug real: modifica tests, hardcodea valores, o adapta el código a las aserciones sin corregir la causa raíz |
-| `VALIDATION_ERROR` | El pipeline de validación falló (LLM error, patch canónico no accesible, error inesperado) — se persiste en DB para trazabilidad |
+| `FAIL` | El run no está resuelto, no hay patch válido que evaluar, o el pipeline no pudo producir un veredicto semántico |
 
 `INCORRECT` e `INFRA_FAIL` se eliminan:
 - Los runs con tests fallidos no llegan al validador → `INCORRECT` (tests fail) es redundante
 - Los runs con infra rota son `infra_failure` en Layer 1 → `INFRA_FAIL` es redundante
-- `VALIDATION_ERROR` reemplaza el skip silencioso en errores de pipeline
+- `FAIL` cubre runs no resueltos y errores no evaluables sin introducir una categoría separada de pipeline
 
 ### C — `infra_fail_detected` en schema
 
@@ -58,7 +58,7 @@ No se sube `SCHEMA_VERSION`.
 | `batch/runner.py` | Añadir `"partial"` al emoji map (compatibilidad histórica) |
 | `validation/models.py` | Nuevo Literal para `verdict`; eliminar `infra_fail_detected` |
 | `validation/prompt.py` | System prompt actualizado |
-| `validation/runner.py` | Filtrar solo `success`; persistir `VALIDATION_ERROR` en errores |
+| `validation/runner.py` | Filtrar solo `success`; persistir `FAIL` en errores |
 | `observability/models.py` | Actualizar comentario de `verdict`; `infra_fail_detected` siempre `None` |
 | `observability/sqlite_schema.py` | Actualizar vistas: añadir `overfitting_count`, `ever_overfitting`; retirar `infra_fail_detected` de `v_run_summary` |
 | `.agents/skills/apr-validator/SKILL.md` | Nuevo decision tree + tabla de veredictos |

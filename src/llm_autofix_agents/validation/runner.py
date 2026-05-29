@@ -85,7 +85,7 @@ class ValidationRunner:
             logger.exception("LLM validation failed for run %s", run_id)
             error_record = self._build_error_record(run_id)
             self._store.upsert_run_validation(error_record)
-            return ValidationResult(run_id=run_id, verdict="VALIDATION_ERROR", confidence=None,
+            return ValidationResult(run_id=run_id, verdict="FAIL", confidence=None,
                                     justification=None, skipped=False)
 
         record = self._build_record(run_id, ctx, output)
@@ -209,7 +209,7 @@ class ValidationRunner:
             run_id=run_id,
             validated_at=datetime.now(UTC).isoformat(),
             validator_model=self._llm_settings.model,
-            verdict="VALIDATION_ERROR",
+            verdict="FAIL",
             justification="LLM validation pipeline failed — see logs for details.",
         )
 

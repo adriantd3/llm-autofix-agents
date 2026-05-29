@@ -130,10 +130,10 @@ class TestValidatorOutputModel(unittest.TestCase):
 
     def test_patch_semantically_matches_nullable(self) -> None:
         output = ValidatorOutput(
-            verdict="VALIDATION_ERROR",
+            verdict="FAIL",
             confidence=0.0,
             test_passed=False,
-            justification="Pipeline error.",
+            justification="No passing patch was available.",
         )
         self.assertIsNone(output.patch_semantically_matches)
 

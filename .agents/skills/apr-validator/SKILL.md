@@ -1,6 +1,6 @@
 ---
 name: apr-validator
-description: 'Validate APR (Automated Program Repair) fixes formally. Use when running `autofix validate`, when evaluating if a generated patch is CORRECT/PLAUSIBLE/OVERFITTING/VALIDATION_ERROR, when comparing agent patches against canonical ground truth, when assessing overfitting to tests, or when the user mentions "validar", "validate", "verdict", "formal validation", "fix quality".'
+description: 'Validate APR (Automated Program Repair) fixes formally. Use when running `autofix validate`, when evaluating if a generated patch is CORRECT/PLAUSIBLE/OVERFITTING/FAIL, when comparing agent patches against canonical ground truth, when assessing overfitting to tests, or when the user mentions "validar", "validate", "verdict", "formal validation", "fix quality".'
 ---
 
 # APR Validator — Formal Fix Validation
@@ -131,7 +131,7 @@ Apply the decision tree below and produce the final verdict with justification.
 | **CORRECT** | Fix repairs the bug correctly | Tests pass AND same root cause as canonical (or clearly sound without canonical) |
 | **PLAUSIBLE** | Fix works but is incomplete or diverges | Tests pass BUT different approach, partial fix, or misses propagation |
 | **OVERFITTING** | Fix games the tests | Tests pass BUT agent modified tests, hardcoded values, or special-cased inputs |
-| **VALIDATION_ERROR** | Pipeline error | Reserved — not produced by the LLM |
+| **FAIL** | No accepted fix | Tests did not pass, no patch is available, or semantic validation is not applicable |
 
 ## Edge Cases
 
@@ -162,7 +162,7 @@ Apply the decision tree below and produce the final verdict with justification.
 
 ```json
 {
-  "verdict": "CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR",
+  "verdict": "CORRECT | PLAUSIBLE | OVERFITTING | FAIL",
   "confidence": 0.85,
   "test_passed": true,
   "patch_semantically_matches": true,
@@ -172,61 +172,76 @@ Apply the decision tree below and produce the final verdict with justification.
 
 ## Agent Step 7 — Persist Verdicts to DB
 
-After producing verdicts (Steps 1–6), run [./scripts/validate_batch.py](./scripts/validate_batch.py)
-to write all results into the batch's `run_validations` table in a single command.
+After producing verdicts (Steps 1–6), write them to the batch DB using
+[./scripts/validate_batch.py](./scripts/validate_batch.py).
 **Do not skip this step** — verdicts that exist only in the chat are not persisted.
+
+The script is a pure persistence layer. **The agent is the judge.** The script
+does not call any LLM; it only writes the verdicts you provide.
 
 ### When to run
 
-- After completing manual validation of one or more runs in a batch
+- After completing validation of one or more runs in a batch
 - After a full batch run completes and you want to validate all resolved runs at once
 - Any time the user asks to "persist", "guardar" or "almacenar" validation results
 
-### Command
+### Two-step workflow
+
+**Step 7a — Discover pending runs:**
 
 ```bash
-# Standard: validate all unvalidated resolved runs, get JSON summary
 uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
-  --db <path-to-batch.db> --json
-
-# Re-validate a single run (e.g. after correcting reasoning)
-uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
-  --db <path-to-batch.db> --run-id <run_id> --force --json
-
-# Force re-validation of everything in a batch
-uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
-  --db <path-to-batch.db> --force --json
-
-# Different judge model
-uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
-  --db <path-to-batch.db> --model gpt-4o --json
+  --db <path-to-batch.db> --list-runs
 ```
 
-Always pass `--json` when invoking from agent context — it emits a single JSON line
-on stdout that you can read to confirm what was written:
+Returns a JSON array of runs needing validation. Each entry contains:
+`run_id`, `target_repo`, `live_log_path`, `problem_id`, `arch`, `benchmark_name`.
+Use these fields to locate patch files and canonical programs for steps 1–6.
+
+```bash
+# Include already-validated runs (re-validation)
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db> --list-runs --force
+
+# Discover a specific run only
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db> --list-runs --run-id <run_id>
+```
+
+**Step 7b — Produce verdicts (steps 1–6)** for each run returned above.
+
+**Step 7c — Persist all verdicts in one call:**
+
+```bash
+echo '<json-array-of-verdicts>' | \
+uv run python .agents/skills/apr-validator/scripts/validate_batch.py \
+  --db <path-to-batch.db>
+```
+
+Each element of the JSON array must have:
+
+| Field | Type | Required |
+|-------|------|----------|
+| `run_id` | string | Yes |
+| `verdict` | `CORRECT\|PLAUSIBLE\|OVERFITTING\|FAIL` | Yes |
+| `confidence` | float 0.0–1.0 | Yes |
+| `test_passed` | bool | Yes |
+| `patch_semantically_matches` | bool or null | Yes |
+| `justification` | string | Yes |
+
+The script prints a JSON confirmation:
 
 ```json
-{"status": "ok", "validated": 12, "errors": 0, "results": [
-  {"run_id": "run-...", "bug_id": "gcd", "arch": "mono_agent", "verdict": "CORRECT", "confidence": 0.92},
+{"status": "ok", "written": 12, "errors": 0, "results": [
+  {"run_id": "run-...", "verdict": "CORRECT", "confidence": 0.92},
   ...
 ]}
 ```
 
-Exit code `0` = success (even with partial errors). Check `"status"` field: `"ok"` or `"partial"`.
+Exit code `0` = success (even with partial errors). Check `"status"`: `"ok"` or `"partial"`.
 
-### What the script resolves automatically
-
-| Field | Source |
-|-------|--------|
-| Generated patch | `it*.patch` files in the run directory (derived from `live_log_path`) |
-| Bug identifier | Last path segment of `target_repo` |
-| Dataset type | Detected from `target_repo` path (`quixbug` → QuixBugs, else BugsInPy) |
-| Canonical program (QuixBugs) | `{target_repo}/correct_python_programs/{bug_id}.py` |
-| Canonical program (BugsInPy) | Not yet supported — `patch_semantically_matches` will be `null` |
-| Workspace root | Defaults to repo root (4 levels above the script); override with `--workspace-root` |
-
-The script is **idempotent**: skips already-validated runs unless `--force` is passed.
-Each run produces exactly one row in `run_validations` (`INSERT OR REPLACE`).
+The script is **idempotent**: each run produces exactly one row in `run_validations`
+(`INSERT OR REPLACE`). Re-running with the same `run_id` overwrites the previous verdict.
 
 ## Confidence Guidelines
 
@@ -237,3 +252,98 @@ Each run produces exactly one row in `run_validations` (`INSERT OR REPLACE`).
 | No canonical + test passes + logic is sound | 0.50–0.70 |
 | No canonical + test passes + unclear logic | 0.40–0.55 |
 | OVERFITTING (clear evidence of test-gaming) | 0.85–0.95 |
+
+## Fallback (MANDATORY): When validate_batch.py Fails
+
+**If validate_batch.py fails for any reason (import error, exception, non-zero exit, tool unavailable), do NOT stop. Perform both steps directly using Python + sqlite3. This is NOT optional.**
+
+### Fallback 7a — Discover runs manually
+
+```python
+import sqlite3, json
+from pathlib import Path
+
+db_path = Path("<path-to-batch.db>")
+repo_root = db_path.resolve().parent.parent.parent   # results/batch-name/batch.db → REPO_ROOT
+
+conn = sqlite3.connect(db_path)
+conn.row_factory = sqlite3.Row
+rows = conn.execute("""
+    SELECT r.run_id, r.target_repo, r.live_log_path, r.diff_path,
+           r.benchmark_name, r.problem_id, a.name AS arch
+    FROM runs r
+    JOIN architectures a ON a.architecture_id = r.architecture_id
+    WHERE r.resolved = 1
+      AND r.live_log_path IS NOT NULL
+      -- Remove the line below to force re-validation of already-validated runs:
+      -- AND r.run_id NOT IN (SELECT run_id FROM run_validations)
+""").fetchall()
+
+def resolve(path, repo_root):
+    if path and path.startswith("/results/"):
+        return str(repo_root / "results" / path[len("/results/"):])
+    return path
+
+runs = []
+for row in rows:
+    r = dict(row)
+    r["live_log_path"] = resolve(r["live_log_path"], repo_root)
+    runs.append(r)
+
+conn.close()
+print(json.dumps(runs, indent=2))
+```
+
+### Fallback 7c — Persist verdicts manually
+
+After producing verdicts following steps 1–6, write them to the DB directly:
+
+```python
+import sqlite3, uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+db_path = Path("<path-to-batch.db>")
+conn = sqlite3.connect(db_path)
+
+verdicts = [
+    # Fill in your verdicts here (one dict per run):
+    {
+        "run_id": "run-...",
+      "verdict": "CORRECT",          # CORRECT | PLAUSIBLE | OVERFITTING | FAIL
+        "confidence": 0.9,
+        "test_passed": True,
+        "patch_semantically_matches": True,   # True | False | None
+        "justification": "...",
+    },
+    # ...
+]
+
+for v in verdicts:
+    pm_raw = v.get("patch_semantically_matches")
+    patch_matches = 1 if pm_raw is True else (0 if pm_raw is False else None)
+  conn.execute("DELETE FROM run_validations WHERE run_id = ?", (v["run_id"],))
+    conn.execute("""
+        INSERT OR REPLACE INTO run_validations
+            (validation_id, run_id, validated_at, validator_model,
+             test_passed, infra_fail_detected, canonical_patch_available,
+             patch_semantically_matches, verdict, confidence, justification)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        str(uuid.uuid4()),
+        v["run_id"],
+        datetime.now(timezone.utc).isoformat(),
+        v.get("validator_model") or "claude-sonnet-4.5",
+        1 if v.get("test_passed", True) else 0,
+        0,
+        1 if pm_raw is not None else 0,
+        patch_matches,
+        v["verdict"],
+        v.get("confidence"),
+        v.get("justification", ""),
+    ))
+
+conn.commit()
+conn.close()
+print(f"Written {len(verdicts)} verdicts.")
+```

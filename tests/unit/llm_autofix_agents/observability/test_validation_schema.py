@@ -122,7 +122,7 @@ class TestUpsertRunValidation(unittest.TestCase):
             run_id=self._run_id,
             validated_at="2026-05-16T00:00:00+00:00",
             validator_model="gpt-4.1-mini",
-            verdict="VALIDATION_ERROR",
+            verdict="FAIL",
         )
         self._store.upsert_run_validation(record)
 

@@ -20,6 +20,31 @@
 
 ## Completado reciente
 
+- **Memoria TFM — Plan definitivo de validación y análisis experimental (2026-05-29)**:
+  - Creado `memoria/plan-validacion-final.md` como guía de redacción final para capítulos 2--7, excluyendo introducción y conclusiones.
+  - Fijadas las hipótesis metodológicas de validación: prompt operativo constante, juez Claude Sonnet 4.5 vía GitHub Copilot y validación semántica solo sobre runs con tests pasados.
+  - Integradas decisiones de ubicación para handoff, selección de modelos, selección de datasets, métricas APR, rechazo de BLEU, skill `apr-validator`, figuras/tablas del notebook y lectura final de RQ1/RQ2.
+  - Revisado tras la normalización `VALIDATION_ERROR`→`FAIL`: métricas recalculadas sobre 826 ejecuciones limpias, `FAIL` tratado como no paso de tests, y redacción orientada a nivel metodológico sin SQLite/JSON/scripts/fallos internos.
+
+- **Memoria TFM — revisión narrativa crítica y validación visual (2026-05-25)**:
+  - Metadatos básicos completados en `memoria/main.tex` a partir de `docs/anteproyecto.md`.
+  - Capítulos 2--6 revisados para mejorar coherencia narrativa, consistencia de veredictos de validación y adecuación al estilo de la skill `tfm-memoria`.
+  - Figuras iniciales de antecedentes adaptadas al dominio APR: `function calling` con `read_file`, patrón `handoff` con roles de reparación y patrón `manager` con orquestación de exploración/tests/diagnóstico.
+  - Handoff documentado en capítulo 5 como arquitectura implementada pero descartada para la comparación formal, evitando presentarlo como candidata equivalente.
+  - Añadida en capítulo 6 la sección de impacto acumulado de mejoras pequeñas con tabla antes/después de un batch preliminar BugsInPy, sin convertirlo en changelog.
+  - Limpieza puntual de estilo: eliminación de separadores con raya, punto y coma en prosa visible, referencias problemáticas a subsubsecciones LNCS y restos de veredictos antiguos en comentarios.
+  - Compilación validada con `latexmk`; inspección visual de páginas con figuras y tabla nueva completada. Quedan solo avisos menores preexistentes de composición LNCS.
+
+- **Memoria TFM — Sección 5 de propuesta ampliada y revalidada (2026-05-24)**:
+  - `memoria/sections/05-propuesta/05-propuesta.tex` reestructurada para explicar el diseño final sin tono retrospectivo: contexto entre iteraciones, validación, reintentos, criterios de parada y arquitecturas comparadas.
+  - Añadida explicación más completa de mono-agente, handoff, planner-executor y orchestrator con sub-agentes, incluyendo tabla comparativa y diagramas TikZ específicos con pies de figura explicativos.
+  - Rediseñado el diagrama de construcción de contexto entre iteraciones como lectura por filas: situación detectada, evidencia que entra, regla de construcción y mensaje resultante.
+  - Rediseñados los diagramas de arquitectura para usar más ancho o disposición vertical cuando aporta claridad, reduciendo cruces de flechas y evitando etiquetas solapadas.
+  - Diagramas renderizados e inspeccionados visualmente en PDF tras varias iteraciones; se eliminaron etiquetas que generaban solapes o ruido visual.
+  - Pasada final de validación visual estricta completada en páginas 19, 23, 24 y 26--30: arquitectura general, bucle, contexto de iteración, arquitecturas mono/handoff/planner-orchestrator y observabilidad.
+  - Añadido soporte de flotantes fijos (`float`) en `memoria/preamble.tex` para mantener la figura de observabilidad después de su subsección y evitar que suba por encima del título.
+  - Compilación validada con `latexmk`; queda solo un overfull mínimo preexistente en la sección 5 (`0.73718pt`, párrafo de `replace_in_file`).
+
 - **SPEC-019 completado: Trace-Analysis Fixes (2026-05-19)**:
   - Análisis de batch `bugsinpy-architecture-check` (12 bugs, mono_agent, qwen3-coder:30b); 10 mejoras implementadas.
   - `extra_packages` en `BugEntry` + `_install_extra_packages()` en harness BugsInPy.
@@ -34,9 +59,9 @@
   - Se añadieron/ajustaron diagramas y pseudocódigo para explicar decisiones de diseño sin depender de paquetes no disponibles (`algorithm.sty`).
   - Compilación validada con `latexmk`; sin warnings ni errors en la sección 5.
 
-- **SPEC-018 completado: Validation Verdict Refactor (2026-05-18)**:
+- **SPEC-018 completado: Validation Verdict Refactor (2026-05-18; normalizado a `FAIL` el 2026-05-29)**:
   - A: `partial` mergeado en `failed` en `contracts.py`, `decision_enactor.py`, `strategy.py`, `batch/runner.py` (compat legacy).
-  - B: Validador rediseñado — `INCORRECT`→`OVERFITTING`, `INFRA_FAIL` eliminado, `VALIDATION_ERROR` para errores de pipeline; validator solo se invoca para runs `success`; `infra_fail_detected` deprecado (NULL, columna SQLite preservada para compat).
+  - B: Validador rediseñado — `INCORRECT`→`OVERFITTING`, `INFRA_FAIL` eliminado, `FAIL` para runs no resueltos o no evaluables; validator solo se invoca para runs `success`; `infra_fail_detected` deprecado (NULL, columna SQLite preservada para compat).
   - C: `SKILL.md`, `spec-013`, `docs/experiment-plan.md` actualizados con nuevos veredictos.
   - D: Tests actualizados — 28 passed, 0 regressions.
 

@@ -202,29 +202,29 @@ class TestDiscoverConfigs(unittest.TestCase):
 
 class TestConstants(unittest.TestCase):
     def test_copilot_model_uses_dot_not_dash(self) -> None:
-        """Regression: model name must be 'claude-sonnet-4.6' (dot), not 'claude-sonnet-4-6' (dash).
+        """Regression: model name must be 'claude-sonnet-4.5' (dot), not 'claude-sonnet-4-5' (dash).
         The copilot CLI rejects the dash variant with 'model not available'."""
-        self.assertEqual(rfe.COPILOT_MODEL, "claude-sonnet-4.6")
+        self.assertEqual(rfe.COPILOT_MODEL, "claude-sonnet-4.5")
         self.assertNotIn("4-6", rfe.COPILOT_MODEL)
 
 
 class TestBuildValidationPrompt(unittest.TestCase):
     def test_contains_batch_dir_path(self) -> None:
         batch_dir = Path("/results/batch-experiment-mono-20260522T")
-        prompt = rfe.build_validation_prompt(batch_dir)
+        prompt = rfe.build_validation_prompt([batch_dir])
         self.assertIn(str(batch_dir), prompt)
 
     def test_contains_repo_root(self) -> None:
         batch_dir = Path("/results/batch-experiment-mono-20260522T")
-        prompt = rfe.build_validation_prompt(batch_dir)
+        prompt = rfe.build_validation_prompt([batch_dir])
         self.assertIn(str(rfe.REPO_ROOT), prompt)
 
     def test_mentions_apr_validator_skill(self) -> None:
-        prompt = rfe.build_validation_prompt(Path("/some/batch"))
+        prompt = rfe.build_validation_prompt([Path("/some/batch")])
         self.assertIn("apr-validator", prompt)
 
     def test_mentions_batch_db(self) -> None:
-        prompt = rfe.build_validation_prompt(Path("/some/batch"))
+        prompt = rfe.build_validation_prompt([Path("/some/batch")])
         self.assertIn("batch.db", prompt)
 
 
@@ -385,7 +385,7 @@ class TestValidationPhase(unittest.TestCase):
                 d.mkdir()
                 (d / "batch.db").write_text("")
 
-            with patch.object(rfe, "run_validation", return_value=True) as mock_val, \
+            with patch.object(rfe, "run_validation", return_value=(True, None)) as mock_val, \
                  patch.object(rfe, "notify"):
                 rc = rfe._run_validation_phase(
                     dirs,
@@ -396,7 +396,8 @@ class TestValidationPhase(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(mock_val.call_count, 4)
-        validated_dirs = {c.args[0] for c in mock_val.call_args_list}
+        # run_validation is called with a list (group), so unwrap to get the single dir
+        validated_dirs = {c.args[0][0] for c in mock_val.call_args_list}
         self.assertEqual(validated_dirs, set(dirs))
 
     def test_failures_collected_and_returns_nonzero(self) -> None:
@@ -408,10 +409,11 @@ class TestValidationPhase(unittest.TestCase):
                 d.mkdir()
                 (d / "batch.db").write_text("")
 
-            side_effects = {good: True, bad: False}
+            side_effects = {good: (True, None), bad: (False, "exit:1")}
 
-            def _fake_validate(bd: Path, **kwargs: object) -> bool:
-                return side_effects[bd]
+            def _fake_validate(group: list, **kwargs: object) -> tuple:
+                # group is a list with one Path element
+                return side_effects[group[0]]
 
             with patch.object(rfe, "run_validation", side_effect=_fake_validate), \
                  patch.object(rfe, "notify"):
@@ -462,6 +464,49 @@ class TestCollectAllExperimentBatchDirs(unittest.TestCase):
 
             dirs = rfe.collect_all_experiment_batch_dirs(results_dir)
             self.assertEqual(dirs, [complete])
+
+
+class TestSplitByProject(unittest.TestCase):
+    """Tests for split_by_project — QuixBugs must not be split."""
+
+    def _write_batch(self, tmp_dir: Path, name: str, bugs: list[str], dataset: str = "../../datasets/quixbugs.yaml") -> Path:
+        data = {"name": name, "description": "test", "dataset": dataset, "global": {}, "bugs": bugs}
+        p = tmp_dir / f"{name}.yaml"
+        p.write_text(__import__("yaml").dump(data))
+        return p
+
+    def test_quixbugs_returns_single_batch(self) -> None:
+        """QuixBugs config must not be split — all bugs in one sub-batch."""
+        with tempfile.TemporaryDirectory() as cfg_tmp, tempfile.TemporaryDirectory() as out_tmp:
+            cfg = self._write_batch(Path(cfg_tmp), "quixbugs-mono-agent-gpt-5.4-mini-extra20", ["bucketsort", "flatten", "gcd"])
+            result = rfe.split_by_project(cfg, Path(out_tmp))
+        self.assertEqual(len(result), 1)
+
+    def test_quixbugs_single_batch_contains_all_bugs(self) -> None:
+        """The single sub-batch must contain all original bugs unchanged."""
+        bugs = ["bucketsort", "flatten", "gcd", "lis"]
+        with tempfile.TemporaryDirectory() as cfg_tmp, tempfile.TemporaryDirectory() as out_tmp:
+            cfg = self._write_batch(Path(cfg_tmp), "quixbugs-mono-agent-gemma4-26b-extra20", bugs)
+            result = rfe.split_by_project(cfg, Path(out_tmp))
+            loaded = __import__("yaml").safe_load(result[0].read_text())
+        self.assertEqual(loaded["bugs"], bugs)
+
+    def test_quixbugs_dataset_path_resolved_to_absolute(self) -> None:
+        """dataset path must be absolute in the output so it works from any cwd."""
+        with tempfile.TemporaryDirectory() as cfg_tmp, tempfile.TemporaryDirectory() as out_tmp:
+            cfg = self._write_batch(Path(cfg_tmp), "quixbugs-planner-executor-qwen3.5-9b-extra20", ["gcd"])
+            result = rfe.split_by_project(cfg, Path(out_tmp))
+            loaded = __import__("yaml").safe_load(result[0].read_text())
+        self.assertTrue(Path(loaded["dataset"]).is_absolute())
+
+    def test_bugsinpy_still_splits_by_project(self) -> None:
+        """BugsInPy configs must still be split per project."""
+        bugs = ["thefuck-1", "thefuck-2", "httpie-1"]
+        with tempfile.TemporaryDirectory() as cfg_tmp, tempfile.TemporaryDirectory() as out_tmp:
+            cfg = self._write_batch(Path(cfg_tmp), "bugsinpy-mono-agent-gpt-5.4-mini", bugs,
+                                    dataset="../../datasets/bugsinpy-full.yaml")
+            result = rfe.split_by_project(cfg, Path(out_tmp))
+        self.assertEqual(len(result), 2)  # thefuck + httpie
 
 
 if __name__ == "__main__":

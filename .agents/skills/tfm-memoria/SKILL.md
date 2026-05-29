@@ -227,6 +227,19 @@ Esto es una lista disfrazada de prosa. La forma correcta es elegir: convertirlo 
 
 **Prueba rápida:** si lo que va después del `:` puede decirse con sujeto, verbo y predicado completos, hay que escribirlo así.
 
+Cuando la construcción `X: Y` encubre dos frases completas, la reescritura es partir en dos con un conector que exprese la relación real:
+
+| Original (patrón a evitar) | Reescritura preferida |
+|---|---|
+| `Su principal limitación es la rigidez: si un agente posterior descubre...` | `La transición es unidireccional, siendo este el motivo de su principal limitación. Si un agente posterior descubre...` |
+| `subagentes que actúan como funciones: puede llamarlos cuando lo necesite` | `subagentes que actúan como si fueran funciones. Esto quiere decir que el coordinador puede llamarlos cuando lo necesite` |
+| `no tiene estado entre llamadas: no recuerda nada` | `no tiene estado entre llamadas. No recuerda nada...` |
+| `en cada momento concreto: qué parte del historial conservar, qué señales...` | `en cada momento concreto, lo que en la práctica significa decidir qué parte del historial conservar, qué señales...` |
+
+Conectores útiles para unir o separar: *siendo este el motivo de*, *Esto quiere decir que*, *Esto se debe a que*, *lo que en la práctica significa*, *en concreto*. Si la segunda frase ya es autoexplicativa, no hace falta conector explícito.
+
+Nota adicional: junto al `:`, vigilar también el uso de `en vez de` frente a `en lugar de` — el primero es más directo y natural en este registro.
+
 ### Párrafos vacíos — test de contenido real
 
 Antes de dar por bueno un párrafo, hacerse esta pregunta: **¿qué sabe el lector después de leerlo que no sabía antes?** Si la respuesta es «lo mismo que antes, con otras palabras», el párrafo está vacío.

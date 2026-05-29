@@ -383,7 +383,7 @@ class RunValidationRecord:
     run_id: str
     validated_at: str
     validator_model: str
-    verdict: str  # CORRECT | PLAUSIBLE | OVERFITTING | VALIDATION_ERROR
+    verdict: str  # CORRECT | PLAUSIBLE | OVERFITTING | FAIL
     test_passed: bool | None = None
     infra_fail_detected: bool | None = None  # deprecated: always None; column kept in schema for compat
     canonical_patch_available: bool | None = None

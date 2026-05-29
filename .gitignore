@@ -222,3 +222,4 @@ prompts/
 pip-cache/
 
 memoria/
+notebooks/exports/
