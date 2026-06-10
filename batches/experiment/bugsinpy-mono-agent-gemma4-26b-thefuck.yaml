@@ -1,0 +1,19 @@
+name: experiment-bugsinpy-mono-agent-gemma4-26b-thefuck
+description: TFM experiment — BugsInPy thefuck (5 bugs), mono_agent, gemma4-26b-ctx32k
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: mono_agent
+  llm:
+    provider: ollama
+    model: gemma4-26b-ctx32k
+    max_turns: 30
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- thefuck-15
+- thefuck-16
+- thefuck-18
+- thefuck-31
+- thefuck-32

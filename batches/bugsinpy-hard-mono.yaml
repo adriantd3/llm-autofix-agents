@@ -15,16 +15,15 @@ global:
   architecture: mono_agent
   llm:
     provider: ollama
-    model: qwen3.5:9b
-    max_turns: 25
+    model: gemma4-26b-ctx32k
+    max_turns: 30
   max_iterations: 3
-  timeout_seconds: 600
+  timeout_seconds: 1500
+  iteration_timeout_seconds: 600
   capture_errors: true
 
 bugs:
-  - tornado-3
   - tornado-6
   - ansible-1
   - ansible-2
   - scrapy-33
-  - keras-1

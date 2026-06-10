@@ -1,0 +1,20 @@
+name: experiment-bugsinpy-multi-agent-orchestrator-gemma4-26b-tornado
+description: TFM experiment — BugsInPy tornado (5 bugs), multi_agent_orchestrator,
+  gemma4-26b-ctx32k
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: gemma4-26b-ctx32k
+    max_turns: 30
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- tornado-2
+- tornado-5
+- tornado-7
+- tornado-11
+- tornado-13

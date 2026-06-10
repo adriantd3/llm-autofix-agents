@@ -1,0 +1,20 @@
+name: experiment-bugsinpy-multi-agent-orchestrator-gpt-5.4-mini-scrapy
+description: TFM experiment — BugsInPy scrapy (5 bugs), multi_agent_orchestrator,
+  gpt-5.4-mini
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: openai
+    model: gpt-5.4-mini
+    max_turns: 15
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- scrapy-9
+- scrapy-16
+- scrapy-18
+- scrapy-21
+- scrapy-25

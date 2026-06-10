@@ -1,0 +1,20 @@
+name: experiment-bugsinpy-multi-agent-orchestrator-gpt-5.4-mini-youtube-dl
+description: TFM experiment — BugsInPy youtube-dl (5 bugs), multi_agent_orchestrator,
+  gpt-5.4-mini
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: openai
+    model: gpt-5.4-mini
+    max_turns: 15
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- youtube-dl-13
+- youtube-dl-19
+- youtube-dl-20
+- youtube-dl-23
+- youtube-dl-35

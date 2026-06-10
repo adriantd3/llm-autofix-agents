@@ -1,0 +1,19 @@
+name: experiment-bugsinpy-planner-executor-gpt-5.4-mini-luigi
+description: TFM experiment — BugsInPy luigi (5 bugs), planner_executor, gpt-5.4-mini
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: planner_executor
+  llm:
+    provider: openai
+    model: gpt-5.4-mini
+    max_turns: 15
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- luigi-5
+- luigi-11
+- luigi-17
+- luigi-25
+- luigi-27

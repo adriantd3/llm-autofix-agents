@@ -1,18 +1,18 @@
-name: bugsinpy-hard-orchestrator
+name: bugsinpy-hard-planner-executor
 description: |
-  Multi-agent orchestrator vs Mono-agent comparison — harder BugsInPy bugs.
-  Identical configuration to bugsinpy-hard-mono.yaml but with multi_agent_orchestrator architecture.
+  Planner-Executor vs Mono-agent comparison — harder BugsInPy bugs.
+  Identical configuration to bugsinpy-hard-mono.yaml but with planner_executor architecture.
 
   Hypothesis to test: on architecturally complex bugs (multi-file, interface contracts,
-  multi-method consistency fixes), the orchestrator's explore_code delegation adds value
-  over a single agent doing everything directly.
+  multi-method consistency fixes), the planner-executor's explicit planning phase adds
+  value over a single agent doing everything directly.
 
   Compare results against batches/bugsinpy-hard-mono.yaml.
 
 dataset: ../datasets/bugsinpy.yaml
 
 global:
-  architecture: multi_agent_orchestrator
+  architecture: planner_executor
   llm:
     provider: ollama
     model: gemma4-26b-ctx32k

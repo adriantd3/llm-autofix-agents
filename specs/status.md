@@ -20,6 +20,75 @@
 
 ## Completado reciente
 
+- **Memoria TFM — Sincronización de cifras tras rerun del análisis final (2026-06-09)**:
+  - Actualizadas en §7 y §8 las cifras globales para alinearlas con los artefactos regenerados del notebook final.
+  - Totales corregidos: 837 ejecuciones agregadas, 477 en BugsInPy y 360 en QuixBugs.
+  - Métricas de BugsInPy alineadas en texto y tablas: 210/477 tests superados (44.0\,\%) y 74/477 reparaciones correctas (15.5\,\%).
+  - Ajustadas también las cifras de coste por reparación correcta en §7 y §8 tras revisar el resto de secciones: 0.86, 1.00, 3.26 y 6.25 millones de tokens en las configuraciones citadas.
+  - Actualizada la fila comparativa ``Este TFM, agregado'' en related work a 74/477 \texttt{CORRECT}.
+  - Validación de errores en los .tex editados completada sin incidencias.
+
+- **Memoria TFM — Pasada transversal de estilo y granularidad (2026-06-09)**:
+  - Revisadas las anotaciones del tutor para extraer patrones de crítica reutilizables (exceso de abstracción, falta de aterrizaje operativo y redacción demasiado genérica).
+  - Aplicadas correcciones en §7 y §8 para añadir detalle concreto de ejecución, reforzar cifras en conclusiones y reducir formulaciones de alto nivel.
+  - Ajustado el cierre de RQ2 con datos explícitos de coste por parche correcto para evitar conclusiones vagas.
+  - Corregida la explicación del desfase en BugsInPy en §7.1.2: se elimina la atribución a "dos casos" y se alinea la redacción con el criterio de análisis limpio del notebook (833 runs brutos, 826 en análisis, 473/466 en BugsInPy bruto/limpio).
+  - Revisión de errores en archivos editados completada sin incidencias.
+
+- **Memoria TFM — Revisión crítica y reescritura del capítulo 5 (2026-05-31)**:
+  - §5 reescrito tras revisión estricta tipo tutor, manteniendo las figuras pero evitando que el texto las narrase de forma redundante.
+  - Reducido el nivel de detalle interno del toolkit APR: la sección pasa de documentar herramientas una a una a explicar grupos funcionales, controles de edición, validación y diagnóstico.
+  - Añadidas listas donde el contenido era inherentemente enumerable: elementos fijos/variables, funciones de exploración, riesgos de edición, fases de iteración, condiciones de validación, hábitos del mono-agente y formatos de observabilidad.
+  - Condensado el detalle de construcción de contexto para no invadir el capítulo 6, dejando en §5 el mecanismo general y reservando el refinamiento fino para §6.
+  - Reescrita la explicación de handoff para distinguir claramente arquitectura implementada y descartada de las tres arquitecturas evaluadas, con evidencia exploratoria más limpia y tabla simplificada.
+  - Limpieza de vocabulario interno o extraño: eliminadas formulaciones como `guardarrail`, `firma del error`, `disciplina la exploración`, `cambios colaterales`, `Runtime Docker` y párrafos defensivos.
+  - Compilación completa de `memoria/main.tex` validada con `latexmk`; §5 queda sin overfull propios, solo underfull menores en la tabla de handoff.
+
+- **Memoria TFM — Reescritura crítica del capítulo 6 (2026-05-31)**:
+  - Capítulo 6 reenfocado como refinamiento del harness iterativo, separando su propósito de la propuesta arquitectónica de §5 y de la evaluación experimental de §7.
+  - Reescritas las subsecciones sobre sobreajuste a tests, continuidad entre iteraciones, efecto acumulado de refinamientos y validación semántica asistida de parches.
+  - Corregida la figura de orden de contexto para que la función fuente aparezca antes que la salida del test tras el refinamiento; eliminada la figura de instrucción interna que filtraba detalle de prompt.
+  - Sustituido vocabulario interno o defensivo por formulaciones académicas más claras, manteniendo los datos diagnósticos sin presentarlos como resultado experimental final.
+  - Compilación completa de `memoria/main.tex` validada con `latexmk`; quedan solo avisos tipográficos menores en tablas/figuras ya compatibles con la generación del PDF.
+
+- **Memoria TFM — Comparativa explícita con trabajos relacionados en §7 (2026-05-31)**:
+  - Añadida en §7.8 una tabla factual de resultados publicados en trabajos cercanos sobre QuixBugs y BugsInPy, junto con los resultados de referencia de este TFM.
+  - Las lecturas comparativas se mantienen fuera de la tabla, en prosa, siguiendo la guía de estilo de la skill `tfm-memoria`.
+  - Añadida la referencia bibliográfica de Sobania et al. sobre ChatGPT en QuixBugs.
+  - Compilación completa de `memoria/main.tex` validada tras limpiar auxiliares LaTeX.
+
+- **Memoria TFM — Validación formal con LLM juez ampliada (2026-05-31)**:
+  - §6.4 reescrita para explicar con más profundidad el papel del LLM juez, el alcance de la validación semántica, el uso de Claude Sonnet 4.5 vía GitHub Copilot y la función de la skill `apr-validator`.
+  - Añadido diagrama TikZ del workflow de ejecución, validación y registro de datos, con separación entre tests fallidos (`FAIL`) y parches plausibles revisados por el juez.
+  - Creado apéndice de material auxiliar de validación formal con una versión normalizada del encargo de validación, un caso ilustrativo `tqdm-9` con veredictos `CORRECT`/`PLAUSIBLE`/`OVERFITTING` y una síntesis metodológica de la skill `apr-validator`, sin comandos ni rutas del entorno local.
+  - Compilación `latexmk` validada e inspección visual del diagrama completada.
+
+- **Memoria TFM — Segunda iteración de correcciones §7 (2026-05-30)**:
+  - Skill `tfm-memoria`: generalizada la guía de marcadores contrastivos a cualquier exposición de elementos relacionados con diferencias (arquitecturas, modelos, benchmarks...), con pautas concretas de cómo y cuándo aplicarla.
+  - §7.7 retitulada a frases nominales formales coherentes con el resto del capítulo: "Iteraciones, tiempos y causas de fallo" + "Reparaciones según la iteración de terminación" / "Coste temporal de los intentos sin éxito" / "Causas de terminación de los intentos fallidos".
+  - Añadida lista (itemize) describiendo cada causa de parada (`max_iterations`, `timed_out`, `validation_failure`, `no_progress`, `tool_failure`) y cuándo se produce.
+  - Eliminada la figura de distribución de duración (boxplot, `fig:duration-distribution`); el dato temporal se mantiene en prosa.
+  - `final_iteration_convergence` regenerada en vertical (2 filas) en lugar de horizontal; figura juntada que se veía mal ahora legible.
+  - Cabeceras de `tab:global-results` traducidas (Correct pass → CORRECT, etc.) por consistencia con el cambio de métricas.
+  - Compila limpio con `latexmk`.
+
+- **Memoria TFM — Revisión crítica del capítulo 7 + antecedentes (2026-05-30)**:
+  - §2: nueva subsección 2.1.4 "Benchmarks de evaluación en APR" con panorama neutral (Defects4J, QuixBugs, BugsInPy, SWE-bench); añadidas citas `just2014defects4j` y `jimenez2024swebench` a `references.bib`.
+  - §7.1: recortada la descripción "qué son" de QuixBugs/BugsInPy (ahora en §2), sustituido el párrafo defensivo Defects4J/SWE-bench por exclusión razonada que referencia §2.
+  - §7 métricas: eliminados los anglicismos acuñados (correct pass / overfitting pass / correct rate / semantic gap); se conserva solo "test pass rate" como término estándar, resto en español llano. BLEU reescrito presentando primero qué es y luego por qué se descarta.
+  - Eliminadas filtraciones de prompt: "ejecuciones limpias"→"ejecuciones", "entorno limpio"→"entorno reproducible y aislado", "tests en verde"→"tests superados".
+  - Reescrito el párrafo confuso de BugsInPy (sin referencias a colores de figura en prosa).
+  - Nueva §7.7 "Convergencia iterativa y modos de fallo" con datos fundamentados (iteración de resolución, duración éxito/fallo, stop_reasons) y 3 figuras: `final_iteration_convergence` (nueva, generada con `notebooks/extra_iteration_convergence_figure.py`), `final_duration_distribution_by_model`, `final_failure_modes_by_config`.
+  - Skill `tfm-memoria`: añadida guía "Estructuras comparativas con marcador contrastivo" para secciones de resultados.
+  - Compila limpio con `latexmk` (sin refs/citas indefinidas).
+
+- **Memoria TFM — Reescritura del capítulo 7 (Evaluación experimental) (2026-05-29)**:
+  - Reintroducción del tono: nuevo arranque sobre la insuficiencia de los tests en verde, sin expresiones "formal traducido a informal".
+  - Introducción real de los benchmarks (QuixBugs y BugsInPy: qué son, origen, estructura, naturaleza de los bugs) dentro de §7.1, alineado con la práctica de TFG/TFM de introducir el benchmark en la fase experimental.
+  - Tablas de variables, modelos, datasets y métricas convertidas a listas/prosa. Conservada solo la tabla de resultados globales por benchmark.
+  - Resultados reestructurados por benchmark: §7.4 QuixBugs y §7.5 BugsInPy, con granularidad por arquitectura, modelo y proyecto (black 0 % → tornado 27.3 %) y casos concretos (shortest_path_length, mergesort, fastapi-5, httpie-1, tornado-2).
+  - Añadida figura de heatmap por proyecto/modelo en BugsInPy. Compilación `latexmk` limpia, sin referencias indefinidas.
+
 - **Memoria TFM — Plan definitivo de validación y análisis experimental (2026-05-29)**:
   - Creado `memoria/plan-validacion-final.md` como guía de redacción final para capítulos 2--7, excluyendo introducción y conclusiones.
   - Fijadas las hipótesis metodológicas de validación: prompt operativo constante, juez Claude Sonnet 4.5 vía GitHub Copilot y validación semántica solo sobre runs con tests pasados.

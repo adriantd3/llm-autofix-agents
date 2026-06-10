@@ -1,0 +1,22 @@
+name: experiment-bugsinpy-multi-agent-orchestrator-qwen3.5-9b-httpie
+description: TFM experiment — BugsInPy httpie (5 bugs), multi_agent_orchestrator,
+  qwen3.5-9b-ctx65k
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: qwen3.5-9b-ctx65k
+    max_turns: 30
+    extra_body:
+      think: false
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- httpie-1
+- httpie-2
+- httpie-3
+- httpie-4
+- httpie-5

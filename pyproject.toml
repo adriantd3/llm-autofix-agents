@@ -18,6 +18,7 @@ dev = [
     "matplotlib>=3.10.9",
     "mypy>=1.20.0",
     "pandas>=3.0.3",
+    "pymupdf>=1.27.2.3",
     "pytest>=9.0.3",
     "ruff>=0.15.9",
     "seaborn>=0.13.2",

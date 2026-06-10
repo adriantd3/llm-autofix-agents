@@ -1,0 +1,19 @@
+name: experiment-bugsinpy-multi-agent-orchestrator-gemma4-26b-black
+description: TFM experiment — BugsInPy black (5 bugs), multi_agent_orchestrator, gemma4-26b-ctx32k
+dataset: ../../datasets/bugsinpy-full.yaml
+global:
+  architecture: multi_agent_orchestrator
+  llm:
+    provider: ollama
+    model: gemma4-26b-ctx32k
+    max_turns: 30
+  max_iterations: 3
+  timeout_seconds: 800
+  iteration_timeout_seconds: 500
+  capture_errors: true
+bugs:
+- black-2
+- black-3
+- black-10
+- black-13
+- black-19
